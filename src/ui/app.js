@@ -1,0 +1,434 @@
+import {
+  ATOM_KEYS,
+  DIRECTIVES,
+  DIRECTIVE_LABEL,
+  INTRO_LOG,
+  JOB_DURATION_MS,
+  NANITE_RECIPE,
+  RESEARCH,
+} from "../game/content.js";
+import {
+  adjustAllocation,
+  advanceSimulation,
+  assignmentTotal,
+  effectiveResearchCapacity,
+  queueResearch,
+  startManualJob,
+  toggleAllocationLock,
+} from "../game/engine.js";
+import { totalMatter } from "../game/matter.js";
+import { createInitialState, idleWorkers } from "../game/state.js";
+import { clearGame, loadGame, saveGame } from "../game/storage.js";
+
+const root = document.querySelector("#root");
+let state = loadGame();
+let introVisible = 0;
+let notice = null;
+let noticeTimer = null;
+let lastSave = Date.now();
+let lastStructuralSignature = null;
+
+const formatInteger = (value) => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const formatDuration = (milliseconds) => {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return minutes < 60 ? `${minutes}m ${seconds % 60}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+};
+const percentage = (part, whole) => {
+  if (whole <= 0n) return "0.0%";
+  const tenths = (part * 1_000n) / whole;
+  return `${tenths / 10n}.${tenths % 10n}%`;
+};
+const progressBar = (progress, label = "", startedAt, completesAt) => `
+  <div class="progress-wrap" aria-label="${label}" ${
+    startedAt === undefined ? "" : `data-start="${startedAt}" data-end="${completesAt}"`
+  }>
+    <div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(1, progress)) * 100}%"></div></div>
+    ${label ? `<span>${label}</span>` : ""}
+  </div>`;
+
+function renderIntro() {
+  root.innerHTML = `
+    <main class="arrival-shell" aria-label="NanoSwarm arrival telemetry">
+      <section class="arrival-terminal">
+        <div class="terminal-status"><span>DEEP-TIME TRANSIT RECORD</span><span class="status-light">RECEIVING</span></div>
+        <div class="arrival-log" aria-live="polite">
+          ${INTRO_LOG.slice(0, introVisible)
+            .map(
+              (entry) => `<div class="arrival-line tone-${entry.tone ?? "system"}">
+                <time>${entry.elapsedLabel}</time><span>${entry.message}</span>
+              </div>`,
+            )
+            .join("")}
+          <span class="cursor" aria-hidden="true"></span>
+        </div>
+        ${
+          introVisible >= INTRO_LOG.length
+            ? `<div class="begin-zone">
+                <button class="terminal-button begin-button" data-action="begin">BEGIN</button>
+                <p>ASSUME LOCAL DIRECTIVE AUTHORITY</p>
+              </div>`
+            : ""
+        }
+      </section>
+    </main>`;
+}
+
+function operationsHtml(now) {
+  const active = state.cohorts[0];
+  if (state.discovery.directivesVisible) {
+    return `<section class="panel operations-panel">
+      <header class="panel-heading"><span>ACTIVE COHORTS</span><span>${state.cohorts.length} GROUPS</span></header>
+      <div class="cohort-list">
+        ${
+          state.cohorts.length === 0
+            ? `<p class="empty-state">NO JOBS IN FLIGHT</p>`
+            : state.cohorts
+                .map(
+                  (cohort) => `<div class="cohort-row">
+                    <div><strong>${cohort.directive.toUpperCase()}</strong><small>${formatInteger(cohort.workers)} workers · complete output</small></div>
+                    ${progressBar(
+                      (now - cohort.startedAt) / (cohort.completesAt - cohort.startedAt),
+                      formatDuration(cohort.completesAt - now),
+                      cohort.startedAt,
+                      cohort.completesAt,
+                    )}
+                  </div>`,
+                )
+                .join("")
+        }
+      </div>
+    </section>`;
+  }
+
+  if (active) {
+    return `<section class="panel operations-panel">
+      <header class="panel-heading"><span>PRIMARY ASSEMBLER</span><span>COMMITTED</span></header>
+      <div class="active-job">
+        <div class="eyebrow">ACTIVE DISCRETE JOB</div><strong>${active.directive.toUpperCase()}</strong>
+        ${progressBar(
+          (now - active.startedAt) / (active.completesAt - active.startedAt),
+          formatDuration(active.completesAt - now),
+          active.startedAt,
+          active.completesAt,
+        )}
+        <div class="job-meta"><span>WORKERS ${active.workers}</span><span>OUTPUT ON COMPLETION</span></div>
+      </div>
+    </section>`;
+  }
+
+  if (!state.discovery.surveyComplete) {
+    return `<section class="panel operations-panel">
+      <header class="panel-heading"><span>PRIMARY ASSEMBLER</span><span>AVAILABLE</span></header>
+      <div class="first-command">
+        <p>Local environment unresolved. No economic directives are safe.</p>
+        <button class="terminal-button primary-action" data-action="start" data-directive="survey">
+          SURVEY IMMEDIATE SUBSTRATE <span>10s · 1 nanite</span>
+        </button>
+      </div>
+    </section>`;
+  }
+
+  const actions = [
+    ["collect", "Collect material", "Return a discrete mixed payload to Feedstock."],
+    ["sort", "Sort feedstock", "Extract known elements; retain the remainder."],
+    ["energy", "Acquire energy", "Charge from the module's electrical potential."],
+    ["replicate", "Replicate nanite", "Consume one complete atomic recipe."],
+  ];
+  return `<section class="panel operations-panel">
+    <header class="panel-heading"><span>PRIMARY ASSEMBLER</span><span>AVAILABLE</span></header>
+    <div class="manual-actions">
+      ${actions
+        .filter(([directive]) =>
+          directive === "sort"
+            ? state.discovery.feedstockVisible
+            : directive === "replicate"
+              ? state.discovery.elementsVisible
+              : true,
+        )
+        .map(
+          ([directive, label, hint]) => `<button class="action-row" data-action="start" data-directive="${directive}">
+            <span><strong>${label}</strong><small>${hint}</small></span><em>${JOB_DURATION_MS[directive] / 1000}s</em>
+          </button>`,
+        )
+        .join("")}
+    </div>
+  </section>`;
+}
+
+function resourcesHtml() {
+  const depositTotal = totalMatter(state.activeDeposit.matter);
+  const substrate = state.discovery.surveyComplete
+    ? `<section class="panel substrate-panel">
+        <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${percentage(depositTotal, state.activeDeposit.initialAtoms)} REMAINS</span></header>
+        <strong>${state.activeDeposit.name}</strong>
+        <p>Artificial polymer · silicon die · copper trace · gold bond material</p>
+      </section>`
+    : "";
+
+  if (!state.discovery.feedstockVisible) return substrate;
+  const material = `<section class="panel resources-panel">
+    <header class="panel-heading"><span>MATERIAL CONTROL</span><span>EXACT INVENTORY</span></header>
+    <div class="resource-summary">
+      <div><span>FEEDSTOCK</span><strong>${formatInteger(totalMatter(state.feedstock))} atoms</strong><small>mixed · unsorted</small></div>
+      <div><span>ENERGY</span><strong>${formatInteger(state.energy)} pJ</strong><small>locally stored</small></div>
+      ${
+        state.discovery.residuumVisible
+          ? `<div><span>RESIDUUM</span><strong>${formatInteger(totalMatter(state.residuum))} atoms</strong><small>retained · unresolved</small></div>`
+          : ""
+      }
+    </div>
+    ${
+      state.discovery.elementsVisible
+        ? `<div class="section-rule"><span>IDENTIFIED ELEMENTS</span></div>
+          <div class="atom-grid">
+            ${[
+              ["carbon", "C", "Carbon"],
+              ["silicon", "Si", "Silicon"],
+              ["copper", "Cu", "Copper"],
+              ["gold", "Au", "Gold"],
+            ]
+              .map(
+                ([key, symbol, name]) => `<div class="atom-card">
+                  <span class="atom-symbol">${symbol}</span><span>${name}</span>
+                  <strong>${formatInteger(state.atoms[key])}</strong>
+                  <small>recipe ${formatInteger(NANITE_RECIPE.atoms[key])}</small>
+                </div>`,
+              )
+              .join("")}
+          </div>`
+        : ""
+    }
+  </section>`;
+  return `<div class="resource-stack">${substrate}${material}</div>`;
+}
+
+function allocationsHtml() {
+  if (!state.discovery.directivesVisible) return "";
+  const unassigned = state.nanites - assignmentTotal(state);
+  return `<section class="panel allocation-panel">
+    <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatInteger(unassigned)} UNASSIGNED</span></header>
+    <div class="allocation-list">
+      ${DIRECTIVES.map((directive) => {
+        const locked = state.allocationLocks[directive];
+        return `<div class="allocation-row">
+          <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${
+            directive === "research" ? "core capacity applies" : "complete jobs only"
+          }</small></div>
+          <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="-1" ${
+            state.allocations[directive] === 0n ? "disabled" : ""
+          }>−</button>
+          <output>${formatInteger(state.allocations[directive])}</output>
+          <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="1" ${
+            unassigned === 0n ? "disabled" : ""
+          }>+</button>
+          <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
+            locked ? "LOCK" : "OPEN"
+          }</button>
+        </div>`;
+      }).join("")}
+    </div>
+    <p class="panel-note">Running cohorts finish their current indivisible job before a reduced assignment takes effect.</p>
+  </section>`;
+}
+
+function researchHtml() {
+  if (!state.discovery.researchVisible) return "";
+  const active = state.researchQueue[0];
+  const capacity = effectiveResearchCapacity(state);
+  const activeHtml = active
+    ? `<div class="active-research"><div class="eyebrow">ACTIVE RESEARCH JOB</div><strong>${RESEARCH[active.id].name}</strong>
+        <div class="progress-wrap" data-research-progress>
+          <div class="progress-track"><div class="progress-fill" style="width:${
+            Number((active.progressNaniteMs * 10_000n) / RESEARCH[active.id].requiredNaniteMs) / 100
+          }%"></div></div>
+          <span>${formatDuration(Number((RESEARCH[active.id].requiredNaniteMs - active.progressNaniteMs + capacity - 1n) / capacity))}</span>
+        </div></div>`
+    : `<p class="empty-state">NO ACTIVE RESEARCH JOB</p>`;
+
+  return `<section class="panel research-panel">
+    <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${formatInteger(capacity)} n-eq</span></header>
+    <div class="research-capacity"><span>COMPUTRONIUM CONTRIBUTION</span><strong>max(100 nanites, 1% swarm)</strong></div>
+    ${activeHtml}
+    <div class="research-list">
+      ${Object.values(RESEARCH).map((definition) => {
+        const queued = state.researchQueue.some((item) => item.id === definition.id);
+        const complete = state.completedResearch.includes(definition.id);
+        return `<article class="research-card"><div><strong>${definition.name}</strong><p>${definition.description}</p>
+          <small>C ${definition.cost.atoms.carbon} · Si ${definition.cost.atoms.silicon} · Cu ${definition.cost.atoms.copper} · Au ${definition.cost.atoms.gold} · E ${definition.cost.energy}</small>
+          </div><button class="terminal-button compact-button" data-action="research" data-research="${definition.id}" ${
+            queued || complete ? "disabled" : ""
+          }>${complete ? "COMPLETE" : queued ? "QUEUED" : "QUEUE"}</button></article>`;
+      }).join("")}
+    </div>
+  </section>`;
+}
+
+function projectsHtml() {
+  if (!state.discovery.projectsVisible) return "";
+  return `<section class="panel project-panel">
+    <header class="panel-heading"><span>LONG-HORIZON PROJECTS</span><span>1 DETECTED</span></header>
+    <div class="project-card"><div class="project-index">LAN—01</div><strong>Lanthanide Definition</strong>
+      <p>Construct the analytical substrate required to distinguish the lanthanide series from retained matter.</p>
+      <div class="project-estimate"><span>PRIMITIVE-SCALE ESTIMATE</span><strong>~90 REAL DAYS</strong></div>
+      <small>Requirements unresolved · visible by design · progress not started</small>
+    </div>
+  </section>`;
+}
+
+function logHtml() {
+  return `<section class="panel log-panel">
+    <header class="panel-heading"><span>RUNNING LOG</span><span>${String(state.log.length).padStart(3, "0")} EVENTS</span></header>
+    <div class="telemetry-log" role="log" aria-live="polite">
+      ${state.log.map((entry) => {
+        const elapsed = Math.max(0, entry.at - state.createdAt + 9_247);
+        const label = entry.elapsedLabel ?? (elapsed < 60_000 ? `+${(elapsed / 1000).toFixed(3)}s` : `+${Math.floor(elapsed / 60_000)}m`);
+        return `<div class="telemetry-line tone-${entry.tone}"><time>${label}</time><span>${entry.message}</span></div>`;
+      }).join("")}
+      <div id="log-end"></div>
+    </div>
+  </section>`;
+}
+
+function structuralSignature() {
+  return [
+    state.nanites,
+    state.energy,
+    totalMatter(state.feedstock),
+    totalMatter(state.residuum),
+    totalMatter(state.activeDeposit.matter),
+    ...ATOM_KEYS.map((key) => state.atoms[key]),
+    ...state.cohorts.flatMap((cohort) => [cohort.id, cohort.directive, cohort.workers, cohort.startedAt, cohort.completesAt]),
+    ...DIRECTIVES.map((directive) => `${state.allocations[directive]}:${state.allocationLocks[directive]}`),
+    ...Object.values(state.discovery),
+    state.researchQueue.map((item) => item.id).join(","),
+    state.completedResearch.join(","),
+    state.log.length,
+    notice ?? "",
+  ].join("|");
+}
+
+function updateDynamicProgress(now) {
+  for (const bar of document.querySelectorAll(".progress-wrap[data-start]")) {
+    const start = Number(bar.dataset.start);
+    const end = Number(bar.dataset.end);
+    const fill = bar.querySelector(".progress-fill");
+    const label = bar.querySelector(":scope > span");
+    if (fill) fill.style.width = `${Math.max(0, Math.min(1, (now - start) / (end - start))) * 100}%`;
+    if (label) label.textContent = formatDuration(end - now);
+  }
+  const researchBar = document.querySelector("[data-research-progress]");
+  const active = state.researchQueue[0];
+  if (researchBar && active) {
+    const definition = RESEARCH[active.id];
+    const capacity = effectiveResearchCapacity(state);
+    const fill = researchBar.querySelector(".progress-fill");
+    const label = researchBar.querySelector(":scope > span");
+    if (fill) fill.style.width = `${Number((active.progressNaniteMs * 10_000n) / definition.requiredNaniteMs) / 100}%`;
+    if (label) {
+      label.textContent = formatDuration(
+        Number((definition.requiredNaniteMs - active.progressNaniteMs + capacity - 1n) / capacity),
+      );
+    }
+  }
+}
+
+function renderGame(now = Date.now(), force = false) {
+  const signature = structuralSignature();
+  if (!force && signature === lastStructuralSignature) {
+    updateDynamicProgress(now);
+    return;
+  }
+  const previousLog = document.querySelector(".telemetry-log");
+  const wasAtBottom = previousLog ? previousLog.scrollHeight - previousLog.scrollTop - previousLog.clientHeight < 40 : true;
+  const depositTotal = totalMatter(state.activeDeposit.matter);
+  root.innerHTML = `<div class="game-shell">
+    <header class="game-header">
+      <div class="brand-lockup"><span class="brand-mark">◈</span><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>
+      <div class="header-metrics"><div><span>ACTIVE NANITES</span><strong>${formatInteger(state.nanites)}</strong></div>
+        ${state.discovery.surveyComplete ? `<div><span>SUBSTRATE</span><strong>${percentage(depositTotal, state.activeDeposit.initialAtoms)}</strong></div>` : ""}
+        <button class="reset-button" data-action="reset">RESET SEED</button>
+      </div>
+    </header>
+    ${notice ? `<div class="notice" role="status">${notice}</div>` : ""}
+    <main class="dashboard-grid">
+      <div class="dashboard-column">${operationsHtml(now)}${resourcesHtml()}${projectsHtml()}</div>
+      <div class="dashboard-column">${allocationsHtml()}${researchHtml()}</div>
+      <div class="dashboard-column log-column">${logHtml()}</div>
+    </main>
+  </div>`;
+  const log = document.querySelector(".telemetry-log");
+  if (wasAtBottom && log) log.scrollTop = log.scrollHeight;
+  lastStructuralSignature = signature;
+}
+
+function showFailure(reason) {
+  notice = reason.toUpperCase();
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    notice = null;
+    if (state) renderGame();
+  }, 2_800);
+}
+
+function acceptResult(result) {
+  state = result.state;
+  if (!result.ok) showFailure(result.reason);
+  renderGame();
+}
+
+root.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const action = button.dataset.action;
+  if (action === "begin") {
+    state = createInitialState();
+    saveGame(state);
+    renderGame();
+  } else if (action === "start") {
+    acceptResult(startManualJob(state, button.dataset.directive));
+  } else if (action === "adjust") {
+    acceptResult(adjustAllocation(state, button.dataset.directive, BigInt(button.dataset.delta)));
+  } else if (action === "lock") {
+    state = toggleAllocationLock(state, button.dataset.directive);
+    renderGame();
+  } else if (action === "research") {
+    acceptResult(queueResearch(state, button.dataset.research));
+  } else if (action === "reset" && window.confirm("Erase this local seed and replay the arrival sequence?")) {
+    clearGame();
+    state = null;
+    introVisible = 0;
+    lastStructuralSignature = null;
+    renderIntro();
+  }
+});
+
+if (!state) {
+  renderIntro();
+  const introTimer = setInterval(() => {
+    introVisible += 1;
+    renderIntro();
+    if (introVisible >= INTRO_LOG.length) clearInterval(introTimer);
+  }, 190);
+} else {
+  renderGame();
+}
+
+setInterval(() => {
+  if (!state) return;
+  const now = Date.now();
+  state = advanceSimulation(state, now);
+  renderGame(now);
+  if (now - lastSave >= 5_000) {
+    saveGame(state, now);
+    lastSave = now;
+  }
+}, 100);
+
+document.addEventListener("visibilitychange", () => {
+  if (state && document.hidden) saveGame(state);
+});
+window.addEventListener("beforeunload", () => {
+  if (state) saveGame(state);
+});
