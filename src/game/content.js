@@ -35,14 +35,26 @@ export const DIRECTIVE_LABEL = Object.freeze({
 });
 
 export const STARTER_DEPOSIT_MATTER = Object.freeze({
-  carbon: 3_000_000n,
-  silicon: 1_250_000n,
-  copper: 500_000n,
-  gold: 150_000n,
-  unknown: 100_000n,
+  // Rounded physical inventory for one damaged 11 x 7.5 x 1.1 mm DDR3 FBGA package.
+  carbon: 3_000_000_000_000_000_000_000n,
+  silicon: 1_250_000_000_000_000_000_000n,
+  copper: 500_000_000_000_000_000_000n,
+  gold: 150_000_000_000_000_000_000n,
+  unknown: 100_000_000_000_000_000_000n,
 });
 
 export const RESEARCH = Object.freeze({
+  "relative-allocation": Object.freeze({
+    id: "relative-allocation",
+    name: "Relative Directive Allocation",
+    description: "Express workforce intent as proportions and exact swarm-scale counts while preserving locked directives.",
+    unlockNanites: 12n,
+    requiredNaniteMs: 6_000_000n,
+    cost: Object.freeze({
+      energy: 120n,
+      atoms: Object.freeze({ carbon: 2_000n, silicon: 800n, copper: 300n, gold: 50n }),
+    }),
+  }),
   "parallel-directives": Object.freeze({
     id: "parallel-directives",
     name: "Parallel Directive Scheduling",

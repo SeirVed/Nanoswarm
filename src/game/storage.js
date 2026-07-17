@@ -1,6 +1,16 @@
 import { advanceSimulation } from "./engine.js";
+import { MATTER_KEYS, STARTER_DEPOSIT_MATTER } from "./content.js";
+import { totalMatter } from "./matter.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
+const CURRENT_SAVE_VERSION = 2;
+const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
+  carbon: 3_000_000n,
+  silicon: 1_250_000n,
+  copper: 500_000n,
+  gold: 150_000n,
+  unknown: 100_000n,
+});
 
 const replacer = (_key, value) => (typeof value === "bigint" ? { $bigint: value.toString() } : value);
 const reviver = (_key, value) =>
@@ -10,9 +20,26 @@ export function serializeState(state) {
   return JSON.stringify(state, replacer);
 }
 
+function migrateState(state) {
+  if (state.version === 1) {
+    if (state.activeDeposit?.id !== "ddr3-module") throw new Error("Unsupported legacy deposit");
+    for (const key of MATTER_KEYS) {
+      state.activeDeposit.matter[key] += STARTER_DEPOSIT_MATTER[key] - LEGACY_STARTER_DEPOSIT_MATTER[key];
+    }
+    state.activeDeposit.initialAtoms = totalMatter(STARTER_DEPOSIT_MATTER);
+    if (state.discovery.surveyComplete) state.activeDeposit.name = "DDR3 SDRAM package · damaged";
+    state.version = CURRENT_SAVE_VERSION;
+  }
+  return state;
+}
+
 export function deserializeState(raw) {
-  const parsed = JSON.parse(raw, reviver);
-  if (parsed?.version !== 1 || typeof parsed.simTime !== "number" || typeof parsed.nanites !== "bigint") {
+  const parsed = migrateState(JSON.parse(raw, reviver));
+  if (
+    parsed?.version !== CURRENT_SAVE_VERSION ||
+    typeof parsed.simTime !== "number" ||
+    typeof parsed.nanites !== "bigint"
+  ) {
     throw new Error("Unsupported or malformed NanoSwarm save");
   }
   return parsed;

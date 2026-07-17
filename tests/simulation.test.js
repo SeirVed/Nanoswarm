@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { NANITE_RECIPE, RESEARCH } from "../src/game/content.js";
+import { NANITE_RECIPE, RESEARCH, STARTER_DEPOSIT_MATTER } from "../src/game/content.js";
 import {
   adjustAllocation,
   advanceSimulation,
   queueResearch,
+  setDirectiveAllocation,
   startManualJob,
 } from "../src/game/engine.js";
 import { totalMatter } from "../src/game/matter.js";
@@ -138,6 +139,51 @@ describe("cohort simulation", () => {
     const duration = Number(RESEARCH["parallel-directives"].requiredNaniteMs / 200n);
     const complete = advanceSimulation(queued, state.simTime + duration);
     assert.equal(complete.completedResearch.includes("parallel-directives"), true);
+  });
+
+  it("unlocks relative allocation research at twelve nanites", () => {
+    const state = reachSortedStockpile();
+    state.energy = 1_000n;
+    state.nanites = 11n;
+    const locked = queueResearch(state, "relative-allocation", state.simTime);
+    assert.equal(locked.ok, false);
+    state.nanites = 12n;
+    const queued = queueResearch(state, "relative-allocation", state.simTime);
+    assert.equal(queued.ok, true, queued.reason);
+  });
+
+  it("redistributes relative allocations without disturbing locked directives", () => {
+    const state = createInitialState(4_000_000);
+    state.nanites = 100n;
+    state.discovery.directivesVisible = true;
+    state.completedResearch.push("relative-allocation");
+    state.allocations.collect = 40n;
+    state.allocations.sort = 30n;
+    state.allocations.energy = 30n;
+    state.allocationLocks.energy = true;
+
+    const result = setDirectiveAllocation(state, "collect", 70n, state.simTime);
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(result.state.allocations.collect, 70n);
+    assert.equal(result.state.allocations.sort, 0n);
+    assert.equal(result.state.allocations.energy, 30n);
+  });
+
+  it("migrates legacy deposits without erasing material already collected", () => {
+    const state = createInitialState(5_000_000);
+    state.version = 1;
+    state.activeDeposit.matter = {
+      carbon: 3_000_000n - 1_234n,
+      silicon: 1_250_000n,
+      copper: 500_000n,
+      gold: 150_000n,
+      unknown: 100_000n,
+    };
+    state.activeDeposit.initialAtoms = 5_000_000n;
+    const restored = deserializeState(serializeState(state));
+    assert.equal(restored.version, 2);
+    assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
+    assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
   });
 
   it("round-trips bigint state through the versioned save codec", () => {

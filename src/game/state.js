@@ -30,7 +30,7 @@ export function createInitialState(now = Date.now()) {
     tone: entry.tone ?? "system",
   }));
   const state = {
-    version: 1,
+    version: 2,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,

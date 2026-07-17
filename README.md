@@ -2,7 +2,7 @@
 
 NanoSwarm is a long-horizon incremental game about rebuilding a stranded nanite seed into an industrial and eventually interstellar swarm.
 
-The current playable slice begins with the seed's deep-time arrival, then reveals the interface only as the player discovers it: one active assembler, a substrate survey, collection, Feedstock, exact elemental sorting, Residuum, energy acquisition, replication, cohort allocation, research, and the first distant project.
+The current playable slice begins with the seed's deep-time arrival, then reveals the interface only as the player discovers it: one active assembler, a physically scaled DDR3 package, collection, Feedstock, exact elemental sorting, Residuum, energy acquisition, replication, cohort allocation, research, and the first distant project.
 
 ## Run locally
 
@@ -34,6 +34,7 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Offline progress calls the same event-jumping simulation used while the page is open.
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec.
+- At 12 nanites, Relative Directive Allocation research exposes proportional sliders and exact count entry while allocation locks preserve protected directives.
 - Sound is synthesized live with Web Audio. Job ratios select the harmonic field, while digits of π and e govern its pulse and drift; no recorded soundtrack or audio dependency is shipped.
 
 See `docs/architecture.md` for the model boundary and extension rules.

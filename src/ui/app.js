@@ -13,6 +13,7 @@ import {
   assignmentTotal,
   effectiveResearchCapacity,
   queueResearch,
+  setDirectiveAllocation,
   startManualJob,
   toggleAllocationLock,
 } from "../game/engine.js";
@@ -31,6 +32,19 @@ let lastSave = Date.now();
 let lastStructuralSignature = null;
 
 const formatInteger = (value) => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const formatScientific = (value) => {
+  const text = value.toString();
+  if (text.length <= 9) return formatInteger(value);
+  let exponent = text.length - 1;
+  let significand = BigInt(text.slice(0, 4));
+  if (Number(text[4] ?? "0") >= 5) significand += 1n;
+  if (significand >= 10_000n) {
+    significand = 1_000n;
+    exponent += 1;
+  }
+  const digits = significand.toString().padStart(4, "0");
+  return `${digits[0]}.${digits.slice(1)}e${exponent}`;
+};
 const formatDuration = (milliseconds) => {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
   if (seconds < 60) return `${seconds}s`;
@@ -43,7 +57,7 @@ const cohortTimeLabel = (startedAt, completesAt, now) =>
     : formatDuration(completesAt - now);
 const percentage = (part, whole) => {
   if (whole <= 0n) return "0.0%";
-  const tenths = (part * 1_000n) / whole;
+  const tenths = (part * 1_000n + whole / 2n) / whole;
   return `${tenths / 10n}.${tenths % 10n}%`;
 };
 const progressBar = (progress, label = "", startedAt, completesAt) => `
@@ -170,6 +184,7 @@ function resourcesHtml() {
         <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${percentage(depositTotal, state.activeDeposit.initialAtoms)} REMAINS</span></header>
         <strong>${state.activeDeposit.name}</strong>
         <p>Artificial polymer · silicon die · copper trace · gold bond material</p>
+        <small>${formatScientific(depositTotal)} constituent atoms accessible</small>
       </section>`
     : "";
 
@@ -213,29 +228,50 @@ function resourcesHtml() {
 function allocationsHtml() {
   if (!state.discovery.directivesVisible) return "";
   const unassigned = state.nanites - assignmentTotal(state);
+  const relativeAllocation = state.completedResearch.includes("relative-allocation");
   return `<section class="panel allocation-panel">
-    <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatInteger(unassigned)} UNASSIGNED</span></header>
+    <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatInteger(unassigned)} UNASSIGNED${
+      relativeAllocation ? " · RELATIVE CONTROL" : ""
+    }</span></header>
     <div class="allocation-list">
       ${DIRECTIVES.map((directive) => {
         const locked = state.allocationLocks[directive];
-        return `<div class="allocation-row">
+        const shareTenths = state.nanites === 0n ? 0n : (state.allocations[directive] * 1_000n) / state.nanites;
+        return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}">
           <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${
             directive === "research" ? "core capacity applies" : "complete jobs only"
           }</small></div>
           <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="-1" ${
             state.allocations[directive] === 0n ? "disabled" : ""
           }>−</button>
-          <output>${formatInteger(state.allocations[directive])}</output>
+          ${
+            relativeAllocation
+              ? `<input class="allocation-input" type="text" inputmode="numeric" value="${formatInteger(
+                  state.allocations[directive],
+                )}" data-action="set-count" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} nanites">`
+              : `<output>${formatInteger(state.allocations[directive])}</output>`
+          }
           <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="1" ${
-            unassigned === 0n ? "disabled" : ""
+            (!relativeAllocation && unassigned === 0n) || state.allocations[directive] >= state.nanites ? "disabled" : ""
           }>+</button>
           <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
             locked ? "LOCK" : "OPEN"
           }</button>
+          ${
+            relativeAllocation
+              ? `<label class="relative-allocation"><input type="range" min="0" max="1000" step="1" value="${shareTenths}" data-action="set-share" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} relative share"><span>${
+                  shareTenths / 10n
+                }.${shareTenths % 10n}%</span></label>`
+              : ""
+          }
         </div>`;
       }).join("")}
     </div>
-    <p class="panel-note">Running cohorts finish their current indivisible job before a reduced assignment takes effect.</p>
+    <p class="panel-note">${
+      relativeAllocation
+        ? "Relative changes draw proportionally from other open directives. Locked directives are preserved. Running cohorts still finish indivisibly."
+        : "Running cohorts finish their current indivisible job before a reduced assignment takes effect."
+    }</p>
   </section>`;
 }
 
@@ -258,15 +294,18 @@ function researchHtml() {
     <div class="research-capacity"><span>COMPUTRONIUM CONTRIBUTION</span><strong>max(100 nanites, 1% swarm)</strong></div>
     ${activeHtml}
     <div class="research-list">
-      ${Object.values(RESEARCH).map((definition) => {
-        const queued = state.researchQueue.some((item) => item.id === definition.id);
-        const complete = state.completedResearch.includes(definition.id);
-        return `<article class="research-card"><div><strong>${definition.name}</strong><p>${definition.description}</p>
-          <small>C ${definition.cost.atoms.carbon} · Si ${definition.cost.atoms.silicon} · Cu ${definition.cost.atoms.copper} · Au ${definition.cost.atoms.gold} · E ${definition.cost.energy}</small>
-          </div><button class="terminal-button compact-button" data-action="research" data-research="${definition.id}" ${
-            queued || complete ? "disabled" : ""
-          }>${complete ? "COMPLETE" : queued ? "QUEUED" : "QUEUE"}</button></article>`;
-      }).join("")}
+      ${Object.values(RESEARCH)
+        .filter((definition) => !definition.unlockNanites || state.nanites >= definition.unlockNanites)
+        .map((definition) => {
+          const queued = state.researchQueue.some((item) => item.id === definition.id);
+          const complete = state.completedResearch.includes(definition.id);
+          return `<article class="research-card"><div><strong>${definition.name}</strong><p>${definition.description}</p>
+            <small>C ${definition.cost.atoms.carbon} · Si ${definition.cost.atoms.silicon} · Cu ${definition.cost.atoms.copper} · Au ${definition.cost.atoms.gold} · E ${definition.cost.energy}</small>
+            </div><button class="terminal-button compact-button" data-action="research" data-research="${definition.id}" ${
+              queued || complete ? "disabled" : ""
+            }>${complete ? "COMPLETE" : queued ? "QUEUED" : "QUEUE"}</button></article>`;
+        })
+        .join("")}
     </div>
   </section>`;
 }
@@ -411,7 +450,13 @@ root.addEventListener("click", (event) => {
   } else if (action === "start") {
     acceptResult(startManualJob(state, button.dataset.directive));
   } else if (action === "adjust") {
-    acceptResult(adjustAllocation(state, button.dataset.directive, BigInt(button.dataset.delta)));
+    const directive = button.dataset.directive;
+    const delta = BigInt(button.dataset.delta);
+    acceptResult(
+      state.completedResearch.includes("relative-allocation")
+        ? setDirectiveAllocation(state, directive, state.allocations[directive] + delta)
+        : adjustAllocation(state, directive, delta),
+    );
   } else if (action === "lock") {
     state = toggleAllocationLock(state, button.dataset.directive);
     renderGame();
@@ -442,6 +487,28 @@ root.addEventListener("input", (event) => {
   const control = event.target.closest("input[data-action='volume']");
   if (!control) return;
   sonicMind.setVolume(Number(control.value) / 100);
+});
+
+root.addEventListener("change", (event) => {
+  if (!state) return;
+  const control = event.target.closest("input[data-action='set-share'], input[data-action='set-count']");
+  if (!control) return;
+  let target;
+  try {
+    target =
+      control.dataset.action === "set-share"
+        ? (state.nanites * BigInt(control.value) + 500n) / 1_000n
+        : BigInt(control.value.replace(/[,\s_]/g, ""));
+  } catch {
+    showFailure("Allocation must be a whole nanite count.");
+    renderGame(Date.now(), true);
+    return;
+  }
+  acceptResult(setDirectiveAllocation(state, control.dataset.directive, target));
+});
+
+root.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && event.target.matches("input[data-action='set-count']")) event.target.blur();
 });
 
 if (!state) {

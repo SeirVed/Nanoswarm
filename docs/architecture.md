@@ -21,6 +21,8 @@ advanceSimulation(targetTime) ── jumps to completion event
 
 Feedstock and Residuum are inventories of constituent atoms. The simulation knows the underlying composition, while the interface may hide unidentified constituents. This conserves matter without floating-point percentages or a mutable generic-mass currency.
 
+The starter deposit is one damaged DDR3 FBGA package with a rounded physical inventory of `5 × 10^21` constituent atoms. Version 1 saves are migrated by adding the corrected unconsumed bulk to the deposit; material already collected, sorted, reserved in cohorts, or retained as Residuum is left untouched.
+
 ## Cohorts
 
 A cohort is a group of identical nanites that began the same job at the same time under the same recipe revision. A million workers therefore remain a real million discrete workers without requiring a million independently updated timers.

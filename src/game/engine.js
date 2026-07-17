@@ -2,6 +2,7 @@ import {
   ATOM_KEYS,
   COHORT_SYNC_WINDOW_MS,
   COLLECTION_ATOMS_PER_NANITE,
+  DIRECTIVES,
   ENERGY_PER_JOB,
   JOB_DURATION_MS,
   NANITE_RECIPE,
@@ -157,13 +158,13 @@ function completeCohort(state, cohort) {
   const payload = cohort.payload;
   if (payload.kind === "survey") {
     state.discovery.surveyComplete = true;
-    state.activeDeposit.name = "Volatile memory module · DDR3 · damaged";
+    state.activeDeposit.name = "DDR3 SDRAM package · damaged";
     appendLog(state, "SUBSTRATE SURVEY COMPLETE.", "good");
     appendLog(state, "ARTIFICIAL POLYMER DETECTED.");
     appendLog(state, "COPPER CONDUCTOR DETECTED.");
     appendLog(state, "SILICON STRUCTURE DETECTED.");
     appendLog(state, "GOLD TRACE DETECTED.");
-    appendLog(state, "OBJECT CLASSIFICATION: VOLATILE MEMORY MODULE · DDR3 · DAMAGED", "good");
+    appendLog(state, "OBJECT CLASSIFICATION: DDR3 SDRAM PACKAGE · DAMAGED", "good");
   } else if (payload.kind === "energy") {
     state.energy += payload.energy;
     appendLog(state, `ENERGY ACQUISITION COMPLETE · +${payload.energy} pJ.`, "good");
@@ -189,6 +190,7 @@ function completeCohort(state, cohort) {
       appendLog(state, "UNRESOLVED MATTER RETAINED AS RESIDUUM FOR FUTURE RE-SORTING.", "muted");
     }
   } else if (payload.kind === "replicate") {
+    const previousNanites = state.nanites;
     state.nanites += payload.nanites;
     state.discovery.directivesVisible = state.nanites >= 2n;
     state.discovery.projectsVisible = true;
@@ -200,6 +202,9 @@ function completeCohort(state, cohort) {
     if (state.nanites === 2n) {
       appendLog(state, "COHORT CONTROL AVAILABLE · DIRECTIVE ALLOCATIONS ONLINE.", "good");
       appendLog(state, "LONG-HORIZON PROJECT ENVELOPE DETECTED.", "muted");
+    }
+    if (previousNanites < 12n && state.nanites >= 12n) {
+      appendLog(state, "RESEARCH SIGNAL RESOLVED · RELATIVE DIRECTIVE ALLOCATION.", "good");
     }
   }
 }
@@ -302,6 +307,52 @@ export function adjustAllocation(input, directive, delta, now = Date.now()) {
   return { ok: true, state };
 }
 
+export function setDirectiveAllocation(input, directive, target, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  if (!state.completedResearch.includes("relative-allocation")) {
+    return failure(state, "Relative Directive Allocation research is incomplete.");
+  }
+  if (!DIRECTIVES.includes(directive)) return failure(state, "Unknown directive.");
+  if (target < 0n || target > state.nanites) return failure(state, "Allocation is outside the active swarm.");
+
+  const current = state.allocations[directive];
+  if (target > current) {
+    const unassigned = state.nanites - assignmentTotal(state);
+    const requiredRelease = target - current - unassigned;
+    if (requiredRelease > 0n) {
+      const sources = DIRECTIVES.filter(
+        (candidate) =>
+          candidate !== directive && !state.allocationLocks[candidate] && state.allocations[candidate] > 0n,
+      );
+      const available = sources.reduce((total, candidate) => total + state.allocations[candidate], 0n);
+      if (available < requiredRelease) {
+        return failure(state, "Locked directives leave too few nanites available for that allocation.");
+      }
+
+      const reductions = new Map();
+      let released = 0n;
+      for (const source of sources) {
+        const reduction = (state.allocations[source] * requiredRelease) / available;
+        reductions.set(source, reduction);
+        released += reduction;
+      }
+      let remainder = requiredRelease - released;
+      for (const source of sources) {
+        if (remainder <= 0n) break;
+        if (reductions.get(source) < state.allocations[source]) {
+          reductions.set(source, reductions.get(source) + 1n);
+          remainder -= 1n;
+        }
+      }
+      for (const source of sources) state.allocations[source] -= reductions.get(source);
+    }
+  }
+
+  state.allocations[directive] = target;
+  scheduleAllocations(state);
+  return { ok: true, state };
+}
+
 export function toggleAllocationLock(input, directive, now = Date.now()) {
   const state = advanceSimulation(input, now);
   state.allocationLocks[directive] = !state.allocationLocks[directive];
@@ -316,6 +367,9 @@ export function queueResearch(input, id, now = Date.now()) {
   }
   const definition = RESEARCH[id];
   if (!definition) return failure(state, "Unknown research definition.");
+  if (definition.unlockNanites && state.nanites < definition.unlockNanites) {
+    return failure(state, `Research signal requires ${definition.unlockNanites} active nanites.`);
+  }
   if (state.energy < definition.cost.energy) return failure(state, "Insufficient energy.");
   for (const key of ATOM_KEYS) {
     if (state.atoms[key] < definition.cost.atoms[key]) return failure(state, `Insufficient ${key}.`);
