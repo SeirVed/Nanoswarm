@@ -32,7 +32,7 @@ export function createInitialState(now = Date.now()) {
     tier: entry.tier ?? "info",
   }));
   const state = {
-    version: 4,
+    version: 5,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,
@@ -44,10 +44,15 @@ export function createInitialState(now = Date.now()) {
     atoms: emptyAtoms(),
     activeDeposit: {
       id: "ddr3-module",
+      index: 0,
       name: "Unclassified planetary substrate",
+      description: "Artificial polymer · silicon die · copper trace · gold bond material",
+      limitingElement: "carbon",
       matter: { ...STARTER_DEPOSIT_MATTER },
       initialAtoms: totalMatter(STARTER_DEPOSIT_MATTER),
     },
+    depletedDeposits: [],
+    prospecting: { searchesCompleted: 0 },
     cohorts: [],
     allocations: emptyAllocations(),
     allocationTargets: emptyAllocationTargets(),
@@ -62,6 +67,9 @@ export function createInitialState(now = Date.now()) {
       directivesVisible: false,
       researchVisible: false,
       projectsVisible: false,
+      atmosphereVisible: false,
+      exhaustionNotified: false,
+      residuumIndexed: false,
     },
     log,
   };

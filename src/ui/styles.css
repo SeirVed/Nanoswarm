@@ -306,7 +306,14 @@ body::after {
 .substrate-panel > strong { display: block; padding: 16px 16px 5px; color: var(--text); font-size: 12px; text-transform: uppercase; }
 .substrate-panel > p { margin: 0; padding: 0 16px; color: var(--muted); font-size: 9px; line-height: 1.6; }
 .substrate-panel > small { display: block; padding: 8px 16px 0; color: var(--green-dim); font-size: 8px; letter-spacing: 0.08em; }
-.resource-stack { display: grid; gap: 16px; }
+.exhaustion-state, .atmosphere-state { margin: 13px 15px 0; padding: 11px; border: 1px solid var(--line); background: rgba(2, 7, 4, 0.42); }
+.exhaustion-state { border-color: rgba(216, 120, 103, 0.35); }
+.exhaustion-state > strong { color: var(--danger); font-size: 9px; letter-spacing: 0.1em; }
+.atmosphere-state > strong { color: #8bd4ff; font-size: 9px; letter-spacing: 0.1em; }
+.exhaustion-state p, .atmosphere-state p { margin: 6px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.search-button { width: 100%; margin-top: 10px; padding: 10px; display: flex; justify-content: space-between; gap: 12px; text-align: left; }
+.search-button span { color: var(--muted); font-size: 8px; }
+.resource-stack { min-width: 0; max-width: 100%; display: grid; gap: 16px; }
 .resource-summary { display: grid; grid-template-columns: repeat(3, 1fr); }
 .resource-summary > div { min-width: 0; padding: 15px; display: grid; gap: 6px; border-right: 1px solid var(--line); }
 .resource-summary > div:last-child { border-right: 0; }
@@ -315,11 +322,11 @@ body::after {
 .resource-summary small { color: var(--muted); font-size: 8px; }
 .section-rule { border-top: 1px solid var(--line); padding: 9px 13px; color: var(--muted); font-size: 8px; letter-spacing: 0.15em; }
 .atom-grid { display: grid; grid-template-columns: repeat(2, 1fr); }
-.atom-card { position: relative; min-height: 88px; padding: 12px 12px 12px 49px; display: grid; align-content: center; gap: 2px; border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
+.atom-card { position: relative; min-width: 0; min-height: 88px; padding: 12px 12px 12px 49px; display: grid; align-content: center; gap: 2px; overflow: hidden; border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
 .atom-card:nth-child(2n) { border-right: 0; }
 .atom-symbol { position: absolute; left: 12px; top: 15px; color: var(--green-dim); font: 700 18px/1 "Cascadia Mono", Consolas, monospace; }
 .atom-card > span:not(.atom-symbol) { color: var(--muted); font-size: 8px; text-transform: uppercase; }
-.atom-card strong { font-size: 12px; }
+.atom-card strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; }
 .atom-card small { color: var(--muted); font-size: 8px; }
 
 .allocation-list { display: grid; }
@@ -350,6 +357,7 @@ body::after {
 .research-card > div { display: grid; gap: 6px; }
 .research-card strong { font-size: 10px; text-transform: uppercase; }
 .research-card p { margin: 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.research-card .research-effect { color: var(--green-dim); }
 .research-card small { color: var(--green-dim); font-size: 8px; }
 .compact-button { flex: 0 0 auto; padding: 8px 10px; font-size: 8px; }
 
@@ -426,6 +434,7 @@ body::after {
     align-content: start;
     gap: 12px;
     overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-color: var(--line-bright) transparent;
     scrollbar-width: thin;
   }

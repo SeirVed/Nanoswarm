@@ -1,12 +1,9 @@
 import {
   ALLOCATION_SHARE_SCALE,
   ATOM_KEYS,
-  COHORT_RESONANCE_WINDOW_MS,
-  COHORT_SYNC_WINDOW_MS,
   DIRECTIVES,
   DIRECTIVE_LABEL,
   INTRO_LOG,
-  JOB_DURATION_MS,
   LOG_TIERS,
   NANITE_RECIPE,
   RESEARCH,
@@ -16,10 +13,18 @@ import {
   advanceSimulation,
   assignmentTotal,
   effectiveResearchCapacity,
+  atmosphericCollectionCapacity,
+  cohortResonanceWindow,
+  cohortSyncWindow,
+  directiveIsVisible,
+  effectiveJobDuration,
   queueResearch,
+  researchIsRevealed,
   setDirectiveAllocation,
   setDirectiveAllocationShare,
+  solidCollectionCapacity,
   startManualJob,
+  startProspecting,
   toggleAllocationLock,
 } from "../game/engine.js";
 import { totalMatter } from "../game/matter.js";
@@ -124,8 +129,8 @@ function operationsHtml(now) {
   if (state.discovery.directivesVisible) {
     const groups = groupedCohorts();
     return `<section class="panel operations-panel">
-      <header class="panel-heading"><span>ACTIVE COHORTS · ${groups.length} DIRECTIVES</span><span>SYNC ${COHORT_SYNC_WINDOW_MS}ms · RESONANCE ${(
-        COHORT_RESONANCE_WINDOW_MS / 1000
+      <header class="panel-heading"><span>ACTIVE COHORTS · ${groups.length} DIRECTIVES</span><span>SYNC ${cohortSyncWindow(state)}ms · RESONANCE ${(
+        cohortResonanceWindow(state) / 1000
       ).toFixed(1)}s</span></header>
       <div class="cohort-list">
         ${
@@ -200,7 +205,7 @@ function operationsHtml(now) {
         )
         .map(
           ([directive, label, hint]) => `<button class="action-row" data-action="start" data-directive="${directive}">
-            <span><strong>${label}</strong><small>${hint}</small></span><em>${JOB_DURATION_MS[directive] / 1000}s</em>
+            <span><strong>${label}</strong><small>${hint}</small></span><em>${effectiveJobDuration(state, directive) / 1000}s</em>
           </button>`,
         )
         .join("")}
@@ -210,12 +215,37 @@ function operationsHtml(now) {
 
 function resourcesHtml() {
   const depositTotal = totalMatter(state.activeDeposit.matter);
+  const depositExhausted = depositTotal === 0n;
+  const prospecting = state.cohorts.some((cohort) => cohort.directive === "prospect");
   const substrate = state.discovery.surveyComplete
     ? `<section class="panel substrate-panel">
-        <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${percentage(depositTotal, state.activeDeposit.initialAtoms)} REMAINS</span></header>
+        <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${
+          depositExhausted ? "EXHAUSTED" : `${percentage(depositTotal, state.activeDeposit.initialAtoms)} REMAINS`
+        }</span></header>
         <strong>${state.activeDeposit.name}</strong>
-        <p>Artificial polymer · silicon die · copper trace · gold bond material</p>
-        <small>${formatScientific(depositTotal)} constituent atoms accessible</small>
+        <p>${state.activeDeposit.description}</p>
+        <small>${formatScientific(depositTotal)} constituent atoms accessible · ${formatScientific(
+          solidCollectionCapacity(state),
+        )} per collector</small>
+        ${
+          depositExhausted
+            ? `<div class="exhaustion-state"><strong>${String(
+                state.activeDeposit.limitingElement ?? "material",
+              ).toUpperCase()} BOTTLENECK CONFIRMED</strong><p>The local solid inventory is committed. A new material field must be located.</p>
+                <button class="terminal-button search-button" data-action="prospect" ${
+                  prospecting || idleWorkers(state) < 1n ? "disabled" : ""
+                }>${prospecting ? "SEARCH IN PROGRESS" : "SEARCH FOR MORE"}<span>${
+                  prospecting ? "cohort deployed" : `${effectiveJobDuration(state, "prospect") / 1000}s · 1 nanite`
+                }</span></button></div>`
+            : ""
+        }
+        ${
+          state.discovery.atmosphereVisible
+            ? `<div class="atmosphere-state"><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatScientific(
+                atmosphericCollectionCapacity(state),
+              )} atoms per nanite per job · ${state.completedResearch.includes("atmospheric-fractionation") ? "5%" : "1%"} effective solid rate</p></div>`
+            : ""
+        }
       </section>`
     : "";
 
@@ -227,7 +257,9 @@ function resourcesHtml() {
       <div><span>ENERGY</span><strong>${formatInteger(state.energy)} pJ</strong><small>locally stored</small></div>
       ${
         state.discovery.residuumVisible
-          ? `<div><span>RESIDUUM</span><strong>${formatInteger(totalMatter(state.residuum))} atoms</strong><small>retained · unresolved</small></div>`
+          ? `<div><span>RESIDUUM</span><strong>${formatScientific(totalMatter(state.residuum))} atoms</strong><small>retained · ${
+              state.discovery.residuumIndexed ? "indexed" : "unresolved"
+            }</small></div>`
           : ""
       }
     </div>
@@ -265,14 +297,16 @@ function allocationsHtml() {
       relativeAllocation ? " · RELATIVE AUTO" : ""
     }</span></header>
     <div class="allocation-list">
-      ${DIRECTIVES.map((directive) => {
+      ${DIRECTIVES.filter((directive) => directiveIsVisible(state, directive)).map((directive) => {
         const locked = state.allocationLocks[directive];
         const shareHundredths = relativeAllocation
           ? (state.allocationTargets[directive] * 10_000n + ALLOCATION_SHARE_SCALE / 2n) /
             ALLOCATION_SHARE_SCALE
           : 0n;
         return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}">
-          <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${
+          <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${formatScientific(
+            state.allocations[directive],
+          )} assigned · ${
             directive === "research" ? "core capacity applies" : "complete jobs only"
           }</small></div>
           <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="-1" ${
@@ -313,6 +347,8 @@ function researchHtml() {
   if (!state.discovery.researchVisible) return "";
   const active = state.researchQueue[0];
   const capacity = effectiveResearchCapacity(state);
+  const revealedResearch = Object.values(RESEARCH).filter((definition) => researchIsRevealed(state, definition));
+  const completedVisible = revealedResearch.filter((definition) => state.completedResearch.includes(definition.id)).length;
   const activeHtml = active
     ? `<div class="active-research"><div class="eyebrow">ACTIVE RESEARCH JOB</div><strong>${RESEARCH[active.id].name}</strong>
         <div class="progress-wrap" data-research-progress>
@@ -324,17 +360,24 @@ function researchHtml() {
     : `<p class="empty-state">NO ACTIVE RESEARCH JOB</p>`;
 
   return `<section class="panel research-panel">
-    <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${formatInteger(capacity)} n-eq</span></header>
-    <div class="research-capacity"><span>COMPUTRONIUM CONTRIBUTION</span><strong>max(100 nanites, 1% swarm)</strong></div>
+    <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${completedVisible}/${revealedResearch.length} RESOLVED · ${formatScientific(
+      capacity,
+    )} n-eq</span></header>
+    <div class="research-capacity"><span>COMPUTRONIUM CONTRIBUTION</span><strong>max(100 nanites, ${
+      state.completedResearch.includes("distributed-computronium") ? "2%" : "1%"
+    } swarm)</strong></div>
     ${activeHtml}
     <div class="research-list">
-      ${Object.values(RESEARCH)
-        .filter((definition) => !definition.unlockNanites || state.nanites >= definition.unlockNanites)
+      ${revealedResearch
         .map((definition) => {
           const queued = state.researchQueue.some((item) => item.id === definition.id);
           const complete = state.completedResearch.includes(definition.id);
-          return `<article class="research-card"><div><strong>${definition.name}</strong><p>${definition.description}</p>
-            <small>C ${definition.cost.atoms.carbon} · Si ${definition.cost.atoms.silicon} · Cu ${definition.cost.atoms.copper} · Au ${definition.cost.atoms.gold} · E ${definition.cost.energy}</small>
+          return `<article class="research-card"><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
+            <small>C ${formatScientific(definition.cost.atoms.carbon)} · Si ${formatScientific(
+              definition.cost.atoms.silicon,
+            )} · Cu ${formatScientific(definition.cost.atoms.copper)} · Au ${formatScientific(
+              definition.cost.atoms.gold,
+            )} · E ${formatScientific(definition.cost.energy)}</small>
             </div><button class="terminal-button compact-button" data-action="research" data-research="${definition.id}" ${
               queued || complete ? "disabled" : ""
             }>${complete ? "COMPLETE" : queued ? "QUEUED" : "QUEUE"}</button></article>`;
@@ -504,6 +547,8 @@ root.addEventListener("click", (event) => {
     renderGame();
   } else if (action === "start") {
     acceptResult(startManualJob(state, button.dataset.directive));
+  } else if (action === "prospect") {
+    acceptResult(startProspecting(state));
   } else if (action === "adjust") {
     const directive = button.dataset.directive;
     const delta = BigInt(button.dataset.delta);

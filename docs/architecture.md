@@ -21,7 +21,13 @@ advanceSimulation(targetTime) ── jumps to completion event
 
 Feedstock and Residuum are inventories of constituent atoms. The simulation knows the underlying composition, while the interface may hide unidentified constituents. This conserves matter without floating-point percentages or a mutable generic-mass currency.
 
-The starter deposit is one damaged DDR3 FBGA package with a rounded physical inventory of `5 × 10^21` constituent atoms. Version 1 saves are migrated by adding the corrected unconsumed bulk to the deposit; material already collected, sorted, reserved in cohorts, or retained as Residuum is left untouched.
+The starter deposit is one damaged DDR3 FBGA package with a rounded physical inventory of `5 × 10^21` constituent atoms. Its `3 × 10^21` carbon atoms permit exactly `6 × 10^17` complete nanite recipes before other carbon spending is considered, making the first apparent swarm ceiling a physical bottleneck rather than a numeric cap. Version 1 saves are migrated by adding the corrected unconsumed bulk to the deposit; material already collected, sorted, reserved in cohorts, or retained as Residuum is left untouched.
+
+## Prospecting and open environments
+
+When all accessible matter in an active deposit has been reserved, the simulation records exhaustion once and exposes a 30-second, one-worker prospecting cohort. Completion archives a summary of the depleted deposit and installs the next deterministic material field. Later fields have distinct compositions and scale by three orders of magnitude when the authored sequence repeats.
+
+The first prospecting departure also identifies atmospheric matter. Atmosphere is an open environmental source rather than a finite deposit, so its harvested atoms enter the tracked system at job completion. Base atmospheric throughput is exactly 1% of the current effective solid-collection payload. Approximately 200 carbon atoms per million are classified immediately; the unresolved balance is retained physically as chiefly nitrogen and oxygen pending future elemental definitions.
 
 ## Cohorts
 
@@ -41,7 +47,9 @@ Log significance and visual tone are separate fields. `world` records history-sc
 
 ## Research
 
-Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. The embedded computronium supplies the greater of 100 nanite-equivalents or 1% of the total swarm; explicitly allocated research nanites add to that capacity.
+Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. Prerequisites and environmental signals are validated by the simulation, not merely hidden by the interface. Completed research modifies capacity functions used when new cohorts reserve their payloads; already-running cohorts preserve the recipe and output with which they began.
+
+The embedded computronium initially supplies the greater of 100 nanite-equivalents or 1% of the total swarm; Distributed Computronium raises the proportional contribution to 2%. Explicitly allocated research nanites add to that capacity.
 
 Relative allocation targets are stored as fixed-point shares of `10^12`. Replication reapportions the enlarged integer swarm with the largest-remainder method, so targets persist without fractional nanites or cumulative rounding loss. Target shares may sum to less than 100%; that remainder deliberately stays unassigned.
 

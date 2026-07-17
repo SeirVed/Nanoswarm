@@ -10,7 +10,7 @@ import {
 import { totalMatter } from "./matter.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 4;
+const CURRENT_SAVE_VERSION = 5;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -42,13 +42,30 @@ function migrateState(state) {
     if (state.completedResearch.includes("relative-allocation") && state.nanites > 0n) {
       for (const directive of DIRECTIVES) {
         state.allocationTargets[directive] =
-          (state.allocations[directive] * ALLOCATION_SHARE_SCALE) / state.nanites;
+          ((state.allocations[directive] ?? 0n) * ALLOCATION_SHARE_SCALE) / state.nanites;
       }
     }
     state.version = 3;
   }
   if (state.version === 3) {
     for (const entry of state.log) entry.tier ??= inferLogTier(entry.message, entry.tone);
+    state.version = 4;
+  }
+  if (state.version === 4) {
+    for (const directive of DIRECTIVES) {
+      state.allocations[directive] ??= 0n;
+      state.allocationTargets[directive] ??= 0n;
+      state.allocationLocks[directive] ??= false;
+    }
+    state.activeDeposit.index ??= 0;
+    state.activeDeposit.description ??=
+      "Artificial polymer · silicon die · copper trace · gold bond material";
+    state.activeDeposit.limitingElement ??= "carbon";
+    state.depletedDeposits ??= [];
+    state.prospecting ??= { searchesCompleted: state.activeDeposit.index ?? 0 };
+    state.discovery.atmosphereVisible ??= false;
+    state.discovery.exhaustionNotified ??= false;
+    state.discovery.residuumIndexed ??= state.completedResearch.includes("residuum-indexing");
     state.version = CURRENT_SAVE_VERSION;
   }
   return state;

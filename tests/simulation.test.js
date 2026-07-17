@@ -2,16 +2,28 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   ALLOCATION_SHARE_SCALE,
+  ATMOSPHERE_ATOMS_PER_NANITE,
+  COLLECTION_ATOMS_PER_NANITE,
   NANITE_RECIPE,
   RESEARCH,
   STARTER_DEPOSIT_MATTER,
+  createProspectedDeposit,
 } from "../src/game/content.js";
 import {
   adjustAllocation,
+  atmosphericCollectionCapacity,
   advanceSimulation,
+  cohortResonanceWindow,
+  cohortSyncWindow,
+  effectiveJobDuration,
+  effectiveResearchCapacity,
+  energyJobYield,
   queueResearch,
   setDirectiveAllocation,
+  solidCollectionCapacity,
+  sortingCapacity,
   startManualJob,
+  startProspecting,
 } from "../src/game/engine.js";
 import { totalMatter } from "../src/game/matter.js";
 import { createInitialState } from "../src/game/state.js";
@@ -36,6 +48,13 @@ function reachSortedStockpile(now = 1_000_000) {
 }
 
 describe("cohort simulation", () => {
+  it("derives the observed six-hundred-quadrillion swarm boundary from starter carbon", () => {
+    assert.equal(
+      STARTER_DEPOSIT_MATTER.carbon / NANITE_RECIPE.atoms.carbon,
+      600_000_000_000_000_000n,
+    );
+  });
+
   it("does not produce fractional or early survey output", () => {
     const initial = createInitialState(1_000);
     const started = success(startManualJob(initial, "survey", 1_000));
@@ -65,6 +84,39 @@ describe("cohort simulation", () => {
     assert.equal(identified + totalMatter(state.residuum), 10_000n);
     assert.deepEqual(state.atoms, { carbon: 6_000n, silicon: 2_500n, copper: 1_000n, gold: 300n });
     assert.equal(state.residuum.unknown, 200n);
+  });
+
+  it("unlocks diffuse atmospheric harvesting when prospecting begins", () => {
+    const now = 1_500_000;
+    let state = createInitialState(now);
+    state.discovery.surveyComplete = true;
+    state.activeDeposit.matter = { carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n };
+
+    state = success(startProspecting(state, now));
+    assert.equal(state.discovery.atmosphereVisible, true);
+    assert.equal(state.cohorts.some((cohort) => cohort.directive === "prospect"), true);
+    assert.equal(
+      state.log.some((entry) => entry.message.includes("DIFFUSE COLLECTION RATE 1.00%")),
+      true,
+    );
+
+    state = advanceSimulation(state, now + 30_000);
+    assert.equal(state.activeDeposit.id, "prospected-1");
+    assert.equal(state.prospecting.searchesCompleted, 1);
+    assert.equal(totalMatter(state.activeDeposit.matter), totalMatter(createProspectedDeposit(1).matter));
+  });
+
+  it("collects atmosphere at exactly one percent of base solid payload", () => {
+    const now = 1_750_000;
+    let state = createInitialState(now);
+    state.nanites = 2n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state.discovery.atmosphereVisible = true;
+    state = success(adjustAllocation(state, "atmosphere", 1n, now));
+    state = advanceSimulation(state, now + 10_500);
+    assert.equal(totalMatter(state.feedstock), ATMOSPHERE_ATOMS_PER_NANITE);
+    assert.equal(ATMOSPHERE_ATOMS_PER_NANITE * 100n, COLLECTION_ATOMS_PER_NANITE);
   });
 
   it("reserves collection matter at job start without destroying it", () => {
@@ -157,6 +209,71 @@ describe("cohort simulation", () => {
     assert.equal(complete.completedResearch.includes("parallel-directives"), true);
   });
 
+  it("applies the expanded research effects to real simulation capacities", () => {
+    const state = createInitialState(3_500_000);
+    state.nanites = 10_000n;
+    state.completedResearch.push(
+      "payload-frame-reinforcement",
+      "atmospheric-fractionation",
+      "packetized-sorting",
+      "capacitive-buffer-lattice",
+      "rf-scavenging",
+      "route-memory",
+      "local-material-caches",
+      "phase-locked-directive-bus",
+      "distributed-computronium",
+      "directive-compilation",
+      "specialized-morphologies",
+    );
+
+    assert.equal(solidCollectionCapacity(state), 80_000n);
+    assert.equal(atmosphericCollectionCapacity(state), 4_000n);
+    assert.equal(sortingCapacity(state), 80_000n);
+    assert.equal(energyJobYield(state), 3_200n);
+    assert.equal(effectiveJobDuration(state, "collect"), 3_600);
+    assert.equal(cohortSyncWindow(state), 100);
+    assert.equal(cohortResonanceWindow(state), 8_000);
+    assert.equal(effectiveResearchCapacity(state), 200n);
+  });
+
+  it("does not rewrite a cohort payload when research completes after reservation", () => {
+    const now = 3_600_000;
+    let state = createInitialState(now);
+    state.nanites = 2n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state = success(adjustAllocation(state, "collect", 1n, now));
+    const reserved = totalMatter(state.cohorts.find((cohort) => cohort.directive === "collect").payload.matter);
+    state.completedResearch.push("payload-frame-reinforcement", "specialized-morphologies");
+    const complete = advanceSimulation(state, now + 10_500);
+    assert.equal(reserved, COLLECTION_ATOMS_PER_NANITE);
+    assert.equal(totalMatter(complete.feedstock), COLLECTION_ATOMS_PER_NANITE);
+    assert.equal(solidCollectionCapacity(complete), COLLECTION_ATOMS_PER_NANITE * 8n);
+  });
+
+  it("enforces research prerequisites rather than exposing disconnected upgrades", () => {
+    const state = reachSortedStockpile();
+    state.energy = 1_000_000n;
+    for (const key of Object.keys(state.atoms)) state.atoms[key] = 1_000_000n;
+    const result = queueResearch(state, "payload-frame-reinforcement", state.simTime);
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /Parallel Directive Scheduling/);
+  });
+
+  it("launches autonomous prospecting after a depleted deposit", () => {
+    const now = 3_750_000;
+    const state = createInitialState(now);
+    state.nanites = 2n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state.activeDeposit.matter = { carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n };
+    state.completedResearch.push("autonomous-prospecting");
+
+    const advanced = advanceSimulation(state, now + 1);
+    assert.equal(advanced.cohorts.some((cohort) => cohort.directive === "prospect"), true);
+    assert.equal(advanced.discovery.atmosphereVisible, true);
+  });
+
   it("unlocks relative allocation research at twelve nanites", () => {
     const state = reachSortedStockpile();
     state.energy = 1_000n;
@@ -220,7 +337,7 @@ describe("cohort simulation", () => {
     };
     state.activeDeposit.initialAtoms = 5_000_000n;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 4);
+    assert.equal(restored.version, 5);
     assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
     assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
   });
@@ -235,7 +352,7 @@ describe("cohort simulation", () => {
     state.allocations.energy = 25n;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 4);
+    assert.equal(restored.version, 5);
     assert.equal(restored.allocationTargets.collect, (ALLOCATION_SHARE_SCALE * 65n) / 100n);
     assert.equal(restored.allocationTargets.energy, (ALLOCATION_SHARE_SCALE * 25n) / 100n);
   });
@@ -248,10 +365,36 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     const impact = restored.log.find((entry) => entry.message === "IMPACT.");
     const assembly = restored.log.find((entry) => entry.message === "ASSEMBLY COMPLETE.");
-    assert.equal(restored.version, 4);
+    assert.equal(restored.version, 5);
     assert.equal(impact.tier, "critical");
     assert.equal(assembly.tier, "world");
     assert.equal(restored.log.every((entry) => typeof entry.tier === "string"), true);
+  });
+
+  it("migrates the exhausted overnight swarm without changing its nanite count", () => {
+    const state = createInitialState(5_900_000);
+    state.version = 4;
+    state.nanites = 600_000_000_000_000_000n;
+    state.discovery.surveyComplete = true;
+    state.activeDeposit.matter = { carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n };
+    delete state.allocations.atmosphere;
+    delete state.allocationTargets.atmosphere;
+    delete state.allocationLocks.atmosphere;
+    delete state.depletedDeposits;
+    delete state.prospecting;
+    delete state.discovery.atmosphereVisible;
+    delete state.discovery.exhaustionNotified;
+    delete state.discovery.residuumIndexed;
+
+    const restored = deserializeState(serializeState(state));
+    assert.equal(restored.version, 5);
+    assert.equal(restored.nanites, 600_000_000_000_000_000n);
+    assert.equal(restored.allocations.atmosphere, 0n);
+    assert.equal(restored.discovery.atmosphereVisible, false);
+    assert.deepEqual(restored.prospecting, { searchesCompleted: 0 });
+    const advanced = advanceSimulation(restored, restored.simTime + 1);
+    assert.equal(advanced.nanites, 600_000_000_000_000_000n);
+    assert.equal(advanced.log.some((entry) => entry.message.includes("SOLID SUBSTRATE EXHAUSTED")), true);
   });
 
   it("round-trips bigint state through the versioned save codec", () => {

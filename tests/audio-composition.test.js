@@ -40,6 +40,15 @@ describe("procedural composition", () => {
     assert.notDeepEqual(derivePatternStep(19, activity, 7), derivePatternStep(20, activity, 7));
   });
 
+  it("gives atmospheric harvesting its own harmonic field", () => {
+    const state = sonicState();
+    state.cohorts = [{ directive: "atmosphere", workers: 16n }];
+    const activity = deriveActivity(state);
+    const harmony = deriveHarmony(activity, 3);
+    assert.equal(activity.dominant, "atmosphere");
+    assert.deepEqual(harmony.intervals, [0, 2, 9, 14]);
+  });
+
   it("exposes more of the synthetic mind as discoveries accumulate", () => {
     const awake = deriveActivity(sonicState());
     const dormantState = sonicState();

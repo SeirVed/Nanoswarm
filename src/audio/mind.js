@@ -26,6 +26,7 @@ function bigintPresence(value) {
 function completionDirective(message) {
   if (message.startsWith("ENERGY ACQUISITION COMPLETE")) return "energy";
   if (message.startsWith("COLLECTION RUN COMPLETE")) return "collect";
+  if (message.startsWith("ATMOSPHERIC HARVEST COMPLETE")) return "atmosphere";
   if (message.startsWith("SORTING RUN COMPLETE")) return "sort";
   if (message.startsWith("REPLICATION COMPLETE")) return "replicate";
   if (message.startsWith("RESEARCH COMPLETE")) return "research";
@@ -315,20 +316,23 @@ export class SyntheticMind {
       this.tone(base * 4, when, 0.18, "sine", level);
     } else if (cohort.directive === "collect") {
       this.tone(base, when, 0.42, "triangle", level);
+    } else if (cohort.directive === "atmosphere") {
+      this.tone(base * 3, when, 0.7, "sine", level * 0.7);
+      this.noise(when, 0.48, 0.0025, 2_400);
     } else if (cohort.directive === "sort") {
       this.tone(base * 2, when, 0.16, "triangle", level);
       this.tone(base * 3, when + 0.085, 0.2, "sine", level * 0.7);
     } else if (cohort.directive === "replicate") {
       [1, 1.5, 2].forEach((multiple, index) => this.tone(base * multiple, when + index * 0.09, 0.5, "sine", level));
       this.noise(when, 0.16, 0.0035, 920);
-    } else if (cohort.directive === "survey") {
+    } else if (cohort.directive === "survey" || cohort.directive === "prospect") {
       this.tone(base * 4, when, 0.65, "sine", level);
     }
   }
 
   completionCue(directive) {
     const when = this.context.currentTime + 0.025;
-    const index = Math.max(0, ["energy", "collect", "sort", "replicate", "research", "survey"].indexOf(directive));
+    const index = Math.max(0, ["energy", "collect", "atmosphere", "sort", "replicate", "research", "survey"].indexOf(directive));
     const base = this.harmony.frequencies[index % this.harmony.frequencies.length];
     if (directive === "replicate") {
       this.tone(base * 2, when, 1.2, "sine", 0.014);

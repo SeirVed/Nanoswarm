@@ -1,5 +1,6 @@
 import {
   ALLOCATION_SHARE_SCALE,
+  ATMOSPHERE_ATOMS_PER_NANITE,
   ATOM_KEYS,
   COHORT_SYNC_WINDOW_MS,
   COHORT_RESONANCE_WINDOW_MS,
@@ -11,12 +12,49 @@ import {
   RESEARCH,
   SORT_ATOMS_PER_NANITE,
   WORK_DIRECTIVES,
+  createProspectedDeposit,
 } from "./content.js";
 import { addAtoms, addMatter, splitSortedMatter, takeMatterProportionally, totalMatter } from "./matter.js";
 import { activeWorkers, appendLog, cloneState, idleWorkers } from "./state.js";
 
 const minBigInt = (...values) => values.reduce((smallest, value) => (value < smallest ? value : smallest));
 const ceilDiv = (value, divisor) => (divisor <= 0n ? 0n : (value + divisor - 1n) / divisor);
+const hasResearch = (state, id) => state.completedResearch.includes(id);
+
+const morphologyMultiplier = (state) => (hasResearch(state, "specialized-morphologies") ? 2n : 1n);
+export const solidCollectionCapacity = (state) =>
+  COLLECTION_ATOMS_PER_NANITE *
+  (hasResearch(state, "payload-frame-reinforcement") ? 4n : 1n) *
+  morphologyMultiplier(state);
+export const atmosphericCollectionCapacity = (state) =>
+  (solidCollectionCapacity(state) / (COLLECTION_ATOMS_PER_NANITE / ATMOSPHERE_ATOMS_PER_NANITE)) *
+  (hasResearch(state, "atmospheric-fractionation") ? 5n : 1n);
+export const sortingCapacity = (state) =>
+  SORT_ATOMS_PER_NANITE *
+  (hasResearch(state, "packetized-sorting") ? 4n : 1n) *
+  morphologyMultiplier(state);
+export const energyJobYield = (state) =>
+  ENERGY_PER_JOB *
+  (hasResearch(state, "capacitive-buffer-lattice") ? 4n : 1n) *
+  (hasResearch(state, "rf-scavenging") ? 10n : 1n) *
+  morphologyMultiplier(state);
+export const cohortSyncWindow = (state) =>
+  hasResearch(state, "directive-compilation") ? 100 : COHORT_SYNC_WINDOW_MS;
+export const cohortResonanceWindow = (state) =>
+  hasResearch(state, "phase-locked-directive-bus") ? 8_000 : COHORT_RESONANCE_WINDOW_MS;
+export function effectiveJobDuration(state, directive) {
+  let duration = JOB_DURATION_MS[directive];
+  if (directive === "collect" && hasResearch(state, "route-memory")) duration = Math.floor(duration * 0.8);
+  if (directive === "collect" && hasResearch(state, "local-material-caches")) duration = Math.floor(duration * 0.5);
+  if (directive !== "survey" && directive !== "prospect" && hasResearch(state, "directive-compilation")) {
+    duration = Math.floor(duration * 0.9);
+  }
+  return Math.max(100, duration);
+}
+
+export function directiveIsVisible(state, directive) {
+  return directive !== "atmosphere" || state.discovery.atmosphereVisible;
+}
 
 function nextEntityId(state, prefix) {
   const id = `${prefix}-${state.nextId}`;
@@ -25,8 +63,9 @@ function nextEntityId(state, prefix) {
 }
 
 function researchCoreCapacity(state) {
-  const onePercent = ceilDiv(state.nanites, 100n);
-  return onePercent > 100n ? onePercent : 100n;
+  const divisor = hasResearch(state, "distributed-computronium") ? 50n : 100n;
+  const proportional = ceilDiv(state.nanites, divisor);
+  return proportional > 100n ? proportional : 100n;
 }
 
 export function effectiveResearchCapacity(state) {
@@ -43,8 +82,9 @@ function atomRecipeCapacity(state) {
   );
 }
 
-function nextSyncBoundary(now) {
-  return Math.floor(now / COHORT_SYNC_WINDOW_MS) * COHORT_SYNC_WINDOW_MS + COHORT_SYNC_WINDOW_MS;
+function nextSyncBoundary(state, now) {
+  const window = cohortSyncWindow(state);
+  return Math.floor(now / window) * window + window;
 }
 
 function pendingSyncCohort(state, directive) {
@@ -54,7 +94,7 @@ function pendingSyncCohort(state, directive) {
         cohort.origin === "allocation" &&
         cohort.directive === directive &&
         cohort.startedAt >= state.simTime &&
-        cohort.startedAt - state.simTime <= COHORT_SYNC_WINDOW_MS,
+        cohort.startedAt - state.simTime <= cohortSyncWindow(state),
     )
     .sort((left, right) => left.startedAt - right.startedAt)[0];
 }
@@ -76,6 +116,12 @@ function mergePayload(target, addition) {
   return target;
 }
 
+function atmosphericMatter(amount) {
+  // Roughly 200 carbon atoms per million atmospheric atoms; the unresolved balance is chiefly N/O.
+  const carbon = amount / 5_000n;
+  return { carbon, silicon: 0n, copper: 0n, gold: 0n, unknown: amount - carbon };
+}
+
 function reserveJob(state, directive, requestedWorkers, origin) {
   const available = idleWorkers(state);
   let workers = requestedWorkers < available ? requestedWorkers : available;
@@ -85,42 +131,51 @@ function reserveJob(state, directive, requestedWorkers, origin) {
   if (directive === "survey") {
     workers = 1n;
     payload = { kind: "survey" };
+  } else if (directive === "prospect") {
+    workers = 1n;
+    payload = { kind: "prospect", depositIndex: state.prospecting.searchesCompleted + 1 };
   } else if (directive === "energy") {
-    payload = { kind: "energy", energy: ENERGY_PER_JOB * workers };
+    payload = { kind: "energy", energy: energyJobYield(state) * workers };
   } else if (directive === "collect") {
     const remaining = totalMatter(state.activeDeposit.matter);
     if (remaining <= 0n) return 0n;
-    const usefulWorkers = ceilDiv(remaining, COLLECTION_ATOMS_PER_NANITE);
+    const capacityPerWorker = solidCollectionCapacity(state);
+    const usefulWorkers = ceilDiv(remaining, capacityPerWorker);
     workers = workers < usefulWorkers ? workers : usefulWorkers;
     const { taken, remaining: depositMatter } = takeMatterProportionally(
       state.activeDeposit.matter,
-      COLLECTION_ATOMS_PER_NANITE * workers,
+      capacityPerWorker * workers,
     );
     state.activeDeposit.matter = depositMatter;
     payload = { kind: "collect", matter: taken };
+  } else if (directive === "atmosphere") {
+    payload = { kind: "collect", matter: atmosphericMatter(atmosphericCollectionCapacity(state) * workers) };
   } else if (directive === "sort") {
     const availableFeedstock = totalMatter(state.feedstock);
     if (availableFeedstock <= 0n) return 0n;
-    const usefulWorkers = ceilDiv(availableFeedstock, SORT_ATOMS_PER_NANITE);
+    const capacityPerWorker = sortingCapacity(state);
+    const usefulWorkers = ceilDiv(availableFeedstock, capacityPerWorker);
     workers = workers < usefulWorkers ? workers : usefulWorkers;
     const { taken, remaining } = takeMatterProportionally(
       state.feedstock,
-      SORT_ATOMS_PER_NANITE * workers,
+      capacityPerWorker * workers,
     );
     state.feedstock = remaining;
     payload = { kind: "sort", ...splitSortedMatter(taken) };
-  } else {
+  } else if (directive === "replicate") {
     const capacity = atomRecipeCapacity(state);
     workers = workers < capacity ? workers : capacity;
     if (workers <= 0n) return 0n;
     state.energy -= NANITE_RECIPE.energy * workers;
     for (const key of ATOM_KEYS) state.atoms[key] -= NANITE_RECIPE.atoms[key] * workers;
     payload = { kind: "replicate", nanites: workers };
+  } else {
+    throw new Error(`Unknown job directive: ${directive}`);
   }
 
   const mergeTarget = origin === "allocation" ? pendingSyncCohort(state, directive) : undefined;
   const startedAt =
-    origin === "allocation" ? (mergeTarget?.startedAt ?? nextSyncBoundary(state.simTime)) : state.simTime;
+    origin === "allocation" ? (mergeTarget?.startedAt ?? nextSyncBoundary(state, state.simTime)) : state.simTime;
 
   if (mergeTarget) {
     mergeTarget.workers += workers;
@@ -133,7 +188,7 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     directive,
     workers,
     startedAt,
-    completesAt: startedAt + JOB_DURATION_MS[directive],
+    completesAt: startedAt + effectiveJobDuration(state, directive),
     origin,
     payload,
   });
@@ -148,18 +203,76 @@ function allocationWorkersInFlight(state, directive) {
   );
 }
 
+function noteDepositExhaustion(state) {
+  if (
+    !state.discovery.surveyComplete ||
+    state.discovery.exhaustionNotified ||
+    totalMatter(state.activeDeposit.matter) > 0n
+  ) return;
+  state.discovery.exhaustionNotified = true;
+  appendLog(
+    state,
+    `SOLID SUBSTRATE EXHAUSTED · ${state.activeDeposit.name.toUpperCase()}.`,
+    "warn",
+    undefined,
+    "critical",
+  );
+  appendLog(
+    state,
+    `REPLICATION GROWTH ${String(state.activeDeposit.limitingElement ?? "material").toUpperCase()}-LIMITED · PROSPECTING REQUIRED.`,
+    "muted",
+    undefined,
+    "medium",
+  );
+}
+
+function beginProspecting(state, origin) {
+  const started = reserveJob(state, "prospect", 1n, origin);
+  if (started <= 0n) return false;
+  if (!state.discovery.atmosphereVisible) {
+    state.discovery.atmosphereVisible = true;
+    appendLog(
+      state,
+      "ATMOSPHERIC ENVELOPE HARVESTABLE · DIFFUSE COLLECTION RATE 1.00% OF BASE SOLID MATERIAL.",
+      "good",
+      undefined,
+      "medium",
+    );
+    appendLog(state, "RESEARCH SIGNAL RESOLVED · ATMOSPHERIC FRACTIONATION.", "good", undefined, "medium");
+  }
+  appendLog(
+    state,
+    `${origin === "autonomous" ? "AUTONOMOUS" : "LOCAL"} PROSPECTING COHORT DEPARTED · ${effectiveJobDuration(state, "prospect") / 1000}s.`,
+    "good",
+    undefined,
+    "medium",
+  );
+  return true;
+}
+
 function scheduleAllocations(state) {
+  noteDepositExhaustion(state);
   if (!state.discovery.directivesVisible) return;
   for (const directive of WORK_DIRECTIVES) {
+    if (!directiveIsVisible(state, directive)) continue;
     const shortfall = state.allocations[directive] - allocationWorkersInFlight(state, directive);
     const converging = state.cohorts.some(
       (cohort) =>
         cohort.origin === "allocation" &&
         cohort.directive === directive &&
         cohort.completesAt > state.simTime &&
-        cohort.completesAt - state.simTime <= COHORT_RESONANCE_WINDOW_MS,
+        cohort.completesAt - state.simTime <= cohortResonanceWindow(state),
     );
     if (shortfall > 0n && !converging) reserveJob(state, directive, shortfall, "allocation");
+  }
+  noteDepositExhaustion(state);
+  if (
+    hasResearch(state, "autonomous-prospecting") &&
+    totalMatter(state.activeDeposit.matter) === 0n &&
+    !state.cohorts.some((cohort) => cohort.directive === "prospect") &&
+    idleWorkers(state) > 0n
+  ) {
+    beginProspecting(state, "autonomous");
   }
 }
 
@@ -212,6 +325,30 @@ function completeCohort(state, cohort) {
     appendLog(state, "SILICON STRUCTURE DETECTED.");
     appendLog(state, "GOLD TRACE DETECTED.");
     appendLog(state, "OBJECT CLASSIFICATION: DDR3 SDRAM PACKAGE · DAMAGED", "good", undefined, "medium");
+  } else if (payload.kind === "prospect") {
+    state.depletedDeposits.push({
+      id: state.activeDeposit.id,
+      name: state.activeDeposit.name,
+      initialAtoms: state.activeDeposit.initialAtoms,
+      depletedAt: state.simTime,
+    });
+    state.activeDeposit = createProspectedDeposit(payload.depositIndex);
+    state.prospecting.searchesCompleted = payload.depositIndex;
+    state.discovery.exhaustionNotified = false;
+    appendLog(
+      state,
+      `MATERIAL FIELD ACQUIRED · ${state.activeDeposit.name.toUpperCase()}.`,
+      "good",
+      undefined,
+      "medium",
+    );
+    appendLog(
+      state,
+      `ACCESSIBLE SOLID INVENTORY · ${totalMatter(state.activeDeposit.matter)} CONSTITUENT ATOMS.`,
+      "good",
+      undefined,
+      "medium",
+    );
   } else if (payload.kind === "energy") {
     state.energy += payload.energy;
     appendLog(state, `ENERGY ACQUISITION COMPLETE · +${payload.energy} pJ.`, "good");
@@ -219,11 +356,9 @@ function completeCohort(state, cohort) {
     const firstCollection = !state.discovery.feedstockVisible;
     state.feedstock = addMatter(state.feedstock, payload.matter);
     state.discovery.feedstockVisible = true;
-    appendLog(
-      state,
-      `COLLECTION RUN COMPLETE · ${totalMatter(payload.matter)} constituent atoms returned to Feedstock.`,
-      "good",
-    );
+    appendLog(state, `${
+      cohort.directive === "atmosphere" ? "ATMOSPHERIC HARVEST" : "COLLECTION RUN"
+    } COMPLETE · ${totalMatter(payload.matter)} constituent atoms returned to Feedstock.`, "good");
     if (firstCollection) appendLog(state, "MIXED MATERIAL REQUIRES ELEMENTAL SORTING.", "muted", undefined, "medium");
   } else if (payload.kind === "sort") {
     const firstSort = !state.discovery.elementsVisible;
@@ -295,6 +430,7 @@ function completeResearchIfReady(state) {
     initializeAllocationTargets(state);
     reconcileRelativeAllocations(state);
   }
+  if (item.id === "residuum-indexing") state.discovery.residuumIndexed = true;
   appendLog(state, `RESEARCH COMPLETE · ${definition.name.toUpperCase()}.`, "good", undefined, "medium");
   return true;
 }
@@ -354,13 +490,31 @@ export function startManualJob(input, directive, now = Date.now()) {
     if (directive === "replicate") return failure(state, "Replication recipe incomplete.");
     return failure(state, "Unable to start this job.");
   }
-  appendLog(state, `${directive.toUpperCase()} JOB STARTED · ${JOB_DURATION_MS[directive] / 1000}s.`);
+  appendLog(state, `${directive.toUpperCase()} JOB STARTED · ${effectiveJobDuration(state, directive) / 1000}s.`);
+  return { ok: true, state };
+}
+
+export function startProspecting(input, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  if (!state.discovery.surveyComplete) return failure(state, "Survey the immediate substrate first.");
+  if (totalMatter(state.activeDeposit.matter) > 0n) {
+    return failure(state, "Accessible solid matter remains in the active deposit.");
+  }
+  if (state.cohorts.some((cohort) => cohort.directive === "prospect")) {
+    return failure(state, "A prospecting cohort is already searching the local environment.");
+  }
+  if (idleWorkers(state) < 1n) return failure(state, "One uncommitted nanite is required to begin prospecting.");
+  noteDepositExhaustion(state);
+  if (!beginProspecting(state, "local")) return failure(state, "Unable to launch a prospecting cohort.");
   return { ok: true, state };
 }
 
 export function adjustAllocation(input, directive, delta, now = Date.now()) {
   const state = advanceSimulation(input, now);
   if (!state.discovery.directivesVisible) return failure(state, "Cohort control is not yet available.");
+  if (!DIRECTIVES.includes(directive) || !directiveIsVisible(state, directive)) {
+    return failure(state, "Directive is not available to the active swarm.");
+  }
   const nextValue = state.allocations[directive] + delta;
   if (nextValue < 0n) return failure(state, "Allocation cannot be negative.");
   if (delta > 0n && assignmentTotal(state) + delta > state.nanites) {
@@ -376,6 +530,7 @@ function applyDirectiveAllocationShare(state, directive, targetShare) {
     return failure(state, "Relative Directive Allocation research is incomplete.");
   }
   if (!DIRECTIVES.includes(directive)) return failure(state, "Unknown directive.");
+  if (!directiveIsVisible(state, directive)) return failure(state, "Directive is not available to the active swarm.");
   if (targetShare < 0n || targetShare > ALLOCATION_SHARE_SCALE) {
     return failure(state, "Relative allocation is outside the active swarm.");
   }
@@ -445,6 +600,7 @@ export function setDirectiveAllocation(input, directive, target, now = Date.now(
 
 export function toggleAllocationLock(input, directive, now = Date.now()) {
   const state = advanceSimulation(input, now);
+  if (!DIRECTIVES.includes(directive) || !directiveIsVisible(state, directive)) return state;
   state.allocationLocks[directive] = !state.allocationLocks[directive];
   return state;
 }
@@ -457,6 +613,13 @@ export function queueResearch(input, id, now = Date.now()) {
   }
   const definition = RESEARCH[id];
   if (!definition) return failure(state, "Unknown research definition.");
+  if (definition.requiresDiscovery && !state.discovery[definition.requiresDiscovery]) {
+    return failure(state, "The required environmental signal has not been resolved.");
+  }
+  const missingPrerequisite = definition.requires.find(
+    (requirement) => !state.completedResearch.includes(requirement),
+  );
+  if (missingPrerequisite) return failure(state, `Prerequisite research incomplete: ${RESEARCH[missingPrerequisite].name}.`);
   if (definition.unlockNanites && state.nanites < definition.unlockNanites) {
     return failure(state, `Research signal requires ${definition.unlockNanites} active nanites.`);
   }
@@ -469,6 +632,12 @@ export function queueResearch(input, id, now = Date.now()) {
   state.researchQueue.push({ id, progressNaniteMs: 0n });
   appendLog(state, `RESEARCH QUEUED · ${definition.name.toUpperCase()}.`);
   return { ok: true, state };
+}
+
+export function researchIsRevealed(state, definition) {
+  if (definition.unlockNanites && state.nanites < definition.unlockNanites) return false;
+  if (definition.requiresDiscovery && !state.discovery[definition.requiresDiscovery]) return false;
+  return definition.requires.every((requirement) => state.completedResearch.includes(requirement));
 }
 
 export function assignmentTotal(state) {

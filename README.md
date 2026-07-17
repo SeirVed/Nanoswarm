@@ -2,7 +2,7 @@
 
 NanoSwarm is a long-horizon incremental game about rebuilding a stranded nanite seed into an industrial and eventually interstellar swarm.
 
-The current playable slice begins with the seed's deep-time arrival, then reveals the interface only as the player discovers it: one active assembler, a physically scaled DDR3 package, collection, Feedstock, exact elemental sorting, Residuum, energy acquisition, replication, cohort allocation, research, and the first distant project. The permanent log separates world, critical, medium, and routine information, while the operations display consolidates nearby cohort phases by directive.
+The current playable slice begins with the seed's deep-time arrival, then reveals the interface only as the player discovers it: one active assembler, a physically scaled DDR3 package, collection, Feedstock, exact elemental sorting, Residuum, energy acquisition, replication, cohort allocation, research, prospecting, atmospheric harvesting, and the first distant project. The permanent log separates world, critical, medium, and routine information, while the operations display consolidates nearby cohort phases by directive.
 
 ## Run locally
 
@@ -32,11 +32,14 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Inputs are reserved at job start and outputs appear atomically at completion.
 - Matter is stored as exact constituent-atom inventories. Collection does not identify it.
 - Sorting transfers known elements to storage and physically retains unknown matter as Residuum.
+- Exhausted deposits expose a discrete prospecting job. Success replaces the depleted field with a larger compositionally distinct solid deposit while retaining depletion history.
+- Beginning the first search identifies atmosphere as inexhaustible external feedstock at exactly 1% of effective solid collection throughput; most atmospheric matter remains unresolved N/O.
 - Offline progress calls the same event-jumping simulation used while the page is open.
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec.
 - Permanent log entries carry a significance tier independently of their visual tone; old saves infer tiers during migration.
 - At 12 nanites, Relative Directive Allocation research exposes persistent proportional targets and exact count entry. New nanites automatically enter those target shares while allocation locks preserve protected directives.
+- Research is a prerequisite graph whose completed nodes alter authoritative payloads, durations, synchronization, resonance, exploration automation, or computronium capacity.
 - Sound is synthesized live with Web Audio. Job ratios select the harmonic field, while digits of π and e govern its pulse and drift; no recorded soundtrack or audio dependency is shipped.
 
 See `docs/architecture.md` for the model boundary and extension rules.

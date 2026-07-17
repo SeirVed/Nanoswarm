@@ -1,11 +1,12 @@
 export const PI_DIGITS = "314159265358979323846264338327950288419716939937510";
 export const E_DIGITS = "271828182845904523536028747135266249775724709369995";
 
-export const SONIC_DIRECTIVES = Object.freeze(["energy", "collect", "sort", "replicate", "research"]);
+export const SONIC_DIRECTIVES = Object.freeze(["energy", "collect", "atmosphere", "sort", "replicate", "research"]);
 
 const DIRECTIVE_COLOUR = Object.freeze({
   energy: 2,
   collect: 0,
+  atmosphere: 9,
   sort: 5,
   replicate: 7,
   research: 11,
@@ -15,6 +16,7 @@ const CHORD_INTERVALS = Object.freeze({
   idle: Object.freeze([0, 7, 12, 19]),
   energy: Object.freeze([0, 2, 7, 9]),
   collect: Object.freeze([0, 5, 7, 12]),
+  atmosphere: Object.freeze([0, 2, 9, 14]),
   sort: Object.freeze([0, 3, 7, 10]),
   replicate: Object.freeze([0, 4, 7, 11]),
   research: Object.freeze([0, 7, 11, 14]),
