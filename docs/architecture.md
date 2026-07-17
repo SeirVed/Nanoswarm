@@ -35,6 +35,12 @@ Inputs are removed from available inventory when a cohort starts. Its payload is
 
 Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. The embedded computronium supplies the greater of 100 nanite-equivalents or 1% of the total swarm; explicitly allocated research nanites add to that capacity.
 
+## Procedural sound
+
+The synthetic-mind sound engine is a read-only observer of authoritative game state. Active job ratios choose a harmonic field, cohort boundaries provide gestures, and digits of π and e deterministically gate rhythm, voicing, spacing, and slow filter motion. New voices emerge with swarm magnitude and discoveries rather than with raw loudness.
+
+Audio is deliberately absent from saves and simulation commands. Muting, browser suspension, or unavailable audio hardware can therefore never change progression. The player's `BEGIN` gesture creates the Web Audio context in compliance with browser autoplay policy; returning players may awaken it from the header control.
+
 ## Scale path
 
 Resource and worker counts use `bigint`. Wall-clock timestamps are integer milliseconds. Future efficiency values should use fixed-point basis points rather than floating-point state. Cohorts may later include recipe revisions, targets, and failure modes without changing the event model.

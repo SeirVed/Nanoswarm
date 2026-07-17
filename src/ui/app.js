@@ -19,8 +19,10 @@ import {
 import { totalMatter } from "../game/matter.js";
 import { createInitialState, idleWorkers } from "../game/state.js";
 import { clearGame, loadGame, saveGame } from "../game/storage.js";
+import { SyntheticMind } from "../audio/mind.js";
 
 const root = document.querySelector("#root");
+const sonicMind = new SyntheticMind();
 let state = loadGame();
 let introVisible = 0;
 let notice = null;
@@ -71,7 +73,7 @@ function renderIntro() {
           introVisible >= INTRO_LOG.length
             ? `<div class="begin-zone">
                 <button class="terminal-button begin-button" data-action="begin">BEGIN</button>
-                <p>ASSUME LOCAL DIRECTIVE AUTHORITY</p>
+                <p>ASSUME LOCAL DIRECTIVE AUTHORITY · AWAKEN SONIC MIND</p>
               </div>`
             : ""
         }
@@ -309,6 +311,8 @@ function structuralSignature() {
     state.researchQueue.map((item) => item.id).join(","),
     state.completedResearch.join(","),
     state.log.length,
+    sonicMind.enabled,
+    sonicMind.volumePercent,
     notice ?? "",
   ].join("|");
 }
@@ -339,6 +343,7 @@ function updateDynamicProgress(now) {
 }
 
 function renderGame(now = Date.now(), force = false) {
+  sonicMind.observe(state, now);
   const signature = structuralSignature();
   if (!force && signature === lastStructuralSignature) {
     updateDynamicProgress(now);
@@ -351,7 +356,15 @@ function renderGame(now = Date.now(), force = false) {
     <header class="game-header">
       <div class="brand-lockup"><span class="brand-mark">◈</span><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>
       <div class="header-metrics"><div><span>ACTIVE NANITES</span><strong>${formatInteger(state.nanites)}</strong></div>
-        ${state.discovery.surveyComplete ? `<div><span>SUBSTRATE</span><strong>${percentage(depositTotal, state.activeDeposit.initialAtoms)}</strong></div>` : ""}
+        ${state.discovery.surveyComplete ? `<div class="substrate-metric"><span>SUBSTRATE</span><strong>${percentage(depositTotal, state.activeDeposit.initialAtoms)}</strong></div>` : ""}
+        <div class="audio-controls">
+          <button class="audio-toggle ${sonicMind.enabled ? "active" : ""}" data-action="audio" aria-pressed="${sonicMind.enabled}" ${
+            sonicMind.isSupported ? "" : "disabled"
+          }><i aria-hidden="true"></i><span>SONIC MIND</span><strong>${sonicMind.enabled ? "RESONANT" : "SILENT"}</strong></button>
+          <label class="volume-control"><span>GAIN</span><input type="range" min="0" max="100" value="${
+            sonicMind.volumePercent
+          }" data-action="volume" aria-label="Sonic mind volume"></label>
+        </div>
         <button class="reset-button" data-action="reset">RESET SEED</button>
       </div>
     </header>
@@ -389,6 +402,11 @@ root.addEventListener("click", (event) => {
   if (action === "begin") {
     state = createInitialState();
     saveGame(state);
+    void sonicMind.start(state).catch(() => {
+      sonicMind.stop();
+      showFailure("The sonic mind could not acquire an audio channel.");
+      renderGame(Date.now(), true);
+    });
     renderGame();
   } else if (action === "start") {
     acceptResult(startManualJob(state, button.dataset.directive));
@@ -399,13 +417,31 @@ root.addEventListener("click", (event) => {
     renderGame();
   } else if (action === "research") {
     acceptResult(queueResearch(state, button.dataset.research));
+  } else if (action === "audio") {
+    if (sonicMind.enabled) {
+      sonicMind.stop();
+    } else {
+      void sonicMind.start(state).catch(() => {
+        sonicMind.stop();
+        showFailure("The sonic mind could not acquire an audio channel.");
+        renderGame(Date.now(), true);
+      });
+    }
+    renderGame(Date.now(), true);
   } else if (action === "reset" && window.confirm("Erase this local seed and replay the arrival sequence?")) {
+    sonicMind.stop();
     clearGame();
     state = null;
     introVisible = 0;
     lastStructuralSignature = null;
     renderIntro();
   }
+});
+
+root.addEventListener("input", (event) => {
+  const control = event.target.closest("input[data-action='volume']");
+  if (!control) return;
+  sonicMind.setVolume(Number(control.value) / 100);
 });
 
 if (!state) {

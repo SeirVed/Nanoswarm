@@ -175,6 +175,49 @@ body::after {
 .reset-button { border: 0; background: transparent; color: var(--muted); font-size: 8px; letter-spacing: 0.14em; cursor: pointer; }
 .reset-button:hover { color: var(--amber); }
 
+.header-metrics > .audio-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding-left: clamp(14px, 2vw, 28px);
+  border-left: 1px solid var(--line);
+}
+
+.audio-toggle {
+  min-width: 116px;
+  padding: 4px 7px 4px 20px;
+  display: grid;
+  position: relative;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.audio-toggle i {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.audio-toggle span { font-size: 8px; letter-spacing: 0.14em; }
+.audio-toggle strong { margin-top: 3px; color: var(--muted); font-size: 8px; letter-spacing: 0.1em; }
+.audio-toggle:hover:not(:disabled) span { color: var(--text); }
+.audio-toggle.active i { border-color: var(--green); background: var(--green); box-shadow: 0 0 10px rgba(105, 240, 138, 0.6); }
+.audio-toggle.active strong { color: var(--green); }
+.audio-toggle:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.volume-control { display: grid; gap: 5px; width: 70px; }
+.volume-control span { color: var(--muted); font-size: 7px; letter-spacing: 0.14em; }
+.volume-control input { width: 70px; accent-color: var(--green); cursor: pointer; }
+
 .notice {
   position: fixed;
   z-index: 20;
@@ -330,7 +373,10 @@ body::after {
   .cursor { margin-left: 82px; }
   .game-header { align-items: flex-start; }
   .header-metrics { gap: 16px; }
-  .header-metrics > div:nth-child(2) { display: none; }
+  .header-metrics > .substrate-metric { display: none; }
+  .header-metrics > .audio-controls { padding-left: 10px; gap: 0; }
+  .audio-toggle { min-width: 98px; }
+  .volume-control { display: none; }
   .reset-button { display: none; }
   .dashboard-grid { grid-template-columns: 1fr; padding: 12px; }
   .log-column { grid-column: auto; height: 480px; }
