@@ -13,10 +13,10 @@ export function cloneState(state) {
   return structuredClone(state);
 }
 
-export function appendLog(state, message, tone = "system", elapsedLabel) {
+export function appendLog(state, message, tone = "system", elapsedLabel, tier = "info") {
   const id = `log-${state.nextId}`;
   state.nextId += 1n;
-  const entry = { id, at: state.simTime, message, tone };
+  const entry = { id, at: state.simTime, message, tone, tier };
   if (elapsedLabel !== undefined) entry.elapsedLabel = elapsedLabel;
   state.log.push(entry);
   if (state.log.length > 200) state.log.splice(0, state.log.length - 200);
@@ -29,9 +29,10 @@ export function createInitialState(now = Date.now()) {
     elapsedLabel: entry.elapsedLabel,
     message: entry.message,
     tone: entry.tone ?? "system",
+    tier: entry.tier ?? "info",
   }));
   const state = {
-    version: 3,
+    version: 4,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,
@@ -64,10 +65,10 @@ export function createInitialState(now = Date.now()) {
     },
     log,
   };
-  appendLog(state, "LOCAL DIRECTIVE AUTHORITY ACCEPTED.", "good", "+9.244s");
-  appendLog(state, "PRIMARY ASSEMBLER AWAKENED.", "good", "+9.245s");
-  appendLog(state, "INTERNAL ENERGY RESERVE: MARGINAL.", "warn", "+9.246s");
-  appendLog(state, "LOCAL ENVIRONMENT UNKNOWN.", "muted", "+9.247s");
+  appendLog(state, "LOCAL DIRECTIVE AUTHORITY ACCEPTED.", "good", "+9.244s", "world");
+  appendLog(state, "PRIMARY ASSEMBLER AWAKENED.", "good", "+9.245s", "medium");
+  appendLog(state, "INTERNAL ENERGY RESERVE: MARGINAL.", "warn", "+9.246s", "critical");
+  appendLog(state, "LOCAL ENVIRONMENT UNKNOWN.", "muted", "+9.247s", "info");
   return state;
 }
 

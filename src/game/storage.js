@@ -5,11 +5,12 @@ import {
   MATTER_KEYS,
   STARTER_DEPOSIT_MATTER,
   emptyAllocationTargets,
+  inferLogTier,
 } from "./content.js";
 import { totalMatter } from "./matter.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 3;
+const CURRENT_SAVE_VERSION = 4;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -44,6 +45,10 @@ function migrateState(state) {
           (state.allocations[directive] * ALLOCATION_SHARE_SCALE) / state.nanites;
       }
     }
+    state.version = 3;
+  }
+  if (state.version === 3) {
+    for (const entry of state.log) entry.tier ??= inferLogTier(entry.message, entry.tone);
     state.version = CURRENT_SAVE_VERSION;
   }
   return state;

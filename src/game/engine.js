@@ -2,6 +2,7 @@ import {
   ALLOCATION_SHARE_SCALE,
   ATOM_KEYS,
   COHORT_SYNC_WINDOW_MS,
+  COHORT_RESONANCE_WINDOW_MS,
   COLLECTION_ATOMS_PER_NANITE,
   DIRECTIVES,
   ENERGY_PER_JOB,
@@ -151,7 +152,14 @@ function scheduleAllocations(state) {
   if (!state.discovery.directivesVisible) return;
   for (const directive of WORK_DIRECTIVES) {
     const shortfall = state.allocations[directive] - allocationWorkersInFlight(state, directive);
-    if (shortfall > 0n) reserveJob(state, directive, shortfall, "allocation");
+    const converging = state.cohorts.some(
+      (cohort) =>
+        cohort.origin === "allocation" &&
+        cohort.directive === directive &&
+        cohort.completesAt > state.simTime &&
+        cohort.completesAt - state.simTime <= COHORT_RESONANCE_WINDOW_MS,
+    );
+    if (shortfall > 0n && !converging) reserveJob(state, directive, shortfall, "allocation");
   }
 }
 
@@ -198,12 +206,12 @@ function completeCohort(state, cohort) {
   if (payload.kind === "survey") {
     state.discovery.surveyComplete = true;
     state.activeDeposit.name = "DDR3 SDRAM package · damaged";
-    appendLog(state, "SUBSTRATE SURVEY COMPLETE.", "good");
+    appendLog(state, "SUBSTRATE SURVEY COMPLETE.", "good", undefined, "medium");
     appendLog(state, "ARTIFICIAL POLYMER DETECTED.");
     appendLog(state, "COPPER CONDUCTOR DETECTED.");
     appendLog(state, "SILICON STRUCTURE DETECTED.");
     appendLog(state, "GOLD TRACE DETECTED.");
-    appendLog(state, "OBJECT CLASSIFICATION: DDR3 SDRAM PACKAGE · DAMAGED", "good");
+    appendLog(state, "OBJECT CLASSIFICATION: DDR3 SDRAM PACKAGE · DAMAGED", "good", undefined, "medium");
   } else if (payload.kind === "energy") {
     state.energy += payload.energy;
     appendLog(state, `ENERGY ACQUISITION COMPLETE · +${payload.energy} pJ.`, "good");
@@ -216,7 +224,7 @@ function completeCohort(state, cohort) {
       `COLLECTION RUN COMPLETE · ${totalMatter(payload.matter)} constituent atoms returned to Feedstock.`,
       "good",
     );
-    if (firstCollection) appendLog(state, "MIXED MATERIAL REQUIRES ELEMENTAL SORTING.", "muted");
+    if (firstCollection) appendLog(state, "MIXED MATERIAL REQUIRES ELEMENTAL SORTING.", "muted", undefined, "medium");
   } else if (payload.kind === "sort") {
     const firstSort = !state.discovery.elementsVisible;
     state.atoms = addAtoms(state.atoms, payload.atoms);
@@ -226,7 +234,13 @@ function completeCohort(state, cohort) {
     state.discovery.researchVisible = true;
     appendLog(state, "SORTING RUN COMPLETE · IDENTIFIED ELEMENTS TRANSFERRED TO STORAGE.", "good");
     if (firstSort && state.discovery.residuumVisible) {
-      appendLog(state, "UNRESOLVED MATTER RETAINED AS RESIDUUM FOR FUTURE RE-SORTING.", "muted");
+      appendLog(
+        state,
+        "UNRESOLVED MATTER RETAINED AS RESIDUUM FOR FUTURE RE-SORTING.",
+        "muted",
+        undefined,
+        "medium",
+      );
     }
   } else if (payload.kind === "replicate") {
     const previousNanites = state.nanites;
@@ -240,11 +254,17 @@ function completeCohort(state, cohort) {
       "good",
     );
     if (state.nanites === 2n) {
-      appendLog(state, "COHORT CONTROL AVAILABLE · DIRECTIVE ALLOCATIONS ONLINE.", "good");
-      appendLog(state, "LONG-HORIZON PROJECT ENVELOPE DETECTED.", "muted");
+      appendLog(state, "COHORT CONTROL AVAILABLE · DIRECTIVE ALLOCATIONS ONLINE.", "good", undefined, "medium");
+      appendLog(state, "LONG-HORIZON PROJECT ENVELOPE DETECTED.", "muted", undefined, "medium");
     }
     if (previousNanites < 12n && state.nanites >= 12n) {
-      appendLog(state, "RESEARCH SIGNAL RESOLVED · RELATIVE DIRECTIVE ALLOCATION.", "good");
+      appendLog(
+        state,
+        "RESEARCH SIGNAL RESOLVED · RELATIVE DIRECTIVE ALLOCATION.",
+        "good",
+        undefined,
+        "medium",
+      );
     }
   }
 }
@@ -275,7 +295,7 @@ function completeResearchIfReady(state) {
     initializeAllocationTargets(state);
     reconcileRelativeAllocations(state);
   }
-  appendLog(state, `RESEARCH COMPLETE · ${definition.name.toUpperCase()}.`, "good");
+  appendLog(state, `RESEARCH COMPLETE · ${definition.name.toUpperCase()}.`, "good", undefined, "medium");
   return true;
 }
 

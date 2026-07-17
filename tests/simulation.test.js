@@ -49,6 +49,16 @@ describe("cohort simulation", () => {
     assert.equal(complete.nanites, 1n);
   });
 
+  it("classifies discoveries above routine job completions", () => {
+    const state = reachSortedStockpile();
+    const survey = state.log.find((entry) => entry.message === "SUBSTRATE SURVEY COMPLETE.");
+    const collection = state.log.find((entry) => entry.message.startsWith("COLLECTION RUN COMPLETE"));
+    const sorting = state.log.find((entry) => entry.message.startsWith("SORTING RUN COMPLETE"));
+    assert.equal(survey.tier, "medium");
+    assert.equal(collection.tier, "info");
+    assert.equal(sorting.tier, "info");
+  });
+
   it("keeps collected matter conserved through sorting", () => {
     const state = reachSortedStockpile();
     const identified = Object.values(state.atoms).reduce((sum, value) => sum + value, 0n);
@@ -108,7 +118,7 @@ describe("cohort simulation", () => {
     assert.equal(collectCohorts[0].startedAt, now + 500);
   });
 
-  it("pulls adjacent same-job cohorts into resonance after a completion boundary", () => {
+  it("holds returned workers for a nearby same-job phase and restores one resonant cohort", () => {
     const now = 3_000_000;
     let state = createInitialState(now);
     state.nanites = 2n;
@@ -116,15 +126,16 @@ describe("cohort simulation", () => {
     state.discovery.directivesVisible = true;
 
     state = success(adjustAllocation(state, "collect", 1n, now));
-    state = success(adjustAllocation(state, "collect", 1n, now + 600));
+    state = success(adjustAllocation(state, "collect", 1n, now + 1_600));
     assert.equal(state.cohorts.filter((cohort) => cohort.directive === "collect").length, 2);
 
     state = advanceSimulation(state, now + 10_500);
-    state = advanceSimulation(state, now + 11_000);
+    assert.equal(state.cohorts.filter((cohort) => cohort.directive === "collect").length, 1);
+    state = advanceSimulation(state, now + 12_000);
     const resonant = state.cohorts.filter((cohort) => cohort.directive === "collect");
     assert.equal(resonant.length, 1);
     assert.equal(resonant[0].workers, 2n);
-    assert.equal(resonant[0].startedAt, now + 11_000);
+    assert.equal(resonant[0].startedAt, now + 12_500);
   });
 
   it("uses at least 100 nanite-equivalents from computronium research", () => {
@@ -209,7 +220,7 @@ describe("cohort simulation", () => {
     };
     state.activeDeposit.initialAtoms = 5_000_000n;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 3);
+    assert.equal(restored.version, 4);
     assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
     assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
   });
@@ -224,9 +235,23 @@ describe("cohort simulation", () => {
     state.allocations.energy = 25n;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 3);
+    assert.equal(restored.version, 4);
     assert.equal(restored.allocationTargets.collect, (ALLOCATION_SHARE_SCALE * 65n) / 100n);
     assert.equal(restored.allocationTargets.energy, (ALLOCATION_SHARE_SCALE * 25n) / 100n);
+  });
+
+  it("migrates legacy log entries into significance tiers", () => {
+    const state = createInitialState(5_750_000);
+    state.version = 3;
+    for (const entry of state.log) delete entry.tier;
+
+    const restored = deserializeState(serializeState(state));
+    const impact = restored.log.find((entry) => entry.message === "IMPACT.");
+    const assembly = restored.log.find((entry) => entry.message === "ASSEMBLY COMPLETE.");
+    assert.equal(restored.version, 4);
+    assert.equal(impact.tier, "critical");
+    assert.equal(assembly.tier, "world");
+    assert.equal(restored.log.every((entry) => typeof entry.tier === "string"), true);
   });
 
   it("round-trips bigint state through the versioned save codec", () => {

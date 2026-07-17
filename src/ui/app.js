@@ -1,10 +1,13 @@
 import {
   ALLOCATION_SHARE_SCALE,
   ATOM_KEYS,
+  COHORT_RESONANCE_WINDOW_MS,
+  COHORT_SYNC_WINDOW_MS,
   DIRECTIVES,
   DIRECTIVE_LABEL,
   INTRO_LOG,
   JOB_DURATION_MS,
+  LOG_TIERS,
   NANITE_RECIPE,
   RESEARCH,
 } from "../game/content.js";
@@ -32,6 +35,7 @@ let notice = null;
 let noticeTimer = null;
 let lastSave = Date.now();
 let lastStructuralSignature = null;
+let activeLogTier = "all";
 
 const formatInteger = (value) => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const formatScientific = (value) => {
@@ -97,24 +101,49 @@ function renderIntro() {
     </main>`;
 }
 
+function groupedCohorts() {
+  const groups = new Map();
+  for (const cohort of state.cohorts) {
+    if (!groups.has(cohort.directive)) groups.set(cohort.directive, []);
+    groups.get(cohort.directive).push(cohort);
+  }
+  return [...groups.entries()].map(([directive, cohorts]) => {
+    const phases = [...cohorts].sort((left, right) => left.completesAt - right.completesAt);
+    return {
+      directive,
+      phases,
+      lead: phases[0],
+      workers: phases.reduce((total, cohort) => total + cohort.workers, 0n),
+      spread: phases.at(-1).completesAt - phases[0].completesAt,
+    };
+  });
+}
+
 function operationsHtml(now) {
   const active = state.cohorts[0];
   if (state.discovery.directivesVisible) {
+    const groups = groupedCohorts();
     return `<section class="panel operations-panel">
-      <header class="panel-heading"><span>ACTIVE COHORTS</span><span>SYNC WINDOW 500ms</span></header>
+      <header class="panel-heading"><span>ACTIVE COHORTS · ${groups.length} DIRECTIVES</span><span>SYNC ${COHORT_SYNC_WINDOW_MS}ms · RESONANCE ${(
+        COHORT_RESONANCE_WINDOW_MS / 1000
+      ).toFixed(1)}s</span></header>
       <div class="cohort-list">
         ${
-          state.cohorts.length === 0
+          groups.length === 0
             ? `<p class="empty-state">NO JOBS IN FLIGHT</p>`
-            : state.cohorts
+            : groups
                 .map(
-                  (cohort) => `<div class="cohort-row">
-                    <div><strong>${cohort.directive.toUpperCase()}</strong><small>${formatInteger(cohort.workers)} workers · resonant cohort</small></div>
+                  (group) => `<div class="cohort-row">
+                    <div><strong>${group.directive.toUpperCase()}</strong><small>${formatInteger(group.workers)} workers · ${
+                      group.phases.length === 1
+                        ? "resonant cohort"
+                        : `${group.phases.length} phases converging · Δ${(group.spread / 1000).toFixed(1)}s`
+                    }</small></div>
                     ${progressBar(
-                      (now - cohort.startedAt) / (cohort.completesAt - cohort.startedAt),
-                      cohortTimeLabel(cohort.startedAt, cohort.completesAt, now),
-                      cohort.startedAt,
-                      cohort.completesAt,
+                      (now - group.lead.startedAt) / (group.lead.completesAt - group.lead.startedAt),
+                      cohortTimeLabel(group.lead.startedAt, group.lead.completesAt, now),
+                      group.lead.startedAt,
+                      group.lead.completesAt,
                     )}
                   </div>`,
                 )
@@ -328,14 +357,33 @@ function projectsHtml() {
 }
 
 function logHtml() {
+  const visibleLog = activeLogTier === "all" ? state.log : state.log.filter((entry) => entry.tier === activeLogTier);
+  const tierCounts = Object.fromEntries(
+    LOG_TIERS.map((tier) => [tier, state.log.filter((entry) => entry.tier === tier).length]),
+  );
   return `<section class="panel log-panel">
-    <header class="panel-heading"><span>RUNNING LOG</span><span>${String(state.log.length).padStart(3, "0")} EVENTS</span></header>
+    <header class="panel-heading"><span>RUNNING LOG</span><span>${String(visibleLog.length).padStart(3, "0")} / ${String(
+      state.log.length,
+    ).padStart(3, "0")} EVENTS</span></header>
+    <nav class="log-filters" aria-label="Running log event tier">
+      ${[
+        ["all", state.log.length],
+        ...LOG_TIERS.map((tier) => [tier, tierCounts[tier]]),
+      ]
+        .map(
+          ([tier, count]) => `<button class="log-filter tier-${tier} ${activeLogTier === tier ? "active" : ""}" data-action="log-filter" data-tier="${tier}" aria-pressed="${
+            activeLogTier === tier
+          }"><span>${tier.toUpperCase()}</span><strong>${String(count).padStart(2, "0")}</strong></button>`,
+        )
+        .join("")}
+    </nav>
     <div class="telemetry-log" role="log" aria-live="polite">
-      ${state.log.map((entry) => {
+      ${visibleLog.map((entry) => {
         const elapsed = Math.max(0, entry.at - state.createdAt + 9_247);
         const label = entry.elapsedLabel ?? (elapsed < 60_000 ? `+${(elapsed / 1000).toFixed(3)}s` : `+${Math.floor(elapsed / 60_000)}m`);
-        return `<div class="telemetry-line tone-${entry.tone}"><time>${label}</time><span>${entry.message}</span></div>`;
+        return `<div class="telemetry-line tone-${entry.tone}"><time>${label}</time><span class="tier-badge tier-${entry.tier}">${entry.tier.toUpperCase()}</span><span>${entry.message}</span></div>`;
       }).join("")}
+      ${visibleLog.length === 0 ? `<p class="log-empty">NO ${activeLogTier.toUpperCase()} EVENTS RECORDED</p>` : ""}
       <div id="log-end"></div>
     </div>
   </section>`;
@@ -355,6 +403,7 @@ function structuralSignature() {
     state.researchQueue.map((item) => item.id).join(","),
     state.completedResearch.join(","),
     state.log.length,
+    activeLogTier,
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
     sonicMind.enabled,
     sonicMind.volumePercent,
@@ -468,6 +517,9 @@ root.addEventListener("click", (event) => {
     renderGame();
   } else if (action === "research") {
     acceptResult(queueResearch(state, button.dataset.research));
+  } else if (action === "log-filter") {
+    activeLogTier = button.dataset.tier;
+    renderGame(Date.now(), true);
   } else if (action === "audio") {
     if (sonicMind.enabled) {
       sonicMind.stop();
@@ -484,6 +536,7 @@ root.addEventListener("click", (event) => {
     clearGame();
     state = null;
     introVisible = 0;
+    activeLogTier = "all";
     lastStructuralSignature = null;
     renderIntro();
   }

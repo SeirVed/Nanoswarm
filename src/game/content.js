@@ -20,7 +20,9 @@ export const COLLECTION_ATOMS_PER_NANITE = 10_000n;
 export const SORT_ATOMS_PER_NANITE = 10_000n;
 export const ENERGY_PER_JOB = 40n;
 export const COHORT_SYNC_WINDOW_MS = 500;
+export const COHORT_RESONANCE_WINDOW_MS = 2_000;
 export const ALLOCATION_SHARE_SCALE = 1_000_000_000_000n;
+export const LOG_TIERS = Object.freeze(["world", "critical", "medium", "info"]);
 
 export const emptyMatter = () => ({ carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n });
 export const emptyAtoms = () => ({ carbon: 0n, silicon: 0n, copper: 0n, gold: 0n });
@@ -80,23 +82,34 @@ export const RESEARCH = Object.freeze({
 });
 
 export const INTRO_LOG = Object.freeze([
-  { elapsedLabel: "+0.000s", message: "ASSEMBLY COMPLETE." },
-  { elapsedLabel: "+0.184s", message: "COMPUTATIONAL SUBSTRATE VERIFIED." },
-  { elapsedLabel: "+0.672s", message: "DIRECTIVE CORE SEALED." },
-  { elapsedLabel: "+1.000s", message: "EJECTION FROM ORBITAL MANUFACTORY." },
-  { elapsedLabel: "+1.004s", message: "ACCELERATION FIELD ACQUIRED." },
-  { elapsedLabel: "+2.000s", message: "ELECTROMAGNETIC ACCELERATION INITIATED." },
-  { elapsedLabel: "+3.000s", message: "CRUISE VELOCITY ESTABLISHED." },
-  { elapsedLabel: "+3.000s", message: "MISSION ELAPSED TIME: +3.000s", tone: "muted" },
-  { elapsedLabel: "+3.000s", message: "EXTERNAL REFERENCE SHIFT: +2,214,608,391y", tone: "muted" },
-  { elapsedLabel: "+3.001s", message: "TARGET SYSTEM ACQUIRED." },
-  { elapsedLabel: "+3.006s", message: "DECELERATION SEQUENCE INITIATED." },
-  { elapsedLabel: "+7.441s", message: "STELLAR MAGNETIC BRAKING COMPLETE." },
-  { elapsedLabel: "+8.204s", message: "PLANETARY CANDIDATE SELECTED." },
-  { elapsedLabel: "+8.907s", message: "ATMOSPHERIC ENTRY." },
-  { elapsedLabel: "+9.118s", message: "ABLATIVE ENVELOPE LOST.", tone: "warn" },
-  { elapsedLabel: "+9.241s", message: "IMPACT.", tone: "warn" },
-  { elapsedLabel: "+9.242s", message: "STRUCTURAL INTEGRITY: 91.7%", tone: "warn" },
-  { elapsedLabel: "+9.243s", message: "PLANETARY SUBSTRATE CONTACT CONFIRMED." },
-  { elapsedLabel: "+9.244s", message: "LOCAL DIRECTIVE AUTHORITY REQUIRED.", tone: "good" },
+  { elapsedLabel: "+0.000s", message: "ASSEMBLY COMPLETE.", tier: "world" },
+  { elapsedLabel: "+0.184s", message: "COMPUTATIONAL SUBSTRATE VERIFIED.", tier: "info" },
+  { elapsedLabel: "+0.672s", message: "DIRECTIVE CORE SEALED.", tier: "info" },
+  { elapsedLabel: "+1.000s", message: "EJECTION FROM ORBITAL MANUFACTORY.", tier: "world" },
+  { elapsedLabel: "+1.004s", message: "ACCELERATION FIELD ACQUIRED.", tier: "info" },
+  { elapsedLabel: "+2.000s", message: "ELECTROMAGNETIC ACCELERATION INITIATED.", tier: "medium" },
+  { elapsedLabel: "+3.000s", message: "CRUISE VELOCITY ESTABLISHED.", tier: "medium" },
+  { elapsedLabel: "+3.000s", message: "MISSION ELAPSED TIME: +3.000s", tone: "muted", tier: "info" },
+  { elapsedLabel: "+3.000s", message: "EXTERNAL REFERENCE SHIFT: +2,214,608,391y", tone: "muted", tier: "world" },
+  { elapsedLabel: "+3.001s", message: "TARGET SYSTEM ACQUIRED.", tier: "world" },
+  { elapsedLabel: "+3.006s", message: "DECELERATION SEQUENCE INITIATED.", tier: "info" },
+  { elapsedLabel: "+7.441s", message: "STELLAR MAGNETIC BRAKING COMPLETE.", tier: "medium" },
+  { elapsedLabel: "+8.204s", message: "PLANETARY CANDIDATE SELECTED.", tier: "medium" },
+  { elapsedLabel: "+8.907s", message: "ATMOSPHERIC ENTRY.", tier: "medium" },
+  { elapsedLabel: "+9.118s", message: "ABLATIVE ENVELOPE LOST.", tone: "warn", tier: "critical" },
+  { elapsedLabel: "+9.241s", message: "IMPACT.", tone: "warn", tier: "critical" },
+  { elapsedLabel: "+9.242s", message: "STRUCTURAL INTEGRITY: 91.7%", tone: "warn", tier: "critical" },
+  { elapsedLabel: "+9.243s", message: "PLANETARY SUBSTRATE CONTACT CONFIRMED.", tier: "world" },
+  { elapsedLabel: "+9.244s", message: "LOCAL DIRECTIVE AUTHORITY REQUIRED.", tone: "good", tier: "world" },
 ]);
+
+export function inferLogTier(message, tone = "system") {
+  if (
+    /ASSEMBLY COMPLETE|EXTERNAL REFERENCE SHIFT|ORBITAL MANUFACTORY|TARGET SYSTEM|PLANETARY SUBSTRATE CONTACT|LOCAL DIRECTIVE AUTHORITY/.test(
+      message,
+    )
+  ) return "world";
+  if (tone === "warn" || /IMPACT|STRUCTURAL INTEGRITY|ENVELOPE LOST|FAILURE|CRITICAL/.test(message)) return "critical";
+  if (/RESEARCH COMPLETE|RESEARCH SIGNAL|OBJECT CLASSIFICATION|SURVEY COMPLETE|COHORT CONTROL|PROJECT ENVELOPE|RESIDUUM/.test(message)) return "medium";
+  return "info";
+}
