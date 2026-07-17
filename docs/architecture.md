@@ -25,7 +25,7 @@ The starter deposit is one damaged DDR3 FBGA package with a rounded physical inv
 
 ## Prospecting and open environments
 
-When all accessible matter in an active deposit has been reserved, the simulation records exhaustion once and exposes a 30-second, one-worker prospecting cohort. Completion archives a summary of the depleted deposit and installs the next deterministic material field. Later fields have distinct compositions and scale by three orders of magnitude when the authored sequence repeats.
+When all accessible matter in an active deposit has been reserved, the simulation records exhaustion once and exposes a 30-second, one-worker prospecting cohort. Completion archives a summary of the depleted deposit and installs the next deterministic material field. Later fields have distinct compositions and scale by nine orders of magnitude when the authored sequence repeats, keeping every successive field larger than its predecessor.
 
 The first prospecting departure also identifies atmospheric matter. Atmosphere is an open environmental source rather than a finite deposit, so its harvested atoms enter the tracked system at job completion. Base atmospheric throughput is exactly 1% of the current effective solid-collection payload. Approximately 200 carbon atoms per million are classified immediately; the unresolved balance is retained physically as chiefly nitrogen and oxygen pending future elemental definitions.
 

@@ -55,6 +55,15 @@ describe("cohort simulation", () => {
     );
   });
 
+  it("keeps every successive prospected field larger than its predecessor", () => {
+    let previous = totalMatter(STARTER_DEPOSIT_MATTER);
+    for (let index = 1; index <= 12; index += 1) {
+      const current = totalMatter(createProspectedDeposit(index).matter);
+      assert.ok(current > previous, `deposit ${index} should exceed the preceding field`);
+      previous = current;
+    }
+  });
+
   it("does not produce fractional or early survey output", () => {
     const initial = createInitialState(1_000);
     const started = success(startManualJob(initial, "survey", 1_000));

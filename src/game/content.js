@@ -98,7 +98,7 @@ export function createProspectedDeposit(index) {
   const templateIndex = (index - 1) % PROSPECTED_DEPOSIT_TEMPLATES.length;
   const generation = Math.floor((index - 1) / PROSPECTED_DEPOSIT_TEMPLATES.length);
   let scale = 1n;
-  for (let level = 0; level < generation; level += 1) scale *= 1_000n;
+  for (let level = 0; level < generation; level += 1) scale *= 1_000_000_000n;
   const template = PROSPECTED_DEPOSIT_TEMPLATES[templateIndex];
   const matter = scaledMatter(template.matter, scale);
   return {
