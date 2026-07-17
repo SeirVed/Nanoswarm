@@ -1,4 +1,5 @@
 import {
+  ALLOCATION_SHARE_SCALE,
   ATOM_KEYS,
   DIRECTIVES,
   DIRECTIVE_LABEL,
@@ -14,6 +15,7 @@ import {
   effectiveResearchCapacity,
   queueResearch,
   setDirectiveAllocation,
+  setDirectiveAllocationShare,
   startManualJob,
   toggleAllocationLock,
 } from "../game/engine.js";
@@ -231,12 +233,15 @@ function allocationsHtml() {
   const relativeAllocation = state.completedResearch.includes("relative-allocation");
   return `<section class="panel allocation-panel">
     <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatInteger(unassigned)} UNASSIGNED${
-      relativeAllocation ? " · RELATIVE CONTROL" : ""
+      relativeAllocation ? " · RELATIVE AUTO" : ""
     }</span></header>
     <div class="allocation-list">
       ${DIRECTIVES.map((directive) => {
         const locked = state.allocationLocks[directive];
-        const shareTenths = state.nanites === 0n ? 0n : (state.allocations[directive] * 1_000n) / state.nanites;
+        const shareHundredths = relativeAllocation
+          ? (state.allocationTargets[directive] * 10_000n + ALLOCATION_SHARE_SCALE / 2n) /
+            ALLOCATION_SHARE_SCALE
+          : 0n;
         return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}">
           <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${
             directive === "research" ? "core capacity applies" : "complete jobs only"
@@ -259,9 +264,9 @@ function allocationsHtml() {
           }</button>
           ${
             relativeAllocation
-              ? `<label class="relative-allocation"><input type="range" min="0" max="1000" step="1" value="${shareTenths}" data-action="set-share" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} relative share"><span>${
-                  shareTenths / 10n
-                }.${shareTenths % 10n}%</span></label>`
+              ? `<label class="relative-allocation"><input type="range" min="0" max="10000" step="1" value="${shareHundredths}" data-action="set-share" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} persistent relative share"><span>${
+                  shareHundredths / 100n
+                }.${(shareHundredths % 100n).toString().padStart(2, "0")}%</span></label>`
               : ""
           }
         </div>`;
@@ -269,7 +274,7 @@ function allocationsHtml() {
     </div>
     <p class="panel-note">${
       relativeAllocation
-        ? "Relative changes draw proportionally from other open directives. Locked directives are preserved. Running cohorts still finish indivisibly."
+        ? "Relative targets auto-allocate new nanites. Changes draw proportionally from other open directives; locks preserve protected shares. Running cohorts still finish indivisibly."
         : "Running cohorts finish their current indivisible job before a reduced assignment takes effect."
     }</p>
   </section>`;
@@ -350,6 +355,7 @@ function structuralSignature() {
     state.researchQueue.map((item) => item.id).join(","),
     state.completedResearch.join(","),
     state.log.length,
+    ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
     sonicMind.enabled,
     sonicMind.volumePercent,
     notice ?? "",
@@ -497,14 +503,18 @@ root.addEventListener("change", (event) => {
   try {
     target =
       control.dataset.action === "set-share"
-        ? (state.nanites * BigInt(control.value) + 500n) / 1_000n
+        ? (BigInt(control.value) * ALLOCATION_SHARE_SCALE) / 10_000n
         : BigInt(control.value.replace(/[,\s_]/g, ""));
   } catch {
     showFailure("Allocation must be a whole nanite count.");
     renderGame(Date.now(), true);
     return;
   }
-  acceptResult(setDirectiveAllocation(state, control.dataset.directive, target));
+  acceptResult(
+    control.dataset.action === "set-share"
+      ? setDirectiveAllocationShare(state, control.dataset.directive, target)
+      : setDirectiveAllocation(state, control.dataset.directive, target),
+  );
 });
 
 root.addEventListener("keydown", (event) => {

@@ -1,4 +1,5 @@
 import {
+  ALLOCATION_SHARE_SCALE,
   ATOM_KEYS,
   COHORT_SYNC_WINDOW_MS,
   COLLECTION_ATOMS_PER_NANITE,
@@ -154,6 +155,44 @@ function scheduleAllocations(state) {
   }
 }
 
+function initializeAllocationTargets(state) {
+  if (!state.allocationTargets || state.nanites <= 0n) return;
+  for (const directive of DIRECTIVES) {
+    state.allocationTargets[directive] =
+      (state.allocations[directive] * ALLOCATION_SHARE_SCALE) / state.nanites;
+  }
+}
+
+function reconcileRelativeAllocations(state) {
+  if (!state.completedResearch.includes("relative-allocation") || !state.allocationTargets) return;
+  const targetTotal = DIRECTIVES.reduce(
+    (total, directive) => total + state.allocationTargets[directive],
+    0n,
+  );
+  const desiredAssigned =
+    (state.nanites * targetTotal + ALLOCATION_SHARE_SCALE / 2n) / ALLOCATION_SHARE_SCALE;
+  const apportionment = DIRECTIVES.map((directive, index) => {
+    const scaled = state.nanites * state.allocationTargets[directive];
+    return {
+      directive,
+      index,
+      workers: scaled / ALLOCATION_SHARE_SCALE,
+      remainder: scaled % ALLOCATION_SHARE_SCALE,
+    };
+  });
+  let assigned = apportionment.reduce((total, item) => total + item.workers, 0n);
+  apportionment.sort((left, right) => {
+    if (left.remainder === right.remainder) return left.index - right.index;
+    return left.remainder > right.remainder ? -1 : 1;
+  });
+  for (const item of apportionment) {
+    if (assigned >= desiredAssigned) break;
+    item.workers += 1n;
+    assigned += 1n;
+  }
+  for (const item of apportionment) state.allocations[item.directive] = item.workers;
+}
+
 function completeCohort(state, cohort) {
   const payload = cohort.payload;
   if (payload.kind === "survey") {
@@ -192,6 +231,7 @@ function completeCohort(state, cohort) {
   } else if (payload.kind === "replicate") {
     const previousNanites = state.nanites;
     state.nanites += payload.nanites;
+    reconcileRelativeAllocations(state);
     state.discovery.directivesVisible = state.nanites >= 2n;
     state.discovery.projectsVisible = true;
     appendLog(
@@ -231,6 +271,10 @@ function completeResearchIfReady(state) {
   if (item.progressNaniteMs < definition.requiredNaniteMs) return false;
   state.researchQueue.shift();
   if (!state.completedResearch.includes(item.id)) state.completedResearch.push(item.id);
+  if (item.id === "relative-allocation") {
+    initializeAllocationTargets(state);
+    reconcileRelativeAllocations(state);
+  }
   appendLog(state, `RESEARCH COMPLETE · ${definition.name.toUpperCase()}.`, "good");
   return true;
 }
@@ -307,24 +351,34 @@ export function adjustAllocation(input, directive, delta, now = Date.now()) {
   return { ok: true, state };
 }
 
-export function setDirectiveAllocation(input, directive, target, now = Date.now()) {
-  const state = advanceSimulation(input, now);
+function applyDirectiveAllocationShare(state, directive, targetShare) {
   if (!state.completedResearch.includes("relative-allocation")) {
     return failure(state, "Relative Directive Allocation research is incomplete.");
   }
   if (!DIRECTIVES.includes(directive)) return failure(state, "Unknown directive.");
-  if (target < 0n || target > state.nanites) return failure(state, "Allocation is outside the active swarm.");
+  if (targetShare < 0n || targetShare > ALLOCATION_SHARE_SCALE) {
+    return failure(state, "Relative allocation is outside the active swarm.");
+  }
 
-  const current = state.allocations[directive];
-  if (target > current) {
-    const unassigned = state.nanites - assignmentTotal(state);
-    const requiredRelease = target - current - unassigned;
+  const currentShare = state.allocationTargets[directive];
+  if (targetShare > currentShare) {
+    const assignedShare = DIRECTIVES.reduce(
+      (total, candidate) => total + state.allocationTargets[candidate],
+      0n,
+    );
+    const unassignedShare = ALLOCATION_SHARE_SCALE - assignedShare;
+    const requiredRelease = targetShare - currentShare - unassignedShare;
     if (requiredRelease > 0n) {
       const sources = DIRECTIVES.filter(
         (candidate) =>
-          candidate !== directive && !state.allocationLocks[candidate] && state.allocations[candidate] > 0n,
+          candidate !== directive &&
+          !state.allocationLocks[candidate] &&
+          state.allocationTargets[candidate] > 0n,
       );
-      const available = sources.reduce((total, candidate) => total + state.allocations[candidate], 0n);
+      const available = sources.reduce(
+        (total, candidate) => total + state.allocationTargets[candidate],
+        0n,
+      );
       if (available < requiredRelease) {
         return failure(state, "Locked directives leave too few nanites available for that allocation.");
       }
@@ -332,25 +386,41 @@ export function setDirectiveAllocation(input, directive, target, now = Date.now(
       const reductions = new Map();
       let released = 0n;
       for (const source of sources) {
-        const reduction = (state.allocations[source] * requiredRelease) / available;
+        const reduction = (state.allocationTargets[source] * requiredRelease) / available;
         reductions.set(source, reduction);
         released += reduction;
       }
       let remainder = requiredRelease - released;
       for (const source of sources) {
         if (remainder <= 0n) break;
-        if (reductions.get(source) < state.allocations[source]) {
+        if (reductions.get(source) < state.allocationTargets[source]) {
           reductions.set(source, reductions.get(source) + 1n);
           remainder -= 1n;
         }
       }
-      for (const source of sources) state.allocations[source] -= reductions.get(source);
+      for (const source of sources) state.allocationTargets[source] -= reductions.get(source);
     }
   }
 
-  state.allocations[directive] = target;
+  state.allocationTargets[directive] = targetShare;
+  reconcileRelativeAllocations(state);
   scheduleAllocations(state);
   return { ok: true, state };
+}
+
+export function setDirectiveAllocationShare(input, directive, targetShare, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  return applyDirectiveAllocationShare(state, directive, targetShare);
+}
+
+export function setDirectiveAllocation(input, directive, target, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  if (target < 0n || target > state.nanites) return failure(state, "Allocation is outside the active swarm.");
+  const targetShare =
+    state.nanites <= 0n
+      ? 0n
+      : (target * ALLOCATION_SHARE_SCALE + state.nanites / 2n) / state.nanites;
+  return applyDirectiveAllocationShare(state, directive, targetShare);
 }
 
 export function toggleAllocationLock(input, directive, now = Date.now()) {

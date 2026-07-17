@@ -1,6 +1,7 @@
 import {
   INTRO_LOG,
   STARTER_DEPOSIT_MATTER,
+  emptyAllocationTargets,
   emptyAllocations,
   emptyAtoms,
   emptyLocks,
@@ -30,7 +31,7 @@ export function createInitialState(now = Date.now()) {
     tone: entry.tone ?? "system",
   }));
   const state = {
-    version: 2,
+    version: 3,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,
@@ -48,6 +49,7 @@ export function createInitialState(now = Date.now()) {
     },
     cohorts: [],
     allocations: emptyAllocations(),
+    allocationTargets: emptyAllocationTargets(),
     allocationLocks: emptyLocks(),
     researchQueue: [],
     completedResearch: [],

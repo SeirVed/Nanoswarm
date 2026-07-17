@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { NANITE_RECIPE, RESEARCH, STARTER_DEPOSIT_MATTER } from "../src/game/content.js";
+import {
+  ALLOCATION_SHARE_SCALE,
+  NANITE_RECIPE,
+  RESEARCH,
+  STARTER_DEPOSIT_MATTER,
+} from "../src/game/content.js";
 import {
   adjustAllocation,
   advanceSimulation,
@@ -160,6 +165,9 @@ describe("cohort simulation", () => {
     state.allocations.collect = 40n;
     state.allocations.sort = 30n;
     state.allocations.energy = 30n;
+    state.allocationTargets.collect = (ALLOCATION_SHARE_SCALE * 40n) / 100n;
+    state.allocationTargets.sort = (ALLOCATION_SHARE_SCALE * 30n) / 100n;
+    state.allocationTargets.energy = (ALLOCATION_SHARE_SCALE * 30n) / 100n;
     state.allocationLocks.energy = true;
 
     const result = setDirectiveAllocation(state, "collect", 70n, state.simTime);
@@ -167,6 +175,26 @@ describe("cohort simulation", () => {
     assert.equal(result.state.allocations.collect, 70n);
     assert.equal(result.state.allocations.sort, 0n);
     assert.equal(result.state.allocations.energy, 30n);
+  });
+
+  it("auto-allocates newly replicated nanites to persistent relative targets", () => {
+    const now = 6_000_000;
+    const state = createInitialState(now);
+    state.nanites = 100n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state.completedResearch.push("relative-allocation");
+    state.allocations.collect = 50n;
+    state.allocations.replicate = 50n;
+    state.allocationTargets.collect = ALLOCATION_SHARE_SCALE / 2n;
+    state.allocationTargets.replicate = ALLOCATION_SHARE_SCALE / 2n;
+    state.energy = NANITE_RECIPE.energy * 125n;
+    for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) state.atoms[key] = amount * 125n;
+
+    const complete = advanceSimulation(state, now + 55_500);
+    assert.equal(complete.nanites, 150n);
+    assert.equal(complete.allocations.collect, 75n);
+    assert.equal(complete.allocations.replicate, 75n);
   });
 
   it("migrates legacy deposits without erasing material already collected", () => {
@@ -181,9 +209,24 @@ describe("cohort simulation", () => {
     };
     state.activeDeposit.initialAtoms = 5_000_000n;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 2);
+    assert.equal(restored.version, 3);
     assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
     assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
+  });
+
+  it("migrates completed relative allocations into persistent targets", () => {
+    const state = createInitialState(5_500_000);
+    state.version = 2;
+    delete state.allocationTargets;
+    state.nanites = 100n;
+    state.completedResearch.push("relative-allocation");
+    state.allocations.collect = 65n;
+    state.allocations.energy = 25n;
+
+    const restored = deserializeState(serializeState(state));
+    assert.equal(restored.version, 3);
+    assert.equal(restored.allocationTargets.collect, (ALLOCATION_SHARE_SCALE * 65n) / 100n);
+    assert.equal(restored.allocationTargets.energy, (ALLOCATION_SHARE_SCALE * 25n) / 100n);
   });
 
   it("round-trips bigint state through the versioned save codec", () => {

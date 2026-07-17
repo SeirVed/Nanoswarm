@@ -37,6 +37,8 @@ Inputs are removed from available inventory when a cohort starts. Its payload is
 
 Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. The embedded computronium supplies the greater of 100 nanite-equivalents or 1% of the total swarm; explicitly allocated research nanites add to that capacity.
 
+Relative allocation targets are stored as fixed-point shares of `10^12`. Replication reapportions the enlarged integer swarm with the largest-remainder method, so targets persist without fractional nanites or cumulative rounding loss. Target shares may sum to less than 100%; that remainder deliberately stays unassigned.
+
 ## Procedural sound
 
 The synthetic-mind sound engine is a read-only observer of authoritative game state. Active job ratios choose a harmonic field, cohort boundaries provide gestures, and digits of π and e deterministically gate rhythm, voicing, spacing, and slow filter motion. New voices emerge with swarm magnitude and discoveries rather than with raw loudness.

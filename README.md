@@ -34,7 +34,7 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Offline progress calls the same event-jumping simulation used while the page is open.
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec.
-- At 12 nanites, Relative Directive Allocation research exposes proportional sliders and exact count entry while allocation locks preserve protected directives.
+- At 12 nanites, Relative Directive Allocation research exposes persistent proportional targets and exact count entry. New nanites automatically enter those target shares while allocation locks preserve protected directives.
 - Sound is synthesized live with Web Audio. Job ratios select the harmonic field, while digits of π and e govern its pulse and drift; no recorded soundtrack or audio dependency is shipped.
 
 See `docs/architecture.md` for the model boundary and extension rules.

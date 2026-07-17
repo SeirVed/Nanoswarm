@@ -20,10 +20,12 @@ export const COLLECTION_ATOMS_PER_NANITE = 10_000n;
 export const SORT_ATOMS_PER_NANITE = 10_000n;
 export const ENERGY_PER_JOB = 40n;
 export const COHORT_SYNC_WINDOW_MS = 500;
+export const ALLOCATION_SHARE_SCALE = 1_000_000_000_000n;
 
 export const emptyMatter = () => ({ carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n });
 export const emptyAtoms = () => ({ carbon: 0n, silicon: 0n, copper: 0n, gold: 0n });
 export const emptyAllocations = () => ({ energy: 0n, collect: 0n, sort: 0n, replicate: 0n, research: 0n });
+export const emptyAllocationTargets = () => ({ energy: 0n, collect: 0n, sort: 0n, replicate: 0n, research: 0n });
 export const emptyLocks = () => ({ energy: false, collect: false, sort: false, replicate: false, research: false });
 
 export const DIRECTIVE_LABEL = Object.freeze({

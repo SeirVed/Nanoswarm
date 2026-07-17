@@ -1,9 +1,15 @@
 import { advanceSimulation } from "./engine.js";
-import { MATTER_KEYS, STARTER_DEPOSIT_MATTER } from "./content.js";
+import {
+  ALLOCATION_SHARE_SCALE,
+  DIRECTIVES,
+  MATTER_KEYS,
+  STARTER_DEPOSIT_MATTER,
+  emptyAllocationTargets,
+} from "./content.js";
 import { totalMatter } from "./matter.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 2;
+const CURRENT_SAVE_VERSION = 3;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -28,6 +34,16 @@ function migrateState(state) {
     }
     state.activeDeposit.initialAtoms = totalMatter(STARTER_DEPOSIT_MATTER);
     if (state.discovery.surveyComplete) state.activeDeposit.name = "DDR3 SDRAM package · damaged";
+    state.version = 2;
+  }
+  if (state.version === 2) {
+    state.allocationTargets = emptyAllocationTargets();
+    if (state.completedResearch.includes("relative-allocation") && state.nanites > 0n) {
+      for (const directive of DIRECTIVES) {
+        state.allocationTargets[directive] =
+          (state.allocations[directive] * ALLOCATION_SHARE_SCALE) / state.nanites;
+      }
+    }
     state.version = CURRENT_SAVE_VERSION;
   }
   return state;
