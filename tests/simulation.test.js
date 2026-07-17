@@ -86,6 +86,41 @@ describe("cohort simulation", () => {
     assert.equal(serializeState(stepped), serializeState(jumped));
   });
 
+  it("merges allocation changes made inside the 500ms synchronization window", () => {
+    const now = 2_000_000;
+    let state = createInitialState(now);
+    state.nanites = 16n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+
+    state = success(adjustAllocation(state, "collect", 1n, now));
+    state = success(adjustAllocation(state, "collect", 1n, now + 100));
+
+    const collectCohorts = state.cohorts.filter((cohort) => cohort.directive === "collect");
+    assert.equal(collectCohorts.length, 1);
+    assert.equal(collectCohorts[0].workers, 2n);
+    assert.equal(collectCohorts[0].startedAt, now + 500);
+  });
+
+  it("pulls adjacent same-job cohorts into resonance after a completion boundary", () => {
+    const now = 3_000_000;
+    let state = createInitialState(now);
+    state.nanites = 2n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+
+    state = success(adjustAllocation(state, "collect", 1n, now));
+    state = success(adjustAllocation(state, "collect", 1n, now + 600));
+    assert.equal(state.cohorts.filter((cohort) => cohort.directive === "collect").length, 2);
+
+    state = advanceSimulation(state, now + 10_500);
+    state = advanceSimulation(state, now + 11_000);
+    const resonant = state.cohorts.filter((cohort) => cohort.directive === "collect");
+    assert.equal(resonant.length, 1);
+    assert.equal(resonant[0].workers, 2n);
+    assert.equal(resonant[0].startedAt, now + 11_000);
+  });
+
   it("uses at least 100 nanite-equivalents from computronium research", () => {
     const sorted = reachSortedStockpile();
     const queued = success(queueResearch(sorted, "parallel-directives", sorted.simTime));

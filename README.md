@@ -16,6 +16,14 @@ npm run build
 
 Open `http://127.0.0.1:4173` after starting the development server. The production-ready static files are emitted to `dist/`.
 
+## Play online
+
+The `main` branch deploys automatically to GitHub Pages:
+
+`https://seirved.github.io/Nanoswarm/`
+
+The deployment workflow builds the dependency-free static site, uploads `dist/`, and publishes it through GitHub Pages. Each browser keeps an independent local save.
+
 ## Simulation rules
 
 - Nanites are whole `bigint` counts; production never uses fractional workers.

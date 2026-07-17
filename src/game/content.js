@@ -19,6 +19,7 @@ export const JOB_DURATION_MS = Object.freeze({
 export const COLLECTION_ATOMS_PER_NANITE = 10_000n;
 export const SORT_ATOMS_PER_NANITE = 10_000n;
 export const ENERGY_PER_JOB = 40n;
+export const COHORT_SYNC_WINDOW_MS = 500;
 
 export const emptyMatter = () => ({ carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n });
 export const emptyAtoms = () => ({ carbon: 0n, silicon: 0n, copper: 0n, gold: 0n });

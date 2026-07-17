@@ -1,5 +1,6 @@
 import {
   ATOM_KEYS,
+  COHORT_SYNC_WINDOW_MS,
   COLLECTION_ATOMS_PER_NANITE,
   ENERGY_PER_JOB,
   JOB_DURATION_MS,
@@ -37,6 +38,39 @@ function atomRecipeCapacity(state) {
     state.atoms.gold / NANITE_RECIPE.atoms.gold,
     state.energy / NANITE_RECIPE.energy,
   );
+}
+
+function nextSyncBoundary(now) {
+  return Math.floor(now / COHORT_SYNC_WINDOW_MS) * COHORT_SYNC_WINDOW_MS + COHORT_SYNC_WINDOW_MS;
+}
+
+function pendingSyncCohort(state, directive) {
+  return state.cohorts
+    .filter(
+      (cohort) =>
+        cohort.origin === "allocation" &&
+        cohort.directive === directive &&
+        cohort.startedAt >= state.simTime &&
+        cohort.startedAt - state.simTime <= COHORT_SYNC_WINDOW_MS,
+    )
+    .sort((left, right) => left.startedAt - right.startedAt)[0];
+}
+
+function mergePayload(target, addition) {
+  if (target.kind !== addition.kind) throw new Error("Cannot merge unlike cohort payloads");
+  if (target.kind === "energy") return { kind: "energy", energy: target.energy + addition.energy };
+  if (target.kind === "collect") return { kind: "collect", matter: addMatter(target.matter, addition.matter) };
+  if (target.kind === "sort") {
+    return {
+      kind: "sort",
+      atoms: addAtoms(target.atoms, addition.atoms),
+      residuum: addMatter(target.residuum, addition.residuum),
+    };
+  }
+  if (target.kind === "replicate") {
+    return { kind: "replicate", nanites: target.nanites + addition.nanites };
+  }
+  return target;
 }
 
 function reserveJob(state, directive, requestedWorkers, origin) {
@@ -81,12 +115,22 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     payload = { kind: "replicate", nanites: workers };
   }
 
+  const mergeTarget = origin === "allocation" ? pendingSyncCohort(state, directive) : undefined;
+  const startedAt =
+    origin === "allocation" ? (mergeTarget?.startedAt ?? nextSyncBoundary(state.simTime)) : state.simTime;
+
+  if (mergeTarget) {
+    mergeTarget.workers += workers;
+    mergeTarget.payload = mergePayload(mergeTarget.payload, payload);
+    return workers;
+  }
+
   state.cohorts.push({
     id: nextEntityId(state, "cohort"),
     directive,
     workers,
-    startedAt: state.simTime,
-    completesAt: state.simTime + JOB_DURATION_MS[directive],
+    startedAt,
+    completesAt: startedAt + JOB_DURATION_MS[directive],
     origin,
     payload,
   });

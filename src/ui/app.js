@@ -35,6 +35,10 @@ const formatDuration = (milliseconds) => {
   const minutes = Math.floor(seconds / 60);
   return minutes < 60 ? `${minutes}m ${seconds % 60}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
+const cohortTimeLabel = (startedAt, completesAt, now) =>
+  now < startedAt
+    ? `SYNC ${Math.max(0, (startedAt - now) / 1000).toFixed(1)}s`
+    : formatDuration(completesAt - now);
 const percentage = (part, whole) => {
   if (whole <= 0n) return "0.0%";
   const tenths = (part * 1_000n) / whole;
@@ -79,7 +83,7 @@ function operationsHtml(now) {
   const active = state.cohorts[0];
   if (state.discovery.directivesVisible) {
     return `<section class="panel operations-panel">
-      <header class="panel-heading"><span>ACTIVE COHORTS</span><span>${state.cohorts.length} GROUPS</span></header>
+      <header class="panel-heading"><span>ACTIVE COHORTS</span><span>SYNC WINDOW 500ms</span></header>
       <div class="cohort-list">
         ${
           state.cohorts.length === 0
@@ -87,10 +91,10 @@ function operationsHtml(now) {
             : state.cohorts
                 .map(
                   (cohort) => `<div class="cohort-row">
-                    <div><strong>${cohort.directive.toUpperCase()}</strong><small>${formatInteger(cohort.workers)} workers · complete output</small></div>
+                    <div><strong>${cohort.directive.toUpperCase()}</strong><small>${formatInteger(cohort.workers)} workers · resonant cohort</small></div>
                     ${progressBar(
                       (now - cohort.startedAt) / (cohort.completesAt - cohort.startedAt),
-                      formatDuration(cohort.completesAt - now),
+                      cohortTimeLabel(cohort.startedAt, cohort.completesAt, now),
                       cohort.startedAt,
                       cohort.completesAt,
                     )}
@@ -109,7 +113,7 @@ function operationsHtml(now) {
         <div class="eyebrow">ACTIVE DISCRETE JOB</div><strong>${active.directive.toUpperCase()}</strong>
         ${progressBar(
           (now - active.startedAt) / (active.completesAt - active.startedAt),
-          formatDuration(active.completesAt - now),
+          cohortTimeLabel(active.startedAt, active.completesAt, now),
           active.startedAt,
           active.completesAt,
         )}
@@ -316,7 +320,7 @@ function updateDynamicProgress(now) {
     const fill = bar.querySelector(".progress-fill");
     const label = bar.querySelector(":scope > span");
     if (fill) fill.style.width = `${Math.max(0, Math.min(1, (now - start) / (end - start))) * 100}%`;
-    if (label) label.textContent = formatDuration(end - now);
+    if (label) label.textContent = cohortTimeLabel(start, end, now);
   }
   const researchBar = document.querySelector("[data-research-progress]");
   const active = state.researchQueue[0];
