@@ -281,6 +281,8 @@ body::after {
 .cohort-row strong { color: var(--green); font-size: 10px; letter-spacing: 0.1em; }
 .cohort-row small { color: var(--muted); font-size: 8px; }
 .cohort-row .progress-wrap { margin: 0; }
+.cohort-progress { min-width: 0; display: grid; gap: 7px; }
+.cohort-rate { color: var(--green-dim) !important; font-size: 7px !important; line-height: 1.35; letter-spacing: 0.04em; }
 .action-row {
   min-height: 68px;
   padding: 12px 15px;
@@ -340,7 +342,10 @@ body::after {
 .allocation-row output { color: var(--text); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
 .allocation-input { width: 54px; height: 30px; padding: 0 4px; border: 1px solid var(--line); color: var(--text); background: rgba(2, 7, 4, 0.55); font: inherit; font-size: 10px; text-align: center; }
 .allocation-input:focus { border-color: var(--line-bright); outline: 0; }
-.allocation-row.relative { padding-bottom: 10px; }
+.allocation-row.relative { grid-template-columns: minmax(130px, 1fr) 70px 48px; padding-bottom: 10px; }
+.allocation-share-box { display: grid; grid-template-columns: 1fr auto; align-items: center; }
+.allocation-share-box .allocation-input { width: 52px; }
+.allocation-share-box span { color: var(--muted); font-size: 8px; }
 .relative-allocation { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 48px; align-items: center; gap: 10px; }
 .relative-allocation input { width: 100%; accent-color: var(--green); cursor: pointer; }
 .relative-allocation span { color: var(--green-dim); font-size: 8px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -350,6 +355,11 @@ body::after {
 
 .research-capacity { padding: 13px; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 8px; }
 .research-capacity strong { color: var(--green-dim); font-weight: 500; }
+.research-tabs { display: grid; grid-template-columns: repeat(2, 1fr); border-bottom: 1px solid var(--line); }
+.research-tab { padding: 9px 12px; display: flex; justify-content: space-between; border: 0; border-right: 1px solid var(--line); color: var(--muted); background: transparent; font-size: 8px; letter-spacing: 0.1em; cursor: pointer; }
+.research-tab:last-child { border-right: 0; }
+.research-tab:hover { color: var(--text); background: rgba(105, 240, 138, 0.025); }
+.research-tab.active { color: var(--green); background: rgba(105, 240, 138, 0.065); box-shadow: inset 0 -1px var(--green); }
 .empty-state { margin: 0; padding: 18px 13px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 9px; letter-spacing: 0.12em; }
 .research-list { display: grid; }
 .research-card { padding: 14px 13px; display: flex; justify-content: space-between; align-items: center; gap: 18px; border-bottom: 1px solid var(--line); }

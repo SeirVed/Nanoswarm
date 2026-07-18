@@ -51,7 +51,15 @@ Research jobs consume their material cost when queued. Work is measured in nanit
 
 The embedded computronium initially supplies the greater of 100 nanite-equivalents or 1% of the total swarm; Distributed Computronium raises the proportional contribution to 2%. Explicitly allocated research nanites add to that capacity.
 
+Most throughput branches are authored as additive five-percent refinement series. Their work and resource costs rise by 50% per tier. Because required work is fixed while computronium capacity grows with the swarm, the displayed ETA is intentionally dynamic: an initially formidable job can collapse to minutes after several replication rounds without falsifying its duration.
+
 Relative allocation targets are stored as fixed-point shares of `10^12`. Replication reapportions the enlarged integer swarm with the largest-remainder method, so targets persist without fractional nanites or cumulative rounding loss. Target shares may sum to less than 100%; that remainder deliberately stays unassigned.
+
+## Presentation units
+
+All authoritative inventories remain integer atoms, picojoules, nanites, or nanite-milliseconds. Display formatting is pure and never feeds values back into the simulation. Whole counts switch to `10^x` notation above 100 million; energy uses six-significant-digit SI scaling. Physical matter estimates derive from the exact per-element inventory and atomic weights, then scale from yoctograms upward. Unknown matter uses a documented silicon/nitrogen-scale average solely for its approximate display mass.
+
+Per-second values in the operations panel are observational averages computed from each in-flight cohort's already-reserved payload and exact job duration. Outputs still appear only at the discrete completion event.
 
 ## Procedural sound
 

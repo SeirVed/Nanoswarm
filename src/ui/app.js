@@ -20,7 +20,6 @@ import {
   effectiveJobDuration,
   queueResearch,
   researchIsRevealed,
-  setDirectiveAllocation,
   setDirectiveAllocationShare,
   solidCollectionCapacity,
   startManualJob,
@@ -28,6 +27,13 @@ import {
   toggleAllocationLock,
 } from "../game/engine.js";
 import { totalMatter } from "../game/matter.js";
+import {
+  formatCount,
+  formatEnergy,
+  formatInventoryMass,
+  formatMass,
+  massYoctograms,
+} from "../game/quantities.js";
 import { createInitialState, idleWorkers } from "../game/state.js";
 import { clearGame, loadGame, saveGame } from "../game/storage.js";
 import { SyntheticMind } from "../audio/mind.js";
@@ -41,27 +47,23 @@ let noticeTimer = null;
 let lastSave = Date.now();
 let lastStructuralSignature = null;
 let activeLogTier = "all";
+let activeResearchTab = "incomplete";
 
-const formatInteger = (value) => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-const formatScientific = (value) => {
-  const text = value.toString();
-  if (text.length <= 9) return formatInteger(value);
-  let exponent = text.length - 1;
-  let significand = BigInt(text.slice(0, 4));
-  if (Number(text[4] ?? "0") >= 5) significand += 1n;
-  if (significand >= 10_000n) {
-    significand = 1_000n;
-    exponent += 1;
-  }
-  const digits = significand.toString().padStart(4, "0");
-  return `${digits[0]}.${digits.slice(1)}e${exponent}`;
-};
 const formatDuration = (milliseconds) => {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  return minutes < 60 ? `${minutes}m ${seconds % 60}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${hours}h ${minutes % 60}m` : `${Math.floor(hours / 24)}d ${hours % 24}h`;
 };
+function percentageShare(raw) {
+  const match = raw.trim().match(/^(\d{1,3})(?:\.(\d{0,2}))?$/);
+  if (!match) throw new Error("invalid percentage");
+  const hundredths = BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0") || "0");
+  if (hundredths > 10_000n) throw new Error("percentage exceeds 100");
+  return hundredths * ALLOCATION_SHARE_SCALE / 10_000n;
+}
 const cohortTimeLabel = (startedAt, completesAt, now) =>
   now < startedAt
     ? `SYNC ${Math.max(0, (startedAt - now) / 1000).toFixed(1)}s`
@@ -124,6 +126,59 @@ function groupedCohorts() {
   });
 }
 
+const microsPerSecond = (phases, valueForPhase) =>
+  phases.reduce((total, phase) => {
+    const duration = BigInt(phase.completesAt - phase.startedAt);
+    return duration > 0n ? total + valueForPhase(phase) * 1_000_000_000n / duration : total;
+  }, 0n);
+
+function formatMicroRate(rateMicros, formatter, fallbackUnit) {
+  if (rateMicros >= 1_000_000n) return `${formatter(rateMicros / 1_000_000n)}/s`;
+  return `≈${(Number(rateMicros) / 1_000_000).toPrecision(3)} ${fallbackUnit}/s`;
+}
+
+function cohortRateLabel(group) {
+  if (group.directive === "prospect" || group.directive === "survey") return "SCANNING · NO MATERIAL FLOW";
+  if (group.directive === "energy") {
+    const energyRate = microsPerSecond(group.phases, (phase) => phase.payload.energy);
+    return `+${formatMicroRate(energyRate, formatEnergy, "pJ")}`;
+  }
+  if (group.directive === "collect" || group.directive === "atmosphere") {
+    const atomRate = microsPerSecond(group.phases, (phase) => totalMatter(phase.payload.matter));
+    const massRate = microsPerSecond(group.phases, (phase) => massYoctograms(phase.payload.matter));
+    return `+${formatMicroRate(atomRate, (value) => `${formatCount(value)} atoms`, "atoms")} · ≈${formatMicroRate(
+      massRate,
+      formatMass,
+      "yg",
+    ).replace(/^≈/, "")}`;
+  }
+  if (group.directive === "sort") {
+    const matterForPhase = (phase) => ({ ...phase.payload.atoms, unknown: phase.payload.residuum.unknown });
+    const atomRate = microsPerSecond(group.phases, (phase) => totalMatter(matterForPhase(phase)));
+    const massRate = microsPerSecond(group.phases, (phase) => massYoctograms(matterForPhase(phase)));
+    return `PROCESS ${formatMicroRate(atomRate, (value) => `${formatCount(value)} atoms`, "atoms")} · ≈${formatMicroRate(
+      massRate,
+      formatMass,
+      "yg",
+    ).replace(/^≈/, "")}`;
+  }
+  const naniteRate = microsPerSecond(group.phases, (phase) => phase.payload.nanites);
+  const recipeMatter = { ...NANITE_RECIPE.atoms, unknown: 0n };
+  const matterRate = microsPerSecond(
+    group.phases,
+    (phase) => massYoctograms(recipeMatter) * phase.payload.nanites,
+  );
+  const energyRate = microsPerSecond(
+    group.phases,
+    (phase) => NANITE_RECIPE.energy * phase.payload.nanites,
+  );
+  return `+${formatMicroRate(naniteRate, (value) => `${formatCount(value)} nanites`, "nanites")} · USE ≈${formatMicroRate(
+    matterRate,
+    formatMass,
+    "yg",
+  ).replace(/^≈/, "")} · ${formatMicroRate(energyRate, formatEnergy, "pJ")}`;
+}
+
 function operationsHtml(now) {
   const active = state.cohorts[0];
   if (state.discovery.directivesVisible) {
@@ -139,17 +194,17 @@ function operationsHtml(now) {
             : groups
                 .map(
                   (group) => `<div class="cohort-row">
-                    <div><strong>${group.directive.toUpperCase()}</strong><small>${formatInteger(group.workers)} workers · ${
+                    <div><strong>${group.directive.toUpperCase()}</strong><small>${formatCount(group.workers)} workers · ${
                       group.phases.length === 1
                         ? "resonant cohort"
                         : `${group.phases.length} phases converging · Δ${(group.spread / 1000).toFixed(1)}s`
                     }</small></div>
-                    ${progressBar(
+                    <div class="cohort-progress">${progressBar(
                       (now - group.lead.startedAt) / (group.lead.completesAt - group.lead.startedAt),
                       cohortTimeLabel(group.lead.startedAt, group.lead.completesAt, now),
                       group.lead.startedAt,
                       group.lead.completesAt,
-                    )}
+                    )}<small class="cohort-rate">${cohortRateLabel(group)}</small></div>
                   </div>`,
                 )
                 .join("")
@@ -169,7 +224,8 @@ function operationsHtml(now) {
           active.startedAt,
           active.completesAt,
         )}
-        <div class="job-meta"><span>WORKERS ${active.workers}</span><span>OUTPUT ON COMPLETION</span></div>
+        <div class="cohort-rate">${cohortRateLabel({ directive: active.directive, phases: [active] })}</div>
+        <div class="job-meta"><span>WORKERS ${formatCount(active.workers)}</span><span>OUTPUT ON COMPLETION</span></div>
       </div>
     </section>`;
   }
@@ -224,7 +280,9 @@ function resourcesHtml() {
         }</span></header>
         <strong>${state.activeDeposit.name}</strong>
         <p>${state.activeDeposit.description}</p>
-        <small>${formatScientific(depositTotal)} constituent atoms accessible · ${formatScientific(
+        <small>${formatCount(depositTotal)} constituent atoms · ≈${formatInventoryMass(
+          state.activeDeposit.matter,
+        )} accessible · ${formatCount(
           solidCollectionCapacity(state),
         )} per collector</small>
         ${
@@ -241,9 +299,9 @@ function resourcesHtml() {
         }
         ${
           state.discovery.atmosphereVisible
-            ? `<div class="atmosphere-state"><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatScientific(
+            ? `<div class="atmosphere-state"><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatCount(
                 atmosphericCollectionCapacity(state),
-              )} atoms per nanite per job · ${state.completedResearch.includes("atmospheric-fractionation") ? "5%" : "1%"} effective solid rate</p></div>`
+              )} atoms (≈${formatInventoryMass({ unknown: atmosphericCollectionCapacity(state) })}) per nanite per job · 1% base capture plus completed refinements</p></div>`
             : ""
         }
       </section>`
@@ -253,11 +311,15 @@ function resourcesHtml() {
   const material = `<section class="panel resources-panel">
     <header class="panel-heading"><span>MATERIAL CONTROL</span><span>EXACT INVENTORY</span></header>
     <div class="resource-summary">
-      <div><span>FEEDSTOCK</span><strong>${formatInteger(totalMatter(state.feedstock))} atoms</strong><small>mixed · unsorted</small></div>
-      <div><span>ENERGY</span><strong>${formatInteger(state.energy)} pJ</strong><small>locally stored</small></div>
+      <div><span>FEEDSTOCK</span><strong>${formatCount(totalMatter(state.feedstock))} atoms</strong><small>≈${formatInventoryMass(
+        state.feedstock,
+      )} · mixed · unsorted</small></div>
+      <div><span>ENERGY</span><strong>${formatEnergy(state.energy)}</strong><small>locally stored</small></div>
       ${
         state.discovery.residuumVisible
-          ? `<div><span>RESIDUUM</span><strong>${formatScientific(totalMatter(state.residuum))} atoms</strong><small>retained · ${
+          ? `<div><span>RESIDUUM</span><strong>${formatCount(totalMatter(state.residuum))} atoms</strong><small>≈${formatInventoryMass(
+              state.residuum,
+            )} · retained · ${
               state.discovery.residuumIndexed ? "indexed" : "unresolved"
             }</small></div>`
           : ""
@@ -276,8 +338,10 @@ function resourcesHtml() {
               .map(
                 ([key, symbol, name]) => `<div class="atom-card">
                   <span class="atom-symbol">${symbol}</span><span>${name}</span>
-                  <strong>${formatInteger(state.atoms[key])}</strong>
-                  <small>recipe ${formatInteger(NANITE_RECIPE.atoms[key])}</small>
+                  <strong>${formatCount(state.atoms[key])}</strong>
+                  <small>≈${formatInventoryMass({ [key]: state.atoms[key] })} · recipe ${formatCount(
+                    NANITE_RECIPE.atoms[key],
+                  )}</small>
                 </div>`,
               )
               .join("")}
@@ -293,7 +357,7 @@ function allocationsHtml() {
   const unassigned = state.nanites - assignmentTotal(state);
   const relativeAllocation = state.completedResearch.includes("relative-allocation");
   return `<section class="panel allocation-panel">
-    <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatInteger(unassigned)} UNASSIGNED${
+    <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatCount(unassigned)} UNASSIGNED${
       relativeAllocation ? " · RELATIVE AUTO" : ""
     }</span></header>
     <div class="allocation-list">
@@ -303,41 +367,36 @@ function allocationsHtml() {
           ? (state.allocationTargets[directive] * 10_000n + ALLOCATION_SHARE_SCALE / 2n) /
             ALLOCATION_SHARE_SCALE
           : 0n;
+        const shareText = `${shareHundredths / 100n}.${(shareHundredths % 100n).toString().padStart(2, "0")}`;
         return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}">
-          <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${formatScientific(
+          <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${formatCount(
             state.allocations[directive],
           )} assigned · ${
             directive === "research" ? "core capacity applies" : "complete jobs only"
           }</small></div>
-          <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="-1" ${
-            state.allocations[directive] === 0n ? "disabled" : ""
-          }>−</button>
           ${
             relativeAllocation
-              ? `<input class="allocation-input" type="text" inputmode="numeric" value="${formatInteger(
-                  state.allocations[directive],
-                )}" data-action="set-count" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} nanites">`
-              : `<output>${formatInteger(state.allocations[directive])}</output>`
-          }
-          <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="1" ${
-            (!relativeAllocation && unassigned === 0n) || state.allocations[directive] >= state.nanites ? "disabled" : ""
-          }>+</button>
-          <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
-            locked ? "LOCK" : "OPEN"
-          }</button>
-          ${
-            relativeAllocation
-              ? `<label class="relative-allocation"><input type="range" min="0" max="10000" step="1" value="${shareHundredths}" data-action="set-share" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} persistent relative share"><span>${
-                  shareHundredths / 100n
-                }.${(shareHundredths % 100n).toString().padStart(2, "0")}%</span></label>`
-              : ""
+              ? `<label class="allocation-share-box"><input class="allocation-input" type="text" inputmode="decimal" value="${shareText}" data-action="set-share-percent" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} percentage"><span>%</span></label>
+                <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
+                  locked ? "LOCK" : "OPEN"
+                }</button>
+                <label class="relative-allocation"><input type="range" min="0" max="10000" step="1" value="${shareHundredths}" data-action="set-share" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} persistent relative share"><span>${shareText}%</span></label>`
+              : `<button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="-1" ${
+                  state.allocations[directive] === 0n ? "disabled" : ""
+                }>−</button><output>${formatCount(state.allocations[directive])}</output>
+                <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="1" ${
+                  unassigned === 0n || state.allocations[directive] >= state.nanites ? "disabled" : ""
+                }>+</button>
+                <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
+                  locked ? "LOCK" : "OPEN"
+                }</button>`
           }
         </div>`;
       }).join("")}
     </div>
     <p class="panel-note">${
       relativeAllocation
-        ? "Relative targets auto-allocate new nanites. Changes draw proportionally from other open directives; locks preserve protected shares. Running cohorts still finish indivisibly."
+        ? "Sliders express persistent workforce percentages. New nanites enter those shares automatically; locks protect ratios while other sliders change. Running cohorts still finish indivisibly."
         : "Running cohorts finish their current indivisible job before a reduced assignment takes effect."
     }</p>
   </section>`;
@@ -348,7 +407,9 @@ function researchHtml() {
   const active = state.researchQueue[0];
   const capacity = effectiveResearchCapacity(state);
   const revealedResearch = Object.values(RESEARCH).filter((definition) => researchIsRevealed(state, definition));
-  const completedVisible = revealedResearch.filter((definition) => state.completedResearch.includes(definition.id)).length;
+  const incompleteResearch = revealedResearch.filter((definition) => !state.completedResearch.includes(definition.id));
+  const completeResearch = revealedResearch.filter((definition) => state.completedResearch.includes(definition.id));
+  const selectedResearch = activeResearchTab === "complete" ? completeResearch : incompleteResearch;
   const activeHtml = active
     ? `<div class="active-research"><div class="eyebrow">ACTIVE RESEARCH JOB</div><strong>${RESEARCH[active.id].name}</strong>
         <div class="progress-wrap" data-research-progress>
@@ -360,29 +421,48 @@ function researchHtml() {
     : `<p class="empty-state">NO ACTIVE RESEARCH JOB</p>`;
 
   return `<section class="panel research-panel">
-    <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${completedVisible}/${revealedResearch.length} RESOLVED · ${formatScientific(
+    <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${state.completedResearch.length}/${Object.keys(
+      RESEARCH,
+    ).length} COMPLETE · ${formatCount(
       capacity,
     )} n-eq</span></header>
     <div class="research-capacity"><span>COMPUTRONIUM CONTRIBUTION</span><strong>max(100 nanites, ${
       state.completedResearch.includes("distributed-computronium") ? "2%" : "1%"
     } swarm)</strong></div>
     ${activeHtml}
+    <nav class="research-tabs" aria-label="Research state">
+      <button class="research-tab ${activeResearchTab === "incomplete" ? "active" : ""}" data-action="research-tab" data-tab="incomplete" aria-pressed="${
+        activeResearchTab === "incomplete"
+      }"><span>INCOMPLETE</span><strong>${incompleteResearch.length}</strong></button>
+      <button class="research-tab ${activeResearchTab === "complete" ? "active" : ""}" data-action="research-tab" data-tab="complete" aria-pressed="${
+        activeResearchTab === "complete"
+      }"><span>COMPLETE</span><strong>${completeResearch.length}</strong></button>
+    </nav>
     <div class="research-list">
-      ${revealedResearch
+      ${selectedResearch
         .map((definition) => {
           const queued = state.researchQueue.some((item) => item.id === definition.id);
           const complete = state.completedResearch.includes(definition.id);
+          const eta = (definition.requiredNaniteMs + capacity - 1n) / capacity;
           return `<article class="research-card"><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
-            <small>C ${formatScientific(definition.cost.atoms.carbon)} · Si ${formatScientific(
+            <small>${
+              complete
+                ? `RESOLVED · WORK ${formatCount(definition.requiredNaniteMs)} n·ms`
+                : `ETA ${formatDuration(Number(eta))} at current capacity · WORK ${formatCount(
+                    definition.requiredNaniteMs,
+                  )} n·ms`
+            }</small>
+            <small>C ${formatCount(definition.cost.atoms.carbon)} · Si ${formatCount(
               definition.cost.atoms.silicon,
-            )} · Cu ${formatScientific(definition.cost.atoms.copper)} · Au ${formatScientific(
+            )} · Cu ${formatCount(definition.cost.atoms.copper)} · Au ${formatCount(
               definition.cost.atoms.gold,
-            )} · E ${formatScientific(definition.cost.energy)}</small>
+            )} · E ${formatEnergy(definition.cost.energy)} · ≈${formatInventoryMass(definition.cost.atoms)}</small>
             </div><button class="terminal-button compact-button" data-action="research" data-research="${definition.id}" ${
               queued || complete ? "disabled" : ""
             }>${complete ? "COMPLETE" : queued ? "QUEUED" : "QUEUE"}</button></article>`;
         })
         .join("")}
+      ${selectedResearch.length === 0 ? `<p class="empty-state">NO ${activeResearchTab.toUpperCase()} RESEARCH SIGNALS</p>` : ""}
     </div>
   </section>`;
 }
@@ -447,6 +527,7 @@ function structuralSignature() {
     state.completedResearch.join(","),
     state.log.length,
     activeLogTier,
+    activeResearchTab,
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
     sonicMind.enabled,
     sonicMind.volumePercent,
@@ -492,7 +573,7 @@ function renderGame(now = Date.now(), force = false) {
   root.innerHTML = `<div class="game-shell">
     <header class="game-header">
       <div class="brand-lockup"><span class="brand-mark">◈</span><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>
-      <div class="header-metrics"><div><span>ACTIVE NANITES</span><strong>${formatInteger(state.nanites)}</strong></div>
+      <div class="header-metrics"><div><span>ACTIVE NANITES</span><strong>${formatCount(state.nanites)}</strong></div>
         ${state.discovery.surveyComplete ? `<div class="substrate-metric"><span>SUBSTRATE</span><strong>${percentage(depositTotal, state.activeDeposit.initialAtoms)}</strong></div>` : ""}
         <div class="audio-controls">
           <button class="audio-toggle ${sonicMind.enabled ? "active" : ""}" data-action="audio" aria-pressed="${sonicMind.enabled}" ${
@@ -552,16 +633,15 @@ root.addEventListener("click", (event) => {
   } else if (action === "adjust") {
     const directive = button.dataset.directive;
     const delta = BigInt(button.dataset.delta);
-    acceptResult(
-      state.completedResearch.includes("relative-allocation")
-        ? setDirectiveAllocation(state, directive, state.allocations[directive] + delta)
-        : adjustAllocation(state, directive, delta),
-    );
+    acceptResult(adjustAllocation(state, directive, delta));
   } else if (action === "lock") {
     state = toggleAllocationLock(state, button.dataset.directive);
     renderGame();
   } else if (action === "research") {
     acceptResult(queueResearch(state, button.dataset.research));
+  } else if (action === "research-tab") {
+    activeResearchTab = button.dataset.tab;
+    renderGame(Date.now(), true);
   } else if (action === "log-filter") {
     activeLogTier = button.dataset.tier;
     renderGame(Date.now(), true);
@@ -582,6 +662,7 @@ root.addEventListener("click", (event) => {
     state = null;
     introVisible = 0;
     activeLogTier = "all";
+    activeResearchTab = "incomplete";
     lastStructuralSignature = null;
     renderIntro();
   }
@@ -595,28 +676,24 @@ root.addEventListener("input", (event) => {
 
 root.addEventListener("change", (event) => {
   if (!state) return;
-  const control = event.target.closest("input[data-action='set-share'], input[data-action='set-count']");
+  const control = event.target.closest("input[data-action='set-share'], input[data-action='set-share-percent']");
   if (!control) return;
   let target;
   try {
     target =
       control.dataset.action === "set-share"
         ? (BigInt(control.value) * ALLOCATION_SHARE_SCALE) / 10_000n
-        : BigInt(control.value.replace(/[,\s_]/g, ""));
+        : percentageShare(control.value);
   } catch {
-    showFailure("Allocation must be a whole nanite count.");
+    showFailure("Allocation percentage must be between 0 and 100 with up to two decimals.");
     renderGame(Date.now(), true);
     return;
   }
-  acceptResult(
-    control.dataset.action === "set-share"
-      ? setDirectiveAllocationShare(state, control.dataset.directive, target)
-      : setDirectiveAllocation(state, control.dataset.directive, target),
-  );
+  acceptResult(setDirectiveAllocationShare(state, control.dataset.directive, target));
 });
 
 root.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && event.target.matches("input[data-action='set-count']")) event.target.blur();
+  if (event.key === "Enter" && event.target.matches("input[data-action='set-share-percent']")) event.target.blur();
 });
 
 if (!state) {

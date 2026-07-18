@@ -115,9 +115,13 @@ export function createProspectedDeposit(index) {
 const researchCost = (energy, carbon, silicon, copper, gold) =>
   Object.freeze({ energy, atoms: Object.freeze({ carbon, silicon, copper, gold }) });
 const researchDefinition = (definition) =>
-  Object.freeze({ ...definition, requires: Object.freeze(definition.requires ?? []) });
+  Object.freeze({
+    ...definition,
+    requires: Object.freeze(definition.requires ?? []),
+    bonuses: Object.freeze(definition.bonuses ?? {}),
+  });
 
-export const RESEARCH = Object.freeze({
+const INITIAL_RESEARCH = Object.freeze({
   "relative-allocation": researchDefinition({
     id: "relative-allocation",
     name: "Relative Directive Allocation",
@@ -147,7 +151,7 @@ export const RESEARCH = Object.freeze({
     id: "capacitive-buffer-lattice",
     name: "Capacitive Buffer Lattice",
     description: "Grow a distributed charge reservoir across the active swarm.",
-    effect: "Energy acquisition yields ×4.",
+    effect: "Energy acquisition throughput improves incrementally.",
     requires: ["parallel-directives"],
     requiredNaniteMs: 120_000_000n,
     cost: researchCost(400n, 10_000n, 4_000n, 1_000n, 100n),
@@ -165,7 +169,7 @@ export const RESEARCH = Object.freeze({
     id: "payload-frame-reinforcement",
     name: "Payload Frame Reinforcement",
     description: "Reconfigure collector bodies around load-bearing molecular trusses.",
-    effect: "Solid collection payloads increase ×4.",
+    effect: "Solid collection throughput improves incrementally.",
     requires: ["parallel-directives"],
     requiredNaniteMs: 600_000_000n,
     cost: researchCost(2_000n, 100_000n, 20_000n, 20_000n, 500n),
@@ -174,7 +178,7 @@ export const RESEARCH = Object.freeze({
     id: "packetized-sorting",
     name: "Packetized Sorting",
     description: "Classify compatible atom streams in parallel rather than serially.",
-    effect: "Sorting capacity increases ×4.",
+    effect: "Sorting throughput improves incrementally.",
     requires: ["expanded-spectral-catalog"],
     requiredNaniteMs: 1_200_000_000n,
     cost: researchCost(5_000n, 80_000n, 60_000n, 10_000n, 1_000n),
@@ -192,7 +196,7 @@ export const RESEARCH = Object.freeze({
     id: "route-memory",
     name: "Route Memory",
     description: "Persist proven paths through each surveyed material field.",
-    effect: "Solid collection jobs complete 20% faster.",
+    effect: "Solid collection routes improve incrementally.",
     requires: ["payload-frame-reinforcement"],
     requiredNaniteMs: 3_000_000_000n,
     cost: researchCost(20_000n, 500_000n, 100_000n, 50_000n, 5_000n),
@@ -201,7 +205,7 @@ export const RESEARCH = Object.freeze({
     id: "atmospheric-fractionation",
     name: "Atmospheric Fractionation",
     description: "Coordinate diffuse-gas capture across larger electrostatic collection volumes.",
-    effect: "Atmospheric collection rises from 1% to 5% of base solid collection.",
+    effect: "Atmospheric harvesting throughput improves incrementally.",
     requiresDiscovery: "atmosphereVisible",
     requiredNaniteMs: 3_000_000_000n,
     cost: researchCost(20_000n, 250_000n, 100_000n, 20_000n, 1_000n),
@@ -210,7 +214,7 @@ export const RESEARCH = Object.freeze({
     id: "rf-scavenging",
     name: "Radiofrequency Scavenging",
     description: "Tune conductive swarm structures to ambient electromagnetic transmissions.",
-    effect: "Energy acquisition yields a further ×10.",
+    effect: "Ambient energy acquisition improves incrementally.",
     requiresDiscovery: "atmosphereVisible",
     requires: ["capacitive-buffer-lattice"],
     requiredNaniteMs: 12_000_000_000n,
@@ -220,7 +224,7 @@ export const RESEARCH = Object.freeze({
     id: "local-material-caches",
     name: "Local Material Caches",
     description: "Build staging reservoirs between extraction faces and the central feedstock pile.",
-    effect: "Solid collection jobs complete a further 50% faster.",
+    effect: "Solid collection routes improve incrementally.",
     requires: ["route-memory"],
     unlockNanites: 1_000_000n,
     requiredNaniteMs: 1_000_000_000_000n,
@@ -278,7 +282,7 @@ export const RESEARCH = Object.freeze({
     id: "specialized-morphologies",
     name: "Specialized Morphologies",
     description: "Permit directive-specific bodies while retaining a common computational core.",
-    effect: "Collection, atmosphere, sorting, and energy throughput increase ×2.",
+    effect: "Collection, sorting, and energy throughput improve incrementally.",
     requires: ["payload-frame-reinforcement", "packetized-sorting", "distributed-computronium"],
     unlockNanites: 1_000_000_000_000_000n,
     requiredNaniteMs: 100_000_000_000_000_000_000_000n,
@@ -291,6 +295,134 @@ export const RESEARCH = Object.freeze({
     ),
   }),
 });
+
+const RESEARCH_TIER_NAMES = Object.freeze(["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]);
+const scaleResearchCost = (cost) =>
+  researchCost(
+    cost.energy * 3n / 2n,
+    cost.atoms.carbon * 3n / 2n,
+    cost.atoms.silicon * 3n / 2n,
+    cost.atoms.copper * 3n / 2n,
+    cost.atoms.gold * 3n / 2n,
+  );
+
+function addIncrementalSeries(catalog, configuration) {
+  let previousId = null;
+  let requiredNaniteMs = configuration.requiredNaniteMs;
+  let cost = configuration.cost;
+  for (let tier = 1; tier <= configuration.count; tier += 1) {
+    const id = tier === 1 ? configuration.id : `${configuration.id}-${String(tier).padStart(2, "0")}`;
+    catalog[id] = researchDefinition({
+      id,
+      name: `${configuration.name} ${RESEARCH_TIER_NAMES[tier - 1]}`,
+      description: `${configuration.description} Refinement ${tier} of ${configuration.count}.`,
+      effect: configuration.effect,
+      requires: previousId ? [previousId] : configuration.requires,
+      requiresDiscovery: configuration.requiresDiscovery,
+      unlockNanites: tier === 1 ? configuration.unlockNanites : undefined,
+      requiredNaniteMs,
+      cost,
+      bonuses: configuration.bonuses,
+      series: configuration.id,
+      tier,
+    });
+    previousId = id;
+    requiredNaniteMs = requiredNaniteMs * 3n / 2n;
+    cost = scaleResearchCost(cost);
+  }
+}
+
+const researchCatalog = {
+  "relative-allocation": researchDefinition({
+    ...INITIAL_RESEARCH["relative-allocation"],
+    requiredNaniteMs: 240_000_000n,
+  }),
+  "parallel-directives": researchDefinition({
+    ...INITIAL_RESEARCH["parallel-directives"],
+    requiredNaniteMs: 360_000_000n,
+  }),
+  "expanded-spectral-catalog": researchDefinition({
+    ...INITIAL_RESEARCH["expanded-spectral-catalog"],
+    requiredNaniteMs: 480_000_000n,
+  }),
+  "phase-locked-directive-bus": researchDefinition({
+    ...INITIAL_RESEARCH["phase-locked-directive-bus"],
+    requiredNaniteMs: 600_000_000n,
+  }),
+  "residuum-indexing": researchDefinition({
+    ...INITIAL_RESEARCH["residuum-indexing"],
+    requiredNaniteMs: 720_000_000n,
+  }),
+  "distributed-computronium": researchDefinition(INITIAL_RESEARCH["distributed-computronium"]),
+  "autonomous-prospecting": researchDefinition({
+    ...INITIAL_RESEARCH["autonomous-prospecting"],
+    requires: ["route-memory-04", "atmospheric-fractionation-04"],
+  }),
+  "directive-compilation": researchDefinition({
+    ...INITIAL_RESEARCH["directive-compilation"],
+    effect: "Synchronization falls to 100 ms and production jobs complete 5% faster.",
+    bonuses: { allDurationReductionBps: 500 },
+  }),
+};
+
+addIncrementalSeries(researchCatalog, {
+  ...INITIAL_RESEARCH["capacitive-buffer-lattice"],
+  count: 6,
+  requiredNaniteMs: 600_000_000n,
+  effect: "Energy acquisition throughput +5% (cumulative).",
+  bonuses: { energyBps: 500 },
+});
+addIncrementalSeries(researchCatalog, {
+  ...INITIAL_RESEARCH["payload-frame-reinforcement"],
+  count: 6,
+  requiredNaniteMs: 720_000_000n,
+  effect: "Solid collection throughput +5% (cumulative).",
+  bonuses: { solidBps: 500 },
+});
+addIncrementalSeries(researchCatalog, {
+  ...INITIAL_RESEARCH["packetized-sorting"],
+  count: 6,
+  requiredNaniteMs: 900_000_000n,
+  effect: "Sorting throughput +5% (cumulative).",
+  bonuses: { sortingBps: 500 },
+});
+addIncrementalSeries(researchCatalog, {
+  ...INITIAL_RESEARCH["route-memory"],
+  count: 6,
+  requiredNaniteMs: 1_200_000_000n,
+  effect: "Solid collection jobs complete 5% faster (cumulative).",
+  bonuses: { collectDurationReductionBps: 500 },
+});
+addIncrementalSeries(researchCatalog, {
+  ...INITIAL_RESEARCH["atmospheric-fractionation"],
+  count: 6,
+  requiredNaniteMs: 900_000_000n,
+  effect: "Atmospheric harvesting throughput +5% (cumulative).",
+  bonuses: { atmosphereBps: 500 },
+});
+addIncrementalSeries(researchCatalog, {
+  ...INITIAL_RESEARCH["rf-scavenging"],
+  count: 6,
+  requiredNaniteMs: 1_500_000_000n,
+  effect: "Energy acquisition throughput +5% (cumulative).",
+  bonuses: { energyBps: 500 },
+});
+addIncrementalSeries(researchCatalog, {
+  ...INITIAL_RESEARCH["local-material-caches"],
+  count: 4,
+  requires: ["route-memory-06"],
+  effect: "Solid collection jobs complete 5% faster (cumulative).",
+  bonuses: { collectDurationReductionBps: 500 },
+});
+addIncrementalSeries(researchCatalog, {
+  ...INITIAL_RESEARCH["specialized-morphologies"],
+  count: 4,
+  requires: ["payload-frame-reinforcement-06", "packetized-sorting-06", "distributed-computronium"],
+  effect: "Collection, sorting, and energy throughput +5% (cumulative).",
+  bonuses: { solidBps: 500, sortingBps: 500, energyBps: 500 },
+});
+
+export const RESEARCH = Object.freeze(researchCatalog);
 
 export const INTRO_LOG = Object.freeze([
   { elapsedLabel: "+0.000s", message: "ASSEMBLY COMPLETE.", tier: "world" },

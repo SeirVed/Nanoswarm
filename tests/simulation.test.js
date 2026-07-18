@@ -235,11 +235,11 @@ describe("cohort simulation", () => {
       "specialized-morphologies",
     );
 
-    assert.equal(solidCollectionCapacity(state), 80_000n);
-    assert.equal(atmosphericCollectionCapacity(state), 4_000n);
-    assert.equal(sortingCapacity(state), 80_000n);
-    assert.equal(energyJobYield(state), 3_200n);
-    assert.equal(effectiveJobDuration(state, "collect"), 3_600);
+    assert.equal(solidCollectionCapacity(state), 11_000n);
+    assert.equal(atmosphericCollectionCapacity(state), 115n);
+    assert.equal(sortingCapacity(state), 11_000n);
+    assert.equal(energyJobYield(state), 46n);
+    assert.equal(effectiveJobDuration(state, "collect"), 8_500);
     assert.equal(cohortSyncWindow(state), 100);
     assert.equal(cohortResonanceWindow(state), 8_000);
     assert.equal(effectiveResearchCapacity(state), 200n);
@@ -257,7 +257,33 @@ describe("cohort simulation", () => {
     const complete = advanceSimulation(state, now + 10_500);
     assert.equal(reserved, COLLECTION_ATOMS_PER_NANITE);
     assert.equal(totalMatter(complete.feedstock), COLLECTION_ATOMS_PER_NANITE);
-    assert.equal(solidCollectionCapacity(complete), COLLECTION_ATOMS_PER_NANITE * 8n);
+    assert.equal(solidCollectionCapacity(complete), 11_000n);
+  });
+
+  it("stacks repeated five-percent research refinements additively", () => {
+    const state = createInitialState(3_700_000);
+    state.completedResearch.push(
+      "capacitive-buffer-lattice",
+      "capacitive-buffer-lattice-02",
+      "capacitive-buffer-lattice-03",
+      "capacitive-buffer-lattice-04",
+      "capacitive-buffer-lattice-05",
+      "capacitive-buffer-lattice-06",
+    );
+
+    assert.equal(energyJobYield(state), 52n);
+  });
+
+  it("turns intimidating research estimates into minutes as the swarm compounds", () => {
+    const state = createInitialState(3_725_000);
+    state.nanites = 12n;
+    const initialEta = RESEARCH["relative-allocation"].requiredNaniteMs / effectiveResearchCapacity(state);
+    assert.equal(initialEta, 2_400_000n);
+
+    state.nanites *= 128n;
+    state.allocations.research = state.nanites / 2n;
+    const compoundedEta = RESEARCH["relative-allocation"].requiredNaniteMs / effectiveResearchCapacity(state);
+    assert.ok(compoundedEta < 300_000n);
   });
 
   it("enforces research prerequisites rather than exposing disconnected upgrades", () => {

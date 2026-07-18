@@ -38,8 +38,11 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec.
 - Permanent log entries carry a significance tier independently of their visual tone; old saves infer tiers during migration.
-- At 12 nanites, Relative Directive Allocation research exposes persistent proportional targets and exact count entry. New nanites automatically enter those target shares while allocation locks preserve protected directives.
-- Research is a prerequisite graph whose completed nodes alter authoritative payloads, durations, synchronization, resonance, exploration automation, or computronium capacity.
+- At 12 nanites, Relative Directive Allocation research replaces single-worker controls with persistent percentage sliders and exact percentage entry. New nanites automatically enter those target shares while allocation locks preserve protected directives.
+- Research is split into incomplete and complete views. Long work estimates use live computronium capacity, so replication and explicit research allocation can collapse days into minutes without changing the job's required work.
+- Throughput development is a ladder of additive 5% refinements rather than a handful of giant multipliers; completed nodes alter authoritative payloads, durations, synchronization, resonance, exploration automation, or computronium capacity.
+- Whole counts use `10^x` notation above 100 million. Energy advances through SI units at six significant digits, and every numeric matter inventory includes its estimated physical mass from yoctograms upward.
+- Active cohort summaries expose approximate per-second material, energy, or nanite flow without turning the underlying discrete jobs into continuous production.
 - Sound is synthesized live with Web Audio. Job ratios select the harmonic field, while digits of π and e govern its pulse and drift; no recorded soundtrack or audio dependency is shipped.
 
 See `docs/architecture.md` for the model boundary and extension rules.
