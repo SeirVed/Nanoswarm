@@ -335,10 +335,12 @@ body::after {
 .atom-card small { color: var(--muted); font-size: 8px; }
 
 .allocation-list { display: grid; }
-.allocation-row { min-height: 60px; padding: 9px 12px; display: grid; grid-template-columns: minmax(130px, 1fr) 30px 54px 30px 48px; align-items: center; gap: 7px; border-bottom: 1px solid var(--line); }
+.allocation-row { min-height: 60px; padding: 9px 12px; display: grid; grid-template-columns: minmax(130px, 1fr) 30px 54px 30px; align-items: center; gap: 7px; border-bottom: 1px solid var(--line); }
 .allocation-label { display: grid; gap: 4px; }
 .allocation-label > span { font-size: 10px; text-transform: uppercase; }
 .allocation-label small { color: var(--muted); font-size: 8px; }
+.allocation-label .directive-recipe { color: var(--green-dim); line-height: 1.5; }
+.allocation-label .directive-alert { color: var(--danger); font-size: 7px; line-height: 1.4; letter-spacing: 0.08em; }
 .step-button, .lock-button { height: 30px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
 .step-button:hover:not(:disabled), .lock-button:hover { border-color: var(--line-bright); color: var(--green); }
 .step-button:disabled { opacity: 0.25; cursor: not-allowed; }
@@ -441,6 +443,22 @@ body::after {
 .tier-badge.tier-medium { border-color: rgba(226, 184, 111, 0.4); color: var(--amber); }
 .log-empty { margin: 24px 0; color: var(--muted); font-size: 8px; letter-spacing: 0.12em; text-align: center; }
 
+.delayed-tooltip {
+  position: fixed;
+  z-index: 1000;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border: 1px solid var(--line-bright);
+  background: rgba(3, 10, 5, 0.97);
+  box-shadow: 0 7px 24px rgba(0, 0, 0, 0.5), inset 0 1px rgba(255, 255, 255, 0.025);
+  color: var(--green-dim);
+  font: 8px/1.55 "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+.delayed-tooltip[hidden] { display: none; }
+
 @media (min-width: 1121px) {
   body { overflow: hidden; }
   .game-shell { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -492,7 +510,7 @@ body::after {
   .log-filters { display: flex; overflow-x: auto; }
   .log-filter { flex: 1 0 72px; }
   .telemetry-line { grid-template-columns: 60px 46px minmax(0, 1fr); gap: 6px; }
-  .allocation-row { grid-template-columns: minmax(110px, 1fr) 28px 38px 28px 44px; padding-inline: 8px; }
+  .allocation-row { grid-template-columns: minmax(110px, 1fr) 28px 38px 28px; padding-inline: 8px; }
   .allocation-row.relative { grid-template-columns: minmax(0, 1fr) 48px; }
   .allocation-row.relative .allocation-label { grid-column: 1 / -1; }
   .allocation-share-stepper { grid-column: 1; width: 124px; }

@@ -16,6 +16,21 @@ export const COHORT_SLOT_LABEL = Object.freeze({
   prospect: "Local search",
 });
 
+export function revealedCohortSlots(state) {
+  const prospectKnown =
+    state.discovery.exhaustionNotified ||
+    (state.prospecting?.searchesCompleted ?? 0) > 0 ||
+    state.cohorts.some((cohort) => cohort.directive === "prospect");
+  return COHORT_SLOT_ORDER.filter((directive) => {
+    if (directive === "replicate") return state.discovery.elementsVisible;
+    if (directive === "collect" || directive === "energy") return state.discovery.surveyComplete;
+    if (directive === "sort") return state.discovery.feedstockVisible;
+    if (directive === "atmosphere") return state.discovery.atmosphereVisible;
+    if (directive === "prospect") return prospectKnown;
+    return false;
+  });
+}
+
 export function groupCohortsForDisplay(cohorts) {
   const groups = new Map();
   for (const cohort of cohorts) {

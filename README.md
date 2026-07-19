@@ -39,9 +39,12 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec.
 - Log entries carry a significance tier independently of their visual tone. World, critical, and medium events remain permanent; only routine info events roll off after the newest 200. Old saves infer tiers during migration.
-- At 12 nanites, Relative Directive Allocation research replaces single-worker controls with persistent percentage sliders and exact percentage entry. New nanites automatically enter those target shares while allocation locks preserve protected directives.
+- Parallel Directive Scheduling is the sole initial research signal and takes four minutes on the embedded 100 n-eq computronium. It gates the later coordination and spectral branches. At 12 nanites, Relative Directive Allocation replaces single-worker controls with persistent percentage sliders and exact percentage entry.
 - Allocation step buttons support accelerating press-and-hold input. Percentage fields retain focus and uncommitted text when an unrelated cohort completion refreshes the dashboard.
-- The operations panel keeps replication, collection, sorting, and miscellaneous work in fixed slots, and structural refreshes preserve the page scroll position.
+- One-by-one allocation omits percentage locks. Once Relative Directive Allocation is complete, new nanites automatically enter target shares and locks protect selected directives.
+- The operations panel keeps discovered replication, collection, sorting, and miscellaneous work in fixed slots without exposing unknown jobs. Structural refreshes preserve the page scroll position.
+- The replication directive owns the nanite recipe readout and reports exact resource shortages whenever assigned production cannot launch.
+- Controls and key status readouts expose contextual tooltips after a three-second hover.
 - Research is split into incomplete and complete views. Long work estimates use live computronium capacity, so replication and explicit research allocation can collapse days into minutes without changing the job's required work.
 - Research inputs remain reserved while queued. Queue entries can be reordered or cancelled; cancellation discards work performed on that topic and releases its full reserved material and energy cost.
 - Throughput development is a ladder of additive 5% refinements rather than a handful of giant multipliers; completed nodes alter authoritative payloads, durations, synchronization, resonance, exploration automation, or computronium capacity.

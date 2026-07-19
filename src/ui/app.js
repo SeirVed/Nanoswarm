@@ -21,6 +21,7 @@ import {
   effectiveJobDuration,
   moveResearch,
   queueResearch,
+  replicationShortages,
   researchIsRevealed,
   setDirectiveAllocationShare,
   solidCollectionCapacity,
@@ -39,9 +40,11 @@ import {
 import { activeResearchWorkers, createInitialState, idleWorkers } from "../game/state.js";
 import { clearGame, loadGame, saveGame } from "../game/storage.js";
 import { SyntheticMind } from "../audio/mind.js";
-import { COHORT_SLOT_LABEL, COHORT_SLOT_ORDER, groupCohortsForDisplay } from "./cohort-groups.js";
+import { COHORT_SLOT_LABEL, groupCohortsForDisplay, revealedCohortSlots } from "./cohort-groups.js";
+import { installDelayedTooltips } from "./tooltips.js";
 
 const root = document.querySelector("#root");
+const delayedTooltips = installDelayedTooltips(root);
 const sonicMind = new SyntheticMind();
 let state = loadGame();
 let introVisible = 0;
@@ -85,6 +88,7 @@ const progressBar = (progress, label = "", startedAt, completesAt) => `
   </div>`;
 
 function renderIntro() {
+  delayedTooltips.hide();
   root.innerHTML = `
     <main class="arrival-shell" aria-label="NanoSwarm arrival telemetry">
       <section class="arrival-terminal">
@@ -173,10 +177,8 @@ function operationsHtml(now) {
   if (state.discovery.directivesVisible) {
     const groups = groupedCohorts();
     const groupByDirective = new Map(groups.map((group) => [group.directive, group]));
-    const visibleSlots = COHORT_SLOT_ORDER.filter(
-      (directive) => directive !== "atmosphere" || state.discovery.atmosphereVisible,
-    );
-    return `<section class="panel operations-panel">
+    const visibleSlots = revealedCohortSlots(state);
+    return `<section class="panel operations-panel" data-tooltip="Fixed directive slots retain their position as cohorts start and finish.">
       <header class="panel-heading"><span>ACTIVE COHORTS · ${groups.length}/${visibleSlots.length} FIXED SLOTS</span><span>SYNC ${cohortSyncWindow(state)}ms · RESONANCE ${(
         cohortResonanceWindow(state) / 1000
       ).toFixed(1)}s</span></header>
@@ -184,12 +186,12 @@ function operationsHtml(now) {
         ${visibleSlots.map((directive) => {
           const group = groupByDirective.get(directive);
           if (!group) {
-            return `<div class="cohort-row cohort-row-idle" data-cohort-slot="${directive}">
+            return `<div class="cohort-row cohort-row-idle" data-cohort-slot="${directive}" data-tooltip="${COHORT_SLOT_LABEL[directive]} is known but has no job in flight.">
               <div><strong>${COHORT_SLOT_LABEL[directive]}</strong><small>STANDBY</small></div>
               <div class="cohort-idle-state">NO JOB IN FLIGHT</div>
             </div>`;
           }
-          return `<div class="cohort-row" data-cohort-slot="${directive}">
+          return `<div class="cohort-row" data-cohort-slot="${directive}" data-tooltip="${COHORT_SLOT_LABEL[directive]} has ${formatCount(group.workers)} workers across ${group.phases.length} active phase${group.phases.length === 1 ? "" : "s"}.">
             <div><strong>${COHORT_SLOT_LABEL[directive]}</strong><small>${formatCount(group.workers)} workers · ${
               group.phases.length === 1
                 ? "resonant cohort"
@@ -208,7 +210,7 @@ function operationsHtml(now) {
   }
 
   if (active) {
-    return `<section class="panel operations-panel">
+    return `<section class="panel operations-panel" data-tooltip="The primary assembler is committed until this indivisible job completes.">
       <header class="panel-heading"><span>PRIMARY ASSEMBLER</span><span>COMMITTED</span></header>
       <div class="active-job">
         <div class="eyebrow">ACTIVE DISCRETE JOB</div><strong>${active.directive.toUpperCase()}</strong>
@@ -225,7 +227,7 @@ function operationsHtml(now) {
   }
 
   if (!state.discovery.surveyComplete) {
-    return `<section class="panel operations-panel">
+    return `<section class="panel operations-panel" data-tooltip="Surveying the immediate substrate reveals safe economic directives.">
       <header class="panel-heading"><span>PRIMARY ASSEMBLER</span><span>AVAILABLE</span></header>
       <div class="first-command">
         <p>Local environment unresolved. No economic directives are safe.</p>
@@ -242,7 +244,7 @@ function operationsHtml(now) {
     ["energy", "Acquire energy", "Charge from the module's electrical potential."],
     ["replicate", "Replicate nanite", "Consume one complete atomic recipe."],
   ];
-  return `<section class="panel operations-panel">
+  return `<section class="panel operations-panel" data-tooltip="Choose one discrete job for the primary assembler.">
     <header class="panel-heading"><span>PRIMARY ASSEMBLER</span><span>AVAILABLE</span></header>
     <div class="manual-actions">
       ${actions
@@ -268,7 +270,7 @@ function resourcesHtml() {
   const depositExhausted = depositTotal === 0n;
   const prospecting = state.cohorts.some((cohort) => cohort.directive === "prospect");
   const substrate = state.discovery.surveyComplete
-    ? `<section class="panel substrate-panel">
+    ? `<section class="panel substrate-panel" data-tooltip="The active material field is finite; inputs are reserved when collection starts.">
         <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${
           depositExhausted ? "EXHAUSTED" : `${percentage(depositTotal, state.activeDeposit.initialAtoms)} REMAINS`
         }</span></header>
@@ -302,7 +304,7 @@ function resourcesHtml() {
     : "";
 
   if (!state.discovery.feedstockVisible) return substrate;
-  const material = `<section class="panel resources-panel">
+  const material = `<section class="panel resources-panel" data-tooltip="Exact available inventories exclude inputs already reserved by active cohorts.">
     <header class="panel-heading"><span>MATERIAL CONTROL</span><span>EXACT INVENTORY</span></header>
     <div class="resource-summary">
       <div><span>FEEDSTOCK</span><strong>${formatCount(totalMatter(state.feedstock))} atoms</strong><small>≈${formatInventoryMass(
@@ -330,12 +332,10 @@ function resourcesHtml() {
               ["gold", "Au", "Gold"],
             ]
               .map(
-                ([key, symbol, name]) => `<div class="atom-card">
+                ([key, symbol, name]) => `<div class="atom-card" data-tooltip="Exact identified ${name.toLowerCase()} inventory available for jobs and research.">
                   <span class="atom-symbol">${symbol}</span><span>${name}</span>
                   <strong>${formatCount(state.atoms[key])}</strong>
-                  <small>≈${formatInventoryMass({ [key]: state.atoms[key] })} · recipe ${formatCount(
-                    NANITE_RECIPE.atoms[key],
-                  )}</small>
+                  <small>≈${formatInventoryMass({ [key]: state.atoms[key] })}</small>
                 </div>`,
               )
               .join("")}
@@ -350,7 +350,24 @@ function allocationsHtml() {
   if (!state.discovery.directivesVisible) return "";
   const unassigned = state.nanites - assignmentTotal(state);
   const relativeAllocation = state.completedResearch.includes("relative-allocation");
-  return `<section class="panel allocation-panel">
+  const replicateHalt = replicationShortages(state);
+  const haltedResources = replicateHalt.map((shortage) => shortage.name.toUpperCase()).join(" · ");
+  const haltDetail = replicateHalt.map((shortage) =>
+    shortage.key === "energy"
+      ? `${shortage.name}: ${formatEnergy(shortage.missing)} missing`
+      : `${shortage.name}: ${formatCount(shortage.missing)} atoms missing`,
+  ).join("; ");
+  const recipeText = `RECIPE · C ${formatCount(NANITE_RECIPE.atoms.carbon)} · Si ${formatCount(
+    NANITE_RECIPE.atoms.silicon,
+  )} · Cu ${formatCount(NANITE_RECIPE.atoms.copper)} · Au ${formatCount(
+    NANITE_RECIPE.atoms.gold,
+  )} · E ${formatEnergy(NANITE_RECIPE.energy)}`;
+  const replicateStatusHtml = `<small class="directive-recipe">${recipeText}</small>${
+    replicateHalt.length > 0
+      ? `<strong class="directive-alert">PRODUCTION HALTED · INSUFFICIENT ${haltedResources}</strong>`
+      : ""
+  }`;
+  return `<section class="panel allocation-panel" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
     <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatCount(unassigned)} UNASSIGNED${
       relativeAllocation ? " · RELATIVE AUTO" : ""
     }</span></header>
@@ -362,12 +379,15 @@ function allocationsHtml() {
             ALLOCATION_SHARE_SCALE
           : 0n;
         const shareText = `${shareHundredths / 100n}.${(shareHundredths % 100n).toString().padStart(2, "0")}`;
-        return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}">
+        return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}" data-tooltip="${
+          directive === "replicate"
+            ? `${recipeText}${haltDetail ? `. Production halted: ${haltDetail}.` : "."}`
+            : `Assign active nanites to ${DIRECTIVE_LABEL[directive].toLowerCase()}.`
+        }">
           <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${formatCount(
             state.allocations[directive],
-          )} assigned · ${
-            directive === "research" ? "core capacity applies" : "complete jobs only"
-          }</small></div>
+          )} assigned${directive === "research" ? " · core capacity applies" : ""}</small>
+          ${directive === "replicate" ? replicateStatusHtml : ""}</div>
           ${
             relativeAllocation
               ? `<div class="allocation-share-stepper">
@@ -379,7 +399,7 @@ function allocationsHtml() {
                     shareHundredths === 10_000n ? "disabled" : ""
                   } aria-label="Increase ${DIRECTIVE_LABEL[directive]} by one percent">+</button>
                 </div>
-                <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
+                <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}" aria-label="${locked ? "Unlock" : "Lock"} ${DIRECTIVE_LABEL[directive]} allocation">${
                   locked ? "LOCK" : "OPEN"
                 }</button>
                 <label class="relative-allocation"><input type="range" min="0" max="10000" step="1" value="${shareHundredths}" data-action="set-share" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} persistent relative share"><span>${shareText}%</span></label>`
@@ -388,10 +408,7 @@ function allocationsHtml() {
                 } data-repeat="accelerated">−</button><output>${formatCount(state.allocations[directive])}</output>
                 <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="1" ${
                   unassigned === 0n || state.allocations[directive] >= state.nanites ? "disabled" : ""
-                } data-repeat="accelerated">+</button>
-                <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
-                  locked ? "LOCK" : "OPEN"
-                }</button>`
+                } data-repeat="accelerated">+</button>`
           }
         </div>`;
       }).join("")}
@@ -446,7 +463,7 @@ function researchHtml() {
       </div>`
     : "";
 
-  return `<section class="panel research-panel">
+  return `<section class="panel research-panel" data-tooltip="Research uses embedded computronium plus any free nanites assigned to research.">
     <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${state.completedResearch.length}/${Object.keys(
       RESEARCH,
     ).length} COMPLETE · ${formatCount(
@@ -471,7 +488,7 @@ function researchHtml() {
           const queued = state.researchQueue.some((item) => item.id === definition.id);
           const complete = state.completedResearch.includes(definition.id);
           const eta = (definition.requiredNaniteMs + capacity - 1n) / capacity;
-          return `<article class="research-card"><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
+          return `<article class="research-card" data-tooltip="${definition.effect}"><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
             <small>${
               complete
                 ? `RESOLVED · WORK ${formatCount(definition.requiredNaniteMs)} n·ms`
@@ -496,7 +513,7 @@ function researchHtml() {
 
 function projectsHtml() {
   if (!state.discovery.projectsVisible) return "";
-  return `<section class="panel project-panel">
+  return `<section class="panel project-panel" data-tooltip="Long-horizon projects expose distant objectives before their requirements are resolved.">
     <header class="panel-heading"><span>LONG-HORIZON PROJECTS</span><span>1 DETECTED</span></header>
     <div class="project-card"><div class="project-index">LAN—01</div><strong>Lanthanide Definition</strong>
       <p>Construct the analytical substrate required to distinguish the lanthanide series from retained matter.</p>
@@ -511,7 +528,7 @@ function logHtml() {
   const tierCounts = Object.fromEntries(
     LOG_TIERS.map((tier) => [tier, state.log.filter((entry) => entry.tier === tier).length]),
   );
-  return `<section class="panel log-panel">
+  return `<section class="panel log-panel" data-tooltip="World, critical, and medium history is permanent; the newest 200 info events are retained.">
     <header class="panel-heading"><span>RUNNING LOG</span><span>${String(visibleLog.length).padStart(3, "0")} / ${String(
       state.log.length,
     ).padStart(3, "0")} EVENTS</span></header>
@@ -610,11 +627,12 @@ function renderGame(now = Date.now(), force = false) {
       }
     : null;
   const depositTotal = totalMatter(state.activeDeposit.matter);
+  delayedTooltips.hide();
   root.innerHTML = `<div class="game-shell">
     <header class="game-header">
       <div class="brand-lockup"><span class="brand-mark">◈</span><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>
-      <div class="header-metrics"><div><span>ACTIVE NANITES</span><strong>${formatCount(state.nanites)}</strong></div>
-        ${state.discovery.surveyComplete ? `<div class="substrate-metric"><span>SUBSTRATE</span><strong>${percentage(depositTotal, state.activeDeposit.initialAtoms)}</strong></div>` : ""}
+      <div class="header-metrics"><div data-tooltip="Total functioning nanites in the local swarm."><span>ACTIVE NANITES</span><strong>${formatCount(state.nanites)}</strong></div>
+        ${state.discovery.surveyComplete ? `<div class="substrate-metric" data-tooltip="Unreserved matter remaining in the active finite deposit."><span>SUBSTRATE</span><strong>${percentage(depositTotal, state.activeDeposit.initialAtoms)}</strong></div>` : ""}
         <div class="audio-controls">
           <button class="audio-toggle ${sonicMind.enabled ? "active" : ""}" data-action="audio" aria-pressed="${sonicMind.enabled}" ${
             sonicMind.isSupported ? "" : "disabled"

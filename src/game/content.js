@@ -127,6 +127,7 @@ const INITIAL_RESEARCH = Object.freeze({
     name: "Relative Directive Allocation",
     description: "Express workforce intent as proportions and exact swarm-scale counts while preserving locked directives.",
     effect: "Persistent percentage targets automatically absorb newly replicated nanites.",
+    requires: ["parallel-directives"],
     unlockNanites: 12n,
     requiredNaniteMs: 6_000_000n,
     cost: researchCost(120n, 2_000n, 800n, 300n, 50n),
@@ -144,6 +145,7 @@ const INITIAL_RESEARCH = Object.freeze({
     name: "Expanded Spectral Catalog",
     description: "Begin resolving the anonymous fraction retained in Residuum.",
     effect: "Reveals analytical and high-throughput sorting research.",
+    requires: ["parallel-directives"],
     requiredNaniteMs: 36_000_000n,
     cost: researchCost(80n, 1_000n, 500n, 100n, 20n),
   }),
@@ -340,7 +342,8 @@ const researchCatalog = {
   }),
   "parallel-directives": researchDefinition({
     ...INITIAL_RESEARCH["parallel-directives"],
-    requiredNaniteMs: 360_000_000n,
+    // The embedded computronium completes this in four minutes at its base 100 n-eq capacity.
+    requiredNaniteMs: 24_000_000n,
   }),
   "expanded-spectral-catalog": researchDefinition({
     ...INITIAL_RESEARCH["expanded-spectral-catalog"],

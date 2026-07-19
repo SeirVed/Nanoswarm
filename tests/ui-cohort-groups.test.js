@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { COHORT_SLOT_ORDER, groupCohortsForDisplay } from "../src/ui/cohort-groups.js";
+import { COHORT_SLOT_ORDER, groupCohortsForDisplay, revealedCohortSlots } from "../src/ui/cohort-groups.js";
 
 describe("cohort display groups", () => {
   it("keeps active work in the fixed replication, collection, sorting, misc order", () => {
@@ -28,5 +28,27 @@ describe("cohort display groups", () => {
     assert.equal(groups[0].lead.completesAt, 30);
     assert.equal(groups[0].workers, 18n);
     assert.equal(groups[0].spread, 20);
+  });
+
+  it("keeps undiscovered fixed slots hidden and retains them after their first reveal", () => {
+    const state = {
+      discovery: {
+        surveyComplete: true,
+        feedstockVisible: true,
+        elementsVisible: true,
+        atmosphereVisible: false,
+        exhaustionNotified: false,
+      },
+      prospecting: { searchesCompleted: 0 },
+      cohorts: [],
+    };
+    assert.deepEqual(revealedCohortSlots(state), ["replicate", "collect", "energy", "sort"]);
+
+    state.cohorts.push({ directive: "prospect" });
+    assert.deepEqual(revealedCohortSlots(state), ["replicate", "collect", "energy", "sort", "prospect"]);
+    state.cohorts = [];
+    state.prospecting.searchesCompleted = 1;
+    state.discovery.atmosphereVisible = true;
+    assert.deepEqual(revealedCohortSlots(state), COHORT_SLOT_ORDER);
   });
 });

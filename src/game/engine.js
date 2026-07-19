@@ -85,6 +85,35 @@ function atomRecipeCapacity(state) {
   );
 }
 
+export function replicationShortages(state) {
+  const inFlight = allocationWorkersInFlight(state, "replicate");
+  const shortfall = state.allocations.replicate - inFlight;
+  const availableWorkers = idleWorkers(state);
+  const requestedWorkers = shortfall < availableWorkers ? shortfall : availableWorkers;
+  if (requestedWorkers <= 0n) return [];
+
+  const resources = [
+    { key: "energy", name: "energy", available: state.energy, perNanite: NANITE_RECIPE.energy },
+    ...ATOM_KEYS.map((key) => ({
+      key,
+      name: key,
+      available: state.atoms[key],
+      perNanite: NANITE_RECIPE.atoms[key],
+    })),
+  ];
+  return resources.flatMap((resource) => {
+    const required = resource.perNanite * requestedWorkers;
+    if (resource.available >= required) return [];
+    return [{
+      key: resource.key,
+      name: resource.name,
+      available: resource.available,
+      required,
+      missing: required - resource.available,
+    }];
+  });
+}
+
 function nextSyncBoundary(state, now) {
   const window = cohortSyncWindow(state);
   return Math.floor(now / window) * window + window;

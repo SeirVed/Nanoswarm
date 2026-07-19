@@ -21,6 +21,8 @@ import {
   energyJobYield,
   moveResearch,
   queueResearch,
+  replicationShortages,
+  researchIsRevealed,
   setDirectiveAllocation,
   solidCollectionCapacity,
   sortingCapacity,
@@ -245,6 +247,16 @@ describe("cohort simulation", () => {
     assert.equal(complete.completedResearch.includes("parallel-directives"), true);
   });
 
+  it("reveals only four-minute Parallel Directive Scheduling when research first appears", () => {
+    const state = reachSortedStockpile();
+    const revealed = Object.values(RESEARCH)
+      .filter((definition) => researchIsRevealed(state, definition))
+      .map((definition) => definition.id);
+
+    assert.deepEqual(revealed, ["parallel-directives"]);
+    assert.equal(RESEARCH["parallel-directives"].requiredNaniteMs / effectiveResearchCapacity(state), 240_000n);
+  });
+
   it("does not double-count workers reassigned from an indivisible cohort into research", () => {
     const now = 3_250_000;
     let state = createInitialState(now);
@@ -355,34 +367,38 @@ describe("cohort simulation", () => {
 
   it("reorders queued research without discarding accumulated work", () => {
     let state = reachSortedStockpile(3_740_000);
-    state.energy = 1_000n;
-    state = success(queueResearch(state, "parallel-directives", state.simTime));
+    state.energy = 1_000_000n;
+    for (const key of Object.keys(state.atoms)) state.atoms[key] = 1_000_000n;
+    state.completedResearch.push("parallel-directives");
     state = success(queueResearch(state, "expanded-spectral-catalog", state.simTime));
+    state = success(queueResearch(state, "capacitive-buffer-lattice", state.simTime));
     state = advanceSimulation(state, state.simTime + 1_000);
-    const parallelProgress = state.researchQueue[0].progressNaniteMs;
+    const spectralProgress = state.researchQueue[0].progressNaniteMs;
 
-    state = success(moveResearch(state, "expanded-spectral-catalog", -1, state.simTime));
-    assert.equal(state.researchQueue[0].id, "expanded-spectral-catalog");
-    assert.equal(state.researchQueue[1].id, "parallel-directives");
-    assert.equal(state.researchQueue[1].progressNaniteMs, parallelProgress);
+    state = success(moveResearch(state, "capacitive-buffer-lattice", -1, state.simTime));
+    assert.equal(state.researchQueue[0].id, "capacitive-buffer-lattice");
+    assert.equal(state.researchQueue[1].id, "expanded-spectral-catalog");
+    assert.equal(state.researchQueue[1].progressNaniteMs, spectralProgress);
   });
 
   it("cancels research and releases its fully reserved inputs", () => {
     let state = reachSortedStockpile(3_745_000);
-    state.energy = 1_000n;
+    state.energy = 1_000_000n;
+    for (const key of Object.keys(state.atoms)) state.atoms[key] = 1_000_000n;
+    state.completedResearch.push("parallel-directives");
     const before = structuredClone(state);
-    state = success(queueResearch(state, "parallel-directives", state.simTime));
     state = success(queueResearch(state, "expanded-spectral-catalog", state.simTime));
+    state = success(queueResearch(state, "capacitive-buffer-lattice", state.simTime));
     state = advanceSimulation(state, state.simTime + 1_000);
-    state = success(cancelResearch(state, "parallel-directives", state.simTime));
+    state = success(cancelResearch(state, "expanded-spectral-catalog", state.simTime));
 
-    const retainedCost = RESEARCH["expanded-spectral-catalog"].cost;
+    const retainedCost = RESEARCH["capacitive-buffer-lattice"].cost;
     assert.equal(state.energy, before.energy - retainedCost.energy);
     for (const key of Object.keys(state.atoms)) {
       assert.equal(state.atoms[key], before.atoms[key] - retainedCost.atoms[key]);
     }
     assert.equal(state.researchQueue.length, 1);
-    assert.equal(state.researchQueue[0].id, "expanded-spectral-catalog");
+    assert.equal(state.researchQueue[0].id, "capacitive-buffer-lattice");
   });
 
   it("launches autonomous prospecting after a depleted deposit", () => {
@@ -402,12 +418,37 @@ describe("cohort simulation", () => {
   it("unlocks relative allocation research at twelve nanites", () => {
     const state = reachSortedStockpile();
     state.energy = 1_000n;
+    state.completedResearch.push("parallel-directives");
     state.nanites = 11n;
     const locked = queueResearch(state, "relative-allocation", state.simTime);
     assert.equal(locked.ok, false);
     state.nanites = 12n;
     const queued = queueResearch(state, "relative-allocation", state.simTime);
     assert.equal(queued.ok, true, queued.reason);
+  });
+
+  it("reports exact replication resource shortages only while assigned production is stalled", () => {
+    const state = createInitialState(3_900_000);
+    state.nanites = 2n;
+    state.energy = 0n;
+    state.discovery.directivesVisible = true;
+    let allocated = success(adjustAllocation(state, "replicate", 1n, state.simTime));
+    assert.deepEqual(replicationShortages(allocated).map((shortage) => shortage.key), [
+      "energy",
+      "carbon",
+      "silicon",
+      "copper",
+      "gold",
+    ]);
+
+    allocated = createInitialState(3_910_000);
+    allocated.nanites = 2n;
+    allocated.discovery.directivesVisible = true;
+    allocated.energy = NANITE_RECIPE.energy;
+    for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) allocated.atoms[key] = amount;
+    allocated = success(adjustAllocation(allocated, "replicate", 1n, allocated.simTime));
+    assert.equal(allocated.cohorts.some((cohort) => cohort.directive === "replicate"), true);
+    assert.deepEqual(replicationShortages(allocated), []);
   });
 
   it("redistributes relative allocations without disturbing locked directives", () => {
