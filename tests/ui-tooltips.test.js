@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ACTION_TOOLTIPS, TOOLTIP_DELAY_MS, tooltipTextFor } from "../src/ui/tooltips.js";
+import { ACTION_TOOLTIPS, TOOLTIP_DELAY_MS, tooltipIdentityFor, tooltipTextFor } from "../src/ui/tooltips.js";
 
 describe("delayed tooltips", () => {
   it("waits one and a half seconds and supplies explanations for every interface action", () => {
@@ -25,5 +25,17 @@ describe("delayed tooltips", () => {
     assert.equal(tooltipTextFor(target), ACTION_TOOLTIPS.adjust);
     delete target.dataset.action;
     assert.equal(tooltipTextFor(target), "Accessible label");
+  });
+
+  it("keeps stable semantic identities when timer text or log layout changes", () => {
+    const log = { dataset: { tooltipKey: "log:42", tooltip: "First wording" } };
+    assert.equal(tooltipIdentityFor(log), "key:log:42");
+    log.dataset.tooltip = "Updated wording";
+    assert.equal(tooltipIdentityFor(log), "key:log:42");
+
+    const control = {
+      dataset: { action: "adjust", directive: "replicate", delta: "1" },
+    };
+    assert.equal(tooltipIdentityFor(control), "control:adjust:replicate::::1:");
   });
 });

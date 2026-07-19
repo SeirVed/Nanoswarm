@@ -87,10 +87,25 @@ const percentage = (part, whole) => {
   const tenths = (part * 1_000n + whole / 2n) / whole;
   return `${tenths / 10n}.${tenths % 10n}%`;
 };
+const LOG_TIER_MEANING = Object.freeze({
+  world: "World events are permanent milestones that define the seed's long-term history.",
+  critical: "Critical events are permanent warnings, failures, bottlenecks, or irreversible transitions.",
+  medium: "Medium events are permanent discoveries and meaningful operational changes.",
+  info: "Info events describe routine operation; only the newest 200 are retained.",
+});
+
+function logEntryTooltip(entry, label) {
+  let meaning = "This is an authoritative record emitted by the deterministic simulation.";
+  if (/RESEARCH/.test(entry.message)) meaning = "Research records track reserved work, queue decisions, and completed changes to swarm capability.";
+  else if (/COHORT|JOB|REPLICAT|COLLECT|SORT|ENERGY/.test(entry.message)) meaning = "Operational records mark discrete jobs; resources and outputs change only at their exact simulation boundaries.";
+  else if (/SUBSTRATE|DEPOSIT|PROSPECT|ATMOSPHERE/.test(entry.message)) meaning = "Exploration records describe the finite local environment and the discovery of additional material fields.";
+  else if (/DIRECTIVE|ALLOCATION/.test(entry.message)) meaning = "Directive records describe changes to the authority and workforce-control systems available to the player.";
+  return `Recorded ${label} after seed assembly. ${meaning} ${LOG_TIER_MEANING[entry.tier]}`;
+}
 const progressBar = (progress, label = "", startedAt, completesAt) => `
   <div class="progress-wrap" aria-label="${label}" ${
     startedAt === undefined ? "" : `data-start="${startedAt}" data-end="${completesAt}"`
-  }>
+  } ${startedAt === undefined ? "" : `data-tooltip-key="job-timer:${startedAt}:${completesAt}" data-tooltip="This cohort is indivisible while the timer runs. Its workers and reserved inputs return only when the discrete job completes."`}>
     <div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(1, progress)) * 100}%"></div></div>
     ${label ? `<span>${label}</span>` : ""}
   </div>`;
@@ -103,7 +118,7 @@ function renderIntro() {
         <div class="arrival-log" aria-live="polite">
           ${INTRO_LOG.slice(0, introVisible)
             .map(
-              (entry) => `<div class="arrival-line tone-${entry.tone ?? "system"}" data-tooltip="${escapeAttribute(`${entry.elapsedLabel}: ${entry.message}`)}">
+              (entry, index) => `<div class="arrival-line tone-${entry.tone ?? "system"}" data-tooltip-key="intro:${index}" data-tooltip="${escapeAttribute(entry.tooltip)}">
                 <time>${entry.elapsedLabel}</time><span>${entry.message}</span>
               </div>`,
             )
@@ -239,7 +254,7 @@ function operationsHtml(now) {
       <header class="panel-heading"><span>PRIMARY ASSEMBLER</span><span>AVAILABLE</span></header>
       <div class="first-command">
         <p>Local environment unresolved. No economic directives are safe.</p>
-        <button class="terminal-button primary-action" data-action="start" data-directive="survey">
+        <button class="terminal-button primary-action" data-action="start" data-directive="survey" data-tooltip="Commit the only assembler to a ten-second close survey. No materials are consumed; economic directives appear only after the substrate is classified.">
           SURVEY IMMEDIATE SUBSTRATE <span>10s · 1 nanite</span>
         </button>
       </div>
@@ -264,7 +279,7 @@ function operationsHtml(now) {
               : true,
         )
         .map(
-          ([directive, label, hint]) => `<button class="action-row${newUnlockClass(`directive:${directive}`)}" data-unlock-id="directive:${directive}" data-action="start" data-directive="${directive}">
+          ([directive, label, hint]) => `<button class="action-row${newUnlockClass(`directive:${directive}`)}" data-unlock-id="directive:${directive}" data-action="start" data-directive="${directive}" data-tooltip="${hint} This commits the primary assembler for ${effectiveJobDuration(state, directive) / 1000} seconds; reserved inputs and discrete outputs settle only at completion.">
             <span><strong>${label}</strong><small>${hint}</small></span><em>${effectiveJobDuration(state, directive) / 1000}s</em>
           </button>`,
         )
@@ -282,16 +297,16 @@ function resourcesHtml() {
         <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${
           depositExhausted ? "EXHAUSTED" : `${percentage(depositTotal, state.activeDeposit.initialAtoms)} REMAINS`
         }</span></header>
-        <strong>${state.activeDeposit.name}</strong>
-        <p>${state.activeDeposit.description}</p>
-        <small>${formatCount(depositTotal)} constituent atoms · ≈${formatInventoryMass(
+        <strong data-tooltip-key="substrate:identity" data-tooltip="This is the swarm's current finite solid material field. Its classification describes likely composition, while exact accessible inventory below excludes matter already reserved by collection cohorts.">${state.activeDeposit.name}</strong>
+        <p data-tooltip-key="substrate:composition" data-tooltip="Composition is inferred from the survey and guides the mixture returned by collection. It does not guarantee that every atom is currently identifiable by the sorting catalog.">${state.activeDeposit.description}</p>
+        <small data-tooltip-key="substrate:inventory" data-tooltip="Accessible atoms are unreserved matter still present in this field. Collector capacity is the maximum discrete payload one nanite can reserve when a collection job starts.">${formatCount(depositTotal)} constituent atoms · ≈${formatInventoryMass(
           state.activeDeposit.matter,
         )} accessible · ${formatCount(
           solidCollectionCapacity(state),
         )} per collector</small>
         ${
           depositExhausted
-            ? `<div class="exhaustion-state${newUnlockClass("directive:prospect")}" data-unlock-id="directive:prospect"><strong>${String(
+            ? `<div class="exhaustion-state${newUnlockClass("directive:prospect")}" data-unlock-id="directive:prospect" data-tooltip-key="substrate:exhaustion" data-tooltip="Every accessible solid atom in this field has been collected or reserved. Production can continue from stored inventory, but new solid matter requires a prospecting search."><strong>${String(
                 state.activeDeposit.limitingElement ?? "material",
               ).toUpperCase()} BOTTLENECK CONFIRMED</strong><p>The local solid inventory is committed. A new material field must be located.</p>
                 <button class="terminal-button search-button" data-action="prospect" ${
@@ -303,7 +318,7 @@ function resourcesHtml() {
         }
         ${
           state.discovery.atmosphereVisible
-            ? `<div class="atmosphere-state${newUnlockClass("directive:atmosphere")}" data-unlock-id="directive:atmosphere"><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatCount(
+            ? `<div class="atmosphere-state${newUnlockClass("directive:atmosphere")}" data-unlock-id="directive:atmosphere" data-tooltip-key="substrate:atmosphere" data-tooltip="Atmospheric harvesting is inexhaustible but diffuse: each nanite captures only one percent of the base solid payload before research bonuses. Its output enters mixed Feedstock and still requires sorting."><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatCount(
                 atmosphericCollectionCapacity(state),
               )} atoms (≈${formatInventoryMass({ unknown: atmosphericCollectionCapacity(state) })}) per nanite per job · 1% base capture plus completed refinements</p></div>`
             : ""
@@ -315,13 +330,13 @@ function resourcesHtml() {
   const material = `<section class="panel resources-panel${newUnlockClass("materials")}" data-unlock-id="materials" data-tooltip="Exact available inventories exclude inputs already reserved by active cohorts.">
     <header class="panel-heading"><span>MATERIAL CONTROL</span><span>EXACT INVENTORY</span></header>
     <div class="resource-summary">
-      <div><span>FEEDSTOCK</span><strong>${formatCount(totalMatter(state.feedstock))} atoms</strong><small>≈${formatInventoryMass(
+      <div data-tooltip-key="resource:feedstock" data-tooltip="Feedstock is mixed, unclassified matter returned by collection jobs. Sorting reserves a discrete portion, separates the four currently recognized elements, and moves everything unresolved into Residuum."><span>FEEDSTOCK</span><strong>${formatCount(totalMatter(state.feedstock))} atoms</strong><small>≈${formatInventoryMass(
         state.feedstock,
       )} · mixed · unsorted</small></div>
-      <div><span>ENERGY</span><strong>${formatEnergy(state.energy)}</strong><small>locally stored</small></div>
+      <div data-tooltip-key="resource:energy" data-tooltip="Energy is locally stored electrical work measured in picojoules. Replication consumes ${formatEnergy(NANITE_RECIPE.energy)} per nanite; research reserves its listed energy cost when queued."><span>ENERGY</span><strong>${formatEnergy(state.energy)}</strong><small>locally stored</small></div>
       ${
         state.discovery.residuumVisible
-          ? `<div class="resource-unlock${newUnlockClass("residuum")}" data-unlock-id="residuum"><span>RESIDUUM</span><strong>${formatCount(totalMatter(state.residuum))} atoms</strong><small>≈${formatInventoryMass(
+          ? `<div class="resource-unlock${newUnlockClass("residuum")}" data-unlock-id="residuum" data-tooltip-key="resource:residuum" data-tooltip="Residuum contains real, conserved atoms whose elemental signatures are not yet in the swarm's catalog. It is retained rather than discarded; later spectral research can classify and use more of it."><span>RESIDUUM</span><strong>${formatCount(totalMatter(state.residuum))} atoms</strong><small>≈${formatInventoryMass(
               state.residuum,
             )} · retained · ${
               state.discovery.residuumIndexed ? "indexed" : "unresolved"
@@ -340,7 +355,12 @@ function resourcesHtml() {
               ["gold", "Au", "Gold"],
             ]
               .map(
-                ([key, symbol, name]) => `<div class="atom-card" data-tooltip="Exact identified ${name.toLowerCase()} inventory available for jobs and research.">
+                ([key, symbol, name]) => `<div class="atom-card" data-tooltip-key="resource:${key}" data-tooltip="${({
+                  carbon: "Carbon is the structural bulk of each nanite and the earliest replication bottleneck. One nanite requires 5,000 available carbon atoms, excluding atoms already reserved by active work.",
+                  silicon: "Silicon forms computational and sensing structures. One nanite requires 400 available silicon atoms, and research may reserve additional silicon while queued.",
+                  copper: "Copper carries power and signals through the swarm. One nanite requires 150 available copper atoms, excluding material committed to active cohorts or research.",
+                  gold: "Gold provides corrosion-resistant nanoscale contacts. One nanite requires 25 available gold atoms; its low abundance can limit otherwise enormous replication runs.",
+                })[key]}">
                   <span class="atom-symbol">${symbol}</span><span>${name}</span>
                   <strong>${formatCount(state.atoms[key])}</strong>
                   <small>≈${formatInventoryMass({ [key]: state.atoms[key] })}</small>
@@ -440,7 +460,7 @@ function researchHtml() {
   const contributingResearchers = activeResearchWorkers(state);
   const activeHtml = active
     ? `<div class="active-research"><div class="eyebrow">ACTIVE RESEARCH JOB</div><strong>${RESEARCH[active.id].name}</strong>
-        <div class="progress-wrap" data-research-progress>
+        <div class="progress-wrap" data-research-progress data-tooltip-key="research-timer:${active.id}" data-tooltip="This estimate uses current computronium and genuinely available research workers. Reallocating nanites can change the remaining time, but accumulated work and reserved inputs remain exact.">
           <div class="progress-track"><div class="progress-fill" style="width:${
             Number((active.progressNaniteMs * 10_000n) / RESEARCH[active.id].requiredNaniteMs) / 100
           }%"></div></div>
@@ -452,7 +472,7 @@ function researchHtml() {
       <div class="research-queue-list">
         ${state.researchQueue.map((item, index) => {
           const definition = RESEARCH[item.id];
-          return `<div class="research-queue-row">
+          return `<div class="research-queue-row" data-tooltip-key="research-queue:${item.id}" data-tooltip="${definition.name} currently has ${percentage(item.progressNaniteMs, definition.requiredNaniteMs)} of its required work complete. Its full material and energy cost remains reserved until completion or cancellation.">
             <span class="queue-index">${String(index + 1).padStart(2, "0")}</span>
             <div><strong>${definition.name}</strong><small>${
               index === 0 ? "ACTIVE" : "QUEUED"
@@ -472,21 +492,17 @@ function researchHtml() {
     : "";
 
   return `<section class="panel research-panel${newUnlockClass("research")}" data-unlock-id="research" data-tooltip="Research uses embedded computronium plus any free nanites assigned to research.">
-    <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${state.completedResearch.length}/${Object.keys(
-      RESEARCH,
-    ).length} COMPLETE · ${formatCount(
-      capacity,
-    )} n-eq</span></header>
-    <div class="research-capacity"><span>COMPUTRONIUM + ACTIVE RESEARCHERS</span><strong>max(100 nanites, ${
+    <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${formatCount(capacity)} n-eq CAPACITY</span></header>
+    <div class="research-capacity" data-tooltip-key="research:capacity" data-tooltip="Research work is measured in nanite-milliseconds. Embedded computronium supplies a protected minimum capacity, while nanites assigned to research contribute only when they are not trapped inside indivisible production cohorts."><span>COMPUTRONIUM + ACTIVE RESEARCHERS</span><strong>max(100 nanites, ${
       state.completedResearch.includes("distributed-computronium") ? "2%" : "1%"
     } swarm) + ${formatCount(contributingResearchers)} / ${formatCount(state.allocations.research)} assigned</strong></div>
     ${activeHtml}
     ${queueHtml}
     <nav class="research-tabs" aria-label="Research state">
-      <button class="research-tab ${activeResearchTab === "incomplete" ? "active" : ""}" data-action="research-tab" data-tab="incomplete" aria-pressed="${
+      <button class="research-tab ${activeResearchTab === "incomplete" ? "active" : ""}" data-action="research-tab" data-tab="incomplete" data-tooltip="Show research signals whose prerequisites are known but whose work is not complete. Hidden branches do not contribute to this count." aria-pressed="${
         activeResearchTab === "incomplete"
       }"><span>INCOMPLETE</span><strong>${incompleteResearch.length}</strong></button>
-      <button class="research-tab ${activeResearchTab === "complete" ? "active" : ""}" data-action="research-tab" data-tab="complete" aria-pressed="${
+      <button class="research-tab ${activeResearchTab === "complete" ? "active" : ""}" data-action="research-tab" data-tab="complete" data-tooltip="Show research the swarm has already resolved. Completed effects are authoritative and remain active permanently." aria-pressed="${
         activeResearchTab === "complete"
       }"><span>COMPLETE</span><strong>${completeResearch.length}</strong></button>
     </nav>
@@ -496,7 +512,7 @@ function researchHtml() {
           const queued = state.researchQueue.some((item) => item.id === definition.id);
           const complete = state.completedResearch.includes(definition.id);
           const eta = (definition.requiredNaniteMs + capacity - 1n) / capacity;
-          return `<article class="research-card${newUnlockClass(`research:${definition.id}`)}" data-unlock-id="research:${definition.id}" data-tooltip="${definition.effect}"><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
+          return `<article class="research-card${newUnlockClass(`research:${definition.id}`)}" data-unlock-id="research:${definition.id}" data-tooltip-key="research-card:${definition.id}" data-tooltip="${definition.description} Effect: ${definition.effect} Queueing reserves the complete listed cost before any work begins."><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
             <small>${
               complete
                 ? `RESOLVED · WORK ${formatCount(definition.requiredNaniteMs)} n·ms`
@@ -546,7 +562,7 @@ function logHtml() {
         ...LOG_TIERS.map((tier) => [tier, tierCounts[tier]]),
       ]
         .map(
-          ([tier, count]) => `<button class="log-filter tier-${tier} ${activeLogTier === tier ? "active" : ""}" data-action="log-filter" data-tier="${tier}" aria-pressed="${
+          ([tier, count]) => `<button class="log-filter tier-${tier} ${activeLogTier === tier ? "active" : ""}" data-action="log-filter" data-tier="${tier}" data-tooltip="${tier === "all" ? "Show every retained event regardless of significance. Filtering changes only this view and never deletes history." : LOG_TIER_MEANING[tier]}" aria-pressed="${
             activeLogTier === tier
           }"><span>${tier.toUpperCase()}</span><strong>${String(count).padStart(2, "0")}</strong></button>`,
         )
@@ -556,7 +572,7 @@ function logHtml() {
       ${visibleLog.map((entry) => {
         const elapsed = Math.max(0, entry.at - state.createdAt + 9_247);
         const label = entry.elapsedLabel ?? (elapsed < 60_000 ? `+${(elapsed / 1000).toFixed(3)}s` : `+${Math.floor(elapsed / 60_000)}m`);
-        return `<div class="telemetry-line tone-${entry.tone}" data-tooltip="${escapeAttribute(`${entry.tier.toUpperCase()} event at ${label}: ${entry.message}`)}"><time>${label}</time><span class="tier-badge tier-${entry.tier}">${entry.tier.toUpperCase()}</span><span>${entry.message}</span></div>`;
+        return `<div class="telemetry-line tone-${entry.tone}" data-tooltip-key="log:${entry.id}" data-tooltip="${escapeAttribute(logEntryTooltip(entry, label))}"><time>${label}</time><span class="tier-badge tier-${entry.tier}">${entry.tier.toUpperCase()}</span><span>${entry.message}</span></div>`;
       }).join("")}
       ${visibleLog.length === 0 ? `<p class="log-empty">NO ${activeLogTier.toUpperCase()} EVENTS RECORDED</p>` : ""}
       <div id="log-end"></div>
@@ -614,6 +630,34 @@ function updateDynamicProgress(now) {
   }
 }
 
+const FOCUS_DATA_KEYS = ["action", "directive", "research", "tab", "tier", "delta", "shareDelta"];
+
+function captureFocusedControl() {
+  const element = document.activeElement;
+  if (!element || !root.contains(element) || !element.dataset?.action) return null;
+  const snapshot = {
+    data: Object.fromEntries(FOCUS_DATA_KEYS.map((key) => [key, element.dataset[key] ?? ""])),
+  };
+  if (element.matches("input, textarea")) {
+    snapshot.value = element.value;
+    snapshot.selectionStart = element.selectionStart;
+    snapshot.selectionEnd = element.selectionEnd;
+  }
+  return snapshot;
+}
+
+function restoreFocusedControl(snapshot) {
+  if (!snapshot) return;
+  const element = [...root.querySelectorAll("[data-action]")].find((candidate) =>
+    FOCUS_DATA_KEYS.every((key) => (candidate.dataset[key] ?? "") === snapshot.data[key]));
+  if (!element || element.disabled) return;
+  if (snapshot.data.action === "set-share-percent" && snapshot.value !== undefined) element.value = snapshot.value;
+  element.focus({ preventScroll: true });
+  if (snapshot.selectionStart !== null && snapshot.selectionStart !== undefined && element.setSelectionRange) {
+    element.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+  }
+}
+
 function renderGame(now = Date.now(), force = false) {
   sonicMind.observe(state, now);
   const signature = structuralSignature();
@@ -627,14 +671,7 @@ function renderGame(now = Date.now(), force = false) {
     (column) => column.scrollTop,
   );
   const previousScroll = { x: window.scrollX, y: window.scrollY };
-  const focusedPercentage = document.activeElement?.matches("input[data-action='set-share-percent']")
-    ? {
-        directive: document.activeElement.dataset.directive,
-        value: document.activeElement.value,
-        selectionStart: document.activeElement.selectionStart,
-        selectionEnd: document.activeElement.selectionEnd,
-      }
-    : null;
+  const focusedControl = captureFocusedControl();
   const depositTotal = totalMatter(state.activeDeposit.matter);
   root.innerHTML = `<div class="game-shell">
     <header class="game-header">
@@ -664,16 +701,7 @@ function renderGame(now = Date.now(), force = false) {
   document.querySelectorAll(".dashboard-column").forEach((column, index) => {
     column.scrollTop = previousColumnScroll[index] ?? 0;
   });
-  if (focusedPercentage) {
-    const restoredInput = document.querySelector(
-      `input[data-action='set-share-percent'][data-directive='${focusedPercentage.directive}']`,
-    );
-    if (restoredInput) {
-      restoredInput.value = focusedPercentage.value;
-      restoredInput.focus({ preventScroll: true });
-      restoredInput.setSelectionRange(focusedPercentage.selectionStart, focusedPercentage.selectionEnd);
-    }
-  }
+  restoreFocusedControl(focusedControl);
   window.scrollTo(previousScroll.x, previousScroll.y);
   delayedTooltips.refresh();
   lastStructuralSignature = signature;

@@ -39,12 +39,12 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec.
 - Log entries carry a significance tier independently of their visual tone. World, critical, and medium events remain permanent; only routine info events roll off after the newest 200. Old saves infer tiers during migration.
-- Parallel Directive Scheduling is the sole initial research signal and takes four minutes on the embedded 100 n-eq computronium. It gates the later coordination and spectral branches. At 12 nanites, Relative Directive Allocation replaces single-worker controls with persistent percentage sliders and exact percentage entry.
+- Parallel Directive Scheduling is the sole initial research signal and takes four minutes on the embedded 100 n-eq computronium. At 12 nanites it reveals Relative Directive Allocation; every other research signal requires both of these roots. The research header deliberately withholds the catalog-wide completion fraction.
 - Allocation step buttons support accelerating press-and-hold input. Percentage fields retain focus and uncommitted text when an unrelated cohort completion refreshes the dashboard.
 - One-by-one allocation omits percentage locks. Once Relative Directive Allocation is complete, new nanites automatically enter target shares and locks protect selected directives.
 - The operations panel keeps discovered replication, collection, sorting, and miscellaneous work in fixed slots without exposing unknown jobs. Structural refreshes preserve the page scroll position.
 - The replication directive owns the nanite recipe readout and reports exact resource shortages whenever assigned production cannot launch.
-- Every manageable control, intro telemetry line, running-log event, and key status readout exposes a contextual tooltip after a 1.5-second hover.
+- Every manageable control, intro telemetry line, running-log event, timer, resource card, and key status readout exposes a verbose contextual tooltip after a 1.5-second hover. Stable semantic tooltip identities and generic focus restoration preserve the player's inspection or keyboard position across job-completion renders.
 - Newly revealed panels, directives, elements, projects, and research signals pulse until clicked. Acknowledgements persist in version 7 saves, while migration treats features visible in older saves as already seen.
 - Research is split into incomplete and complete views. Long work estimates use live computronium capacity, so replication and explicit research allocation can collapse days into minutes without changing the job's required work.
 - Research inputs remain reserved while queued. Queue entries can be reordered or cancelled; cancellation discards work performed on that topic and releases its full reserved material and energy cost.

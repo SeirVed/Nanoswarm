@@ -365,11 +365,28 @@ describe("cohort simulation", () => {
     assert.match(result.reason, /Parallel Directive Scheduling/);
   });
 
+  it("reveals Relative Directive Allocation before every other post-root topic", () => {
+    const state = reachSortedStockpile();
+    state.nanites = 12n;
+    state.completedResearch.push("parallel-directives");
+    const beforeRelative = Object.values(RESEARCH)
+      .filter((definition) => !state.completedResearch.includes(definition.id))
+      .filter((definition) => researchIsRevealed(state, definition))
+      .map((definition) => definition.id);
+    assert.deepEqual(beforeRelative, ["relative-allocation"]);
+
+    state.completedResearch.push("relative-allocation");
+    assert.equal(researchIsRevealed(state, RESEARCH["expanded-spectral-catalog"]), true);
+    assert.equal(Object.values(RESEARCH).every((definition) =>
+      ["parallel-directives", "relative-allocation"].includes(definition.id) ||
+      definition.requires.includes("relative-allocation")), true);
+  });
+
   it("reorders queued research without discarding accumulated work", () => {
     let state = reachSortedStockpile(3_740_000);
     state.energy = 1_000_000n;
     for (const key of Object.keys(state.atoms)) state.atoms[key] = 1_000_000n;
-    state.completedResearch.push("parallel-directives");
+    state.completedResearch.push("parallel-directives", "relative-allocation");
     state = success(queueResearch(state, "expanded-spectral-catalog", state.simTime));
     state = success(queueResearch(state, "capacitive-buffer-lattice", state.simTime));
     state = advanceSimulation(state, state.simTime + 1_000);
@@ -385,7 +402,7 @@ describe("cohort simulation", () => {
     let state = reachSortedStockpile(3_745_000);
     state.energy = 1_000_000n;
     for (const key of Object.keys(state.atoms)) state.atoms[key] = 1_000_000n;
-    state.completedResearch.push("parallel-directives");
+    state.completedResearch.push("parallel-directives", "relative-allocation");
     const before = structuredClone(state);
     state = success(queueResearch(state, "expanded-spectral-catalog", state.simTime));
     state = success(queueResearch(state, "capacitive-buffer-lattice", state.simTime));

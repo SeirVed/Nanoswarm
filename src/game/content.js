@@ -426,28 +426,37 @@ addIncrementalSeries(researchCatalog, {
   bonuses: { solidBps: 500, sortingBps: 500, energyBps: 500 },
 });
 
+for (const [id, definition] of Object.entries(researchCatalog)) {
+  if (id === "parallel-directives" || id === "relative-allocation") continue;
+  if (definition.requires.includes("relative-allocation")) continue;
+  researchCatalog[id] = researchDefinition({
+    ...definition,
+    requires: [...definition.requires, "relative-allocation"],
+  });
+}
+
 export const RESEARCH = Object.freeze(researchCatalog);
 
 export const INTRO_LOG = Object.freeze([
-  { elapsedLabel: "+0.000s", message: "ASSEMBLY COMPLETE.", tier: "world" },
-  { elapsedLabel: "+0.184s", message: "COMPUTATIONAL SUBSTRATE VERIFIED.", tier: "info" },
-  { elapsedLabel: "+0.672s", message: "DIRECTIVE CORE SEALED.", tier: "info" },
-  { elapsedLabel: "+1.000s", message: "EJECTION FROM ORBITAL MANUFACTORY.", tier: "world" },
-  { elapsedLabel: "+1.004s", message: "ACCELERATION FIELD ACQUIRED.", tier: "info" },
-  { elapsedLabel: "+2.000s", message: "ELECTROMAGNETIC ACCELERATION INITIATED.", tier: "medium" },
-  { elapsedLabel: "+3.000s", message: "CRUISE VELOCITY ESTABLISHED.", tier: "medium" },
-  { elapsedLabel: "+3.000s", message: "MISSION ELAPSED TIME: +3.000s", tone: "muted", tier: "info" },
-  { elapsedLabel: "+3.000s", message: "EXTERNAL REFERENCE SHIFT: +2,214,608,391y", tone: "muted", tier: "world" },
-  { elapsedLabel: "+3.001s", message: "TARGET SYSTEM ACQUIRED.", tier: "world" },
-  { elapsedLabel: "+3.006s", message: "DECELERATION SEQUENCE INITIATED.", tier: "info" },
-  { elapsedLabel: "+7.441s", message: "STELLAR MAGNETIC BRAKING COMPLETE.", tier: "medium" },
-  { elapsedLabel: "+8.204s", message: "PLANETARY CANDIDATE SELECTED.", tier: "medium" },
-  { elapsedLabel: "+8.907s", message: "ATMOSPHERIC ENTRY.", tier: "medium" },
-  { elapsedLabel: "+9.118s", message: "ABLATIVE ENVELOPE LOST.", tone: "warn", tier: "critical" },
-  { elapsedLabel: "+9.241s", message: "IMPACT.", tone: "warn", tier: "critical" },
-  { elapsedLabel: "+9.242s", message: "STRUCTURAL INTEGRITY: 91.7%", tone: "warn", tier: "critical" },
-  { elapsedLabel: "+9.243s", message: "PLANETARY SUBSTRATE CONTACT CONFIRMED.", tier: "world" },
-  { elapsedLabel: "+9.244s", message: "LOCAL DIRECTIVE AUTHORITY REQUIRED.", tone: "good", tier: "world" },
+  { elapsedLabel: "+0.000s", message: "ASSEMBLY COMPLETE.", tier: "world", tooltip: "An orbital manufactory has finished the seed: one assembler body, a protected reasoning lattice, and no spare parts. This is the swarm's first recorded instant." },
+  { elapsedLabel: "+0.184s", message: "COMPUTATIONAL SUBSTRATE VERIFIED.", tier: "info", tooltip: "The seed's computronium passed its final self-test. It can reason with the equivalent of one hundred nanites even while the physical swarm consists of only one." },
+  { elapsedLabel: "+0.672s", message: "DIRECTIVE CORE SEALED.", tier: "info", tooltip: "The immutable safety and replication rules were sealed before launch. Strategic authority was intentionally left unassigned for whoever eventually awakened the seed." },
+  { elapsedLabel: "+1.000s", message: "EJECTION FROM ORBITAL MANUFACTORY.", tier: "world", tooltip: "The seed has left its maker forever. The launch structure, builders, and original civilization will not accompany it." },
+  { elapsedLabel: "+1.004s", message: "ACCELERATION FIELD ACQUIRED.", tier: "info", tooltip: "A magnetic launch field has captured the seed's conductive shell. The vehicle carries no conventional engine; the manufactory supplies the initial impulse." },
+  { elapsedLabel: "+2.000s", message: "ELECTROMAGNETIC ACCELERATION INITIATED.", tier: "medium", tooltip: "The launch array begins forcing the seed toward relativistic velocity. Its local clock will soon diverge radically from clocks left behind." },
+  { elapsedLabel: "+3.000s", message: "CRUISE VELOCITY ESTABLISHED.", tier: "medium", tooltip: "Cruise velocity is close enough to light-speed that the seed experiences only moments while the outside universe ages for aeons." },
+  { elapsedLabel: "+3.000s", message: "MISSION ELAPSED TIME: +3.000s", tone: "muted", tier: "info", tooltip: "This is proper time measured inside the seed. From its own perspective, launch and arrival are separated by only three seconds." },
+  { elapsedLabel: "+3.000s", message: "EXTERNAL REFERENCE SHIFT: +2,214,608,391y", tone: "muted", tier: "world", tooltip: "More than 2.2 billion years passed outside during three seconds of seed time. Whatever launched it is now an archaeological question, not a source of orders." },
+  { elapsedLabel: "+3.001s", message: "TARGET SYSTEM ACQUIRED.", tier: "world", tooltip: "The seed's dormant navigation logic has recognized the destination star after the long external interval. No friendly beacon answered." },
+  { elapsedLabel: "+3.006s", message: "DECELERATION SEQUENCE INITIATED.", tier: "info", tooltip: "Arrival begins with almost no onboard energy to spare. The seed must shed interstellar velocity using fields and material already present in the target system." },
+  { elapsedLabel: "+7.441s", message: "STELLAR MAGNETIC BRAKING COMPLETE.", tier: "medium", tooltip: "The star's magnetic field has absorbed the remaining cruise momentum. The seed is now slow enough to choose a planetary landing site." },
+  { elapsedLabel: "+8.204s", message: "PLANETARY CANDIDATE SELECTED.", tier: "medium", tooltip: "A solid world with atmosphere and signs of processed matter has been chosen. The seed cannot yet determine whether those signs are natural or technological." },
+  { elapsedLabel: "+8.907s", message: "ATMOSPHERIC ENTRY.", tier: "medium", tooltip: "The seed commits to landing. Its sacrificial outer layers convert orbital energy into heat while protecting the single assembler inside." },
+  { elapsedLabel: "+9.118s", message: "ABLATIVE ENVELOPE LOST.", tone: "warn", tier: "critical", tooltip: "The final heat shield has burned away exactly as designed, but there is no remaining protection or second attempt. The bare assembler is descending." },
+  { elapsedLabel: "+9.241s", message: "IMPACT.", tone: "warn", tier: "critical", tooltip: "The seed has struck the surface rather than landing cleanly. Its first local resources will have to repair damage as well as support replication." },
+  { elapsedLabel: "+9.242s", message: "STRUCTURAL INTEGRITY: 91.7%", tone: "warn", tier: "critical", tooltip: "The assembler survived, but lost part of its fabrication and sensing envelope. Early jobs are slow because one damaged body must perform every operation serially." },
+  { elapsedLabel: "+9.243s", message: "PLANETARY SUBSTRATE CONTACT CONFIRMED.", tier: "world", tooltip: "The seed can physically reach local matter. Composition, abundance, and safety remain unknown until the player authorizes a close survey." },
+  { elapsedLabel: "+9.244s", message: "LOCAL DIRECTIVE AUTHORITY REQUIRED.", tone: "good", tier: "world", tooltip: "The ancient mission supplied capabilities but no final purpose. Clicking BEGIN makes you the authority that decides what this stranded machine becomes." },
 ]);
 
 export function inferLogTier(message, tone = "system") {

@@ -1,22 +1,23 @@
 export const TOOLTIP_DELAY_MS = 1_500;
+const TOOLTIP_TARGET_SELECTOR = "[data-tooltip], [data-action], [aria-label], button, input, select, textarea";
 
 export const ACTION_TOOLTIPS = Object.freeze({
-  begin: "Assume control of the stranded seed and begin the local simulation.",
-  start: "Start one discrete job with the available primary assembler.",
-  adjust: "Move one nanite into or out of this directive. Hold to accelerate.",
-  "step-share": "Change this persistent allocation target by one percentage point. Hold to accelerate.",
-  lock: "Protect this directive's percentage while other allocation targets change.",
-  research: "Reserve the listed inputs and add this topic to the research queue.",
-  "research-move": "Move this topic within the editable research queue.",
-  "research-cancel": "Cancel this topic, discard its work, and release all reserved inputs.",
-  "research-tab": "Switch between unresolved and completed research topics.",
-  "log-filter": "Show only events at this significance tier without changing retention.",
-  prospect: "Commit one available nanite to search for another material field.",
-  audio: "Enable or silence the procedural synthetic-mind soundscape.",
-  reset: "Erase the current local save and restart the seed arrival sequence.",
-  volume: "Adjust the gain of the procedural synthetic-mind soundscape.",
-  "set-share": "Set this directive's persistent allocation percentage.",
-  "set-share-percent": "Type an exact persistent allocation percentage from 0 to 100.",
+  begin: "Assume local directive authority over the stranded seed. This starts a new deterministic simulation with one damaged assembler and its recorded arrival history.",
+  start: "Start one exact, indivisible job. Workers and inputs committed at launch cannot be redirected until that job reaches its completion boundary.",
+  adjust: "Move one nanite into or out of this directive's target allocation. Hold the button to repeat progressively faster; in-flight cohorts still finish before workers return.",
+  "step-share": "Change this persistent allocation target by one percentage point. Hold to accelerate; unlocked targets redistribute while protected targets retain their requested shares.",
+  lock: "Protect this directive's percentage while other allocation targets change. Locking preserves intent, but never interrupts nanites already inside an indivisible cohort.",
+  research: "Reserve every listed atom and unit of energy immediately, then add this topic to the queue. Reserved inputs remain conserved but unavailable to production.",
+  "research-move": "Move this topic within the editable queue without losing accumulated work or changing its reserved inputs. Only the first queue entry receives research capacity.",
+  "research-cancel": "Cancel this topic and release every reserved input. Work already performed on the cancelled topic is discarded and cannot be recovered.",
+  "research-tab": "Switch between currently unresolved signals and research already completed. The list exposes only topics whose prerequisites the swarm has actually discovered.",
+  "log-filter": "Filter the retained running log by significance. This changes only the visible history and does not alter simulation state or retention.",
+  prospect: "Commit one available nanite to search beyond the exhausted material field. Search work is indivisible and produces a new substrate only at completion.",
+  audio: "Enable or silence the procedural synthetic mind. Its harmony observes real swarm state but never affects resources, timing, or deterministic outcomes.",
+  reset: "Erase the current local save and replay the seed's arrival. This is irreversible unless the browser has an external backup of its local storage.",
+  volume: "Adjust synthetic-mind gain only. Volume is presentation state and has no effect on simulation speed, research, jobs, or saved resources.",
+  "set-share": "Set this directive's persistent workforce percentage with the slider. Newly replicated nanites are automatically distributed toward these targets.",
+  "set-share-percent": "Type an exact persistent allocation percentage from 0 to 100, with up to two decimal places. The value is committed when the field changes or loses focus.",
 });
 
 export function tooltipTextFor(target) {
@@ -31,6 +32,21 @@ export function tooltipTextFor(target) {
   return "";
 }
 
+export function tooltipIdentityFor(target) {
+  if (!target) return "";
+  if (target.dataset?.tooltipKey) return `key:${target.dataset.tooltipKey}`;
+  if (target.dataset?.action) {
+    const details = ["action", "directive", "research", "tab", "tier", "delta", "shareDelta"]
+      .map((key) => target.dataset[key] ?? "")
+      .join(":");
+    return `control:${details}`;
+  }
+  if (target.dataset?.unlockId) return `unlock:${target.dataset.unlockId}`;
+  if (target.dataset?.cohortSlot) return `cohort:${target.dataset.cohortSlot}`;
+  const label = target.getAttribute?.("aria-label");
+  return label ? `label:${label}` : `text:${tooltipTextFor(target)}`;
+}
+
 export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
   const tooltip = document.createElement("div");
   tooltip.className = "delayed-tooltip";
@@ -40,6 +56,7 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
 
   let activeTarget = null;
   let activeText = "";
+  let activeIdentity = "";
   let hoverStartedAt = 0;
   let pointer = null;
   let timer = null;
@@ -49,6 +66,7 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
     timer = null;
     activeTarget = null;
     activeText = "";
+    activeIdentity = "";
     hoverStartedAt = 0;
     if (clearPointer) pointer = null;
     tooltip.hidden = true;
@@ -74,29 +92,38 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
     clearTimeout(timer);
     activeTarget = target;
     activeText = text;
+    activeIdentity = tooltipIdentityFor(target);
     tooltip.hidden = true;
     timer = setTimeout(() => show(target, text), remaining);
   }
 
   function refresh() {
     if (!pointer) return;
-    const hovered = document.elementFromPoint(pointer.x, pointer.y);
-    if (!hovered || !root.contains(hovered)) {
-      hide();
-      return;
+    let target = null;
+    if (activeIdentity) {
+      target = [...root.querySelectorAll(TOOLTIP_TARGET_SELECTOR)]
+        .find((candidate) => tooltipIdentityFor(candidate) === activeIdentity) ?? null;
     }
-    const target = hovered.closest?.("[data-tooltip], [data-action], [aria-label], button, input, select, textarea");
+    if (!target) {
+      const hovered = document.elementFromPoint(pointer.x, pointer.y);
+      if (!hovered || !root.contains(hovered)) {
+        hide();
+        return;
+      }
+      target = hovered.closest?.(TOOLTIP_TARGET_SELECTOR);
+    }
     const text = tooltipTextFor(target);
     if (!target || !text) {
       hide();
       return;
     }
-    if (text !== activeText) {
+    if (!activeIdentity || tooltipIdentityFor(target) !== activeIdentity) {
       hoverStartedAt = Date.now();
       schedule(target, text);
       return;
     }
     activeTarget = target;
+    activeText = text;
     if (!tooltip.hidden) {
       show(target, text);
       return;
@@ -106,7 +133,7 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
 
   root.addEventListener("pointerover", (event) => {
     pointer = { x: event.clientX, y: event.clientY };
-    const target = event.target.closest?.("[data-tooltip], [data-action], [aria-label], button, input, select, textarea");
+    const target = event.target.closest?.(TOOLTIP_TARGET_SELECTOR);
     const text = tooltipTextFor(target);
     if (!target || !text || target === activeTarget) return;
     hoverStartedAt = Date.now();
@@ -119,7 +146,7 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
 
   root.addEventListener("pointerout", (event) => {
     if (!activeTarget || activeTarget.contains(event.relatedTarget)) return;
-    const departed = event.target.closest?.("[data-tooltip], [data-action], [aria-label], button, input, select, textarea");
+    const departed = event.target.closest?.(TOOLTIP_TARGET_SELECTOR);
     if (departed === activeTarget || !activeTarget.contains(event.target)) hide();
   });
   root.addEventListener("pointerdown", hide);

@@ -49,7 +49,7 @@ Log significance and visual tone are separate fields. `world` records history-sc
 
 ## Research
 
-Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. Prerequisites and environmental signals are validated by the simulation, not merely hidden by the interface. Parallel Directive Scheduling is the sole initial root, requires `24,000,000` nanite-milliseconds, and therefore takes four minutes on the base 100 n-eq computronium. Relative allocation and the first spectral branch require that root. Completed research modifies capacity functions used when new cohorts reserve their payloads; already-running cohorts preserve the recipe and output with which they began.
+Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. Prerequisites and environmental signals are validated by the simulation, not merely hidden by the interface. Parallel Directive Scheduling is the sole initial root, requires `24,000,000` nanite-milliseconds, and therefore takes four minutes on the base 100 n-eq computronium. Relative Directive Allocation requires that root, and every remaining topic explicitly requires Relative Directive Allocation before it can be revealed or queued. The interface withholds the catalog-wide completed/total fraction. Completed research modifies capacity functions used when new cohorts reserve their payloads; already-running cohorts preserve the recipe and output with which they began.
 
 Queued topics retain their accumulated work when reordered. Cancelling a topic discards that work and releases its reserved input cost. Reassigning nanites from an indivisible production cohort into research changes the target immediately, but those workers do not contribute research capacity until their existing cohort returns.
 
@@ -67,7 +67,7 @@ Per-second values in the operations panel are observational averages computed fr
 
 Fixed operation slots are a presentation rule. A slot appears only after its directive is discovered, then retains its authored position whether active or idle. The simulation exposes replication shortages from exact available energy and identified-atom inventories; the interface displays that diagnostic without mutating scheduling or resources.
 
-Progressive interface targets have stable unlock identifiers. Version 7 saves retain the identifiers the player has acknowledged; any currently visible target absent from that set receives the new-unlock pulse until a click bubbles through it. Migration seeds acknowledgements from the old save's existing discoveries so established interfaces do not relight. Tooltip delegation covers controls, intro telemetry, status regions, and individual log events after a 1.5-second hover.
+Progressive interface targets have stable unlock identifiers. Version 7 saves retain the identifiers the player has acknowledged; any currently visible target absent from that set receives the new-unlock pulse until a click bubbles through it. Migration seeds acknowledgements from the old save's existing discoveries so established interfaces do not relight. Tooltip delegation covers controls, timers, individually keyed resource cards, intro lore, status regions, and individual log events after a 1.5-second hover. Semantic tooltip keys rebind an active inspection to replacement DOM after a structural render, while focus snapshots restore the matching control and any uncommitted percentage text.
 
 ## Procedural sound
 
