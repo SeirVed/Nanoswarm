@@ -32,7 +32,7 @@ export function createInitialState(now = Date.now()) {
     tier: entry.tier ?? "info",
   }));
   const state = {
-    version: 5,
+    version: 6,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,
@@ -81,7 +81,14 @@ export function createInitialState(now = Date.now()) {
 }
 
 export function activeWorkers(state) {
-  return state.cohorts.reduce((total, cohort) => total + cohort.workers, 0n) + state.allocations.research;
+  const cohortWorkers = state.cohorts.reduce((total, cohort) => total + cohort.workers, 0n);
+  return cohortWorkers + activeResearchWorkers(state);
+}
+
+export function activeResearchWorkers(state) {
+  const cohortWorkers = state.cohorts.reduce((total, cohort) => total + cohort.workers, 0n);
+  const available = state.nanites > cohortWorkers ? state.nanites - cohortWorkers : 0n;
+  return state.allocations.research < available ? state.allocations.research : available;
 }
 
 export function idleWorkers(state) {

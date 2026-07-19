@@ -49,6 +49,14 @@ describe("procedural composition", () => {
     assert.deepEqual(harmony.intervals, [0, 2, 9, 14]);
   });
 
+  it("does not sonically double-count researchers still committed to cohorts", () => {
+    const state = sonicState();
+    state.allocations.research = 16n;
+    state.researchQueue = [{ id: "parallel-directives", progressNaniteMs: 0n }];
+    const activity = deriveActivity(state);
+    assert.equal(activity.weights.research, 100n);
+  });
+
   it("exposes more of the synthetic mind as discoveries accumulate", () => {
     const awake = deriveActivity(sonicState());
     const dormantState = sonicState();

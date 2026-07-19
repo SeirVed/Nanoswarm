@@ -40,11 +40,15 @@ function computroniumCapacity(state) {
 
 export function deriveActivity(state) {
   const weights = Object.fromEntries(SONIC_DIRECTIVES.map((directive) => [directive, 0n]));
+  let cohortWorkers = 0n;
   for (const cohort of state.cohorts) {
+    cohortWorkers += cohort.workers;
     if (cohort.directive in weights) weights[cohort.directive] += cohort.workers;
   }
   if (state.researchQueue.length > 0) {
-    weights.research = computroniumCapacity(state) + state.allocations.research;
+    const available = state.nanites > cohortWorkers ? state.nanites - cohortWorkers : 0n;
+    const activeResearchers = state.allocations.research < available ? state.allocations.research : available;
+    weights.research = computroniumCapacity(state) + activeResearchers;
   }
 
   const total = Object.values(weights).reduce((sum, value) => sum + value, 0n);

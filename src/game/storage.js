@@ -3,6 +3,7 @@ import {
   ALLOCATION_SHARE_SCALE,
   DIRECTIVES,
   MATTER_KEYS,
+  RESEARCH,
   STARTER_DEPOSIT_MATTER,
   emptyAllocationTargets,
   inferLogTier,
@@ -10,7 +11,7 @@ import {
 import { totalMatter } from "./matter.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 5;
+const CURRENT_SAVE_VERSION = 6;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -66,6 +67,15 @@ function migrateState(state) {
     state.discovery.atmosphereVisible ??= false;
     state.discovery.exhaustionNotified ??= false;
     state.discovery.residuumIndexed ??= state.completedResearch.includes("residuum-indexing");
+    state.version = 5;
+  }
+  if (state.version === 5) {
+    for (const item of state.researchQueue) {
+      const cost = RESEARCH[item.id]?.cost;
+      if (cost && !item.reservedCost) {
+        item.reservedCost = { energy: cost.energy, atoms: { ...cost.atoms } };
+      }
+    }
     state.version = CURRENT_SAVE_VERSION;
   }
   return state;

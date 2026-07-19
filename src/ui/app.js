@@ -12,12 +12,14 @@ import {
   adjustAllocation,
   advanceSimulation,
   assignmentTotal,
+  cancelResearch,
   effectiveResearchCapacity,
   atmosphericCollectionCapacity,
   cohortResonanceWindow,
   cohortSyncWindow,
   directiveIsVisible,
   effectiveJobDuration,
+  moveResearch,
   queueResearch,
   researchIsRevealed,
   setDirectiveAllocationShare,
@@ -34,7 +36,7 @@ import {
   formatMass,
   massYoctograms,
 } from "../game/quantities.js";
-import { createInitialState, idleWorkers } from "../game/state.js";
+import { activeResearchWorkers, createInitialState, idleWorkers } from "../game/state.js";
 import { clearGame, loadGame, saveGame } from "../game/storage.js";
 import { SyntheticMind } from "../audio/mind.js";
 
@@ -376,17 +378,25 @@ function allocationsHtml() {
           }</small></div>
           ${
             relativeAllocation
-              ? `<label class="allocation-share-box"><input class="allocation-input" type="text" inputmode="decimal" value="${shareText}" data-action="set-share-percent" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} percentage"><span>%</span></label>
+              ? `<div class="allocation-share-stepper">
+                  <button class="step-button" data-action="step-share" data-directive="${directive}" data-share-delta="-100" data-repeat="accelerated" ${
+                    shareHundredths === 0n ? "disabled" : ""
+                  } aria-label="Decrease ${DIRECTIVE_LABEL[directive]} by one percent">−</button>
+                  <label class="allocation-share-box"><input class="allocation-input" type="text" inputmode="decimal" value="${shareText}" data-action="set-share-percent" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} percentage"><span>%</span></label>
+                  <button class="step-button" data-action="step-share" data-directive="${directive}" data-share-delta="100" data-repeat="accelerated" ${
+                    shareHundredths === 10_000n ? "disabled" : ""
+                  } aria-label="Increase ${DIRECTIVE_LABEL[directive]} by one percent">+</button>
+                </div>
                 <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
                   locked ? "LOCK" : "OPEN"
                 }</button>
                 <label class="relative-allocation"><input type="range" min="0" max="10000" step="1" value="${shareHundredths}" data-action="set-share" data-directive="${directive}" aria-label="${DIRECTIVE_LABEL[directive]} persistent relative share"><span>${shareText}%</span></label>`
               : `<button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="-1" ${
                   state.allocations[directive] === 0n ? "disabled" : ""
-                }>−</button><output>${formatCount(state.allocations[directive])}</output>
+                } data-repeat="accelerated">−</button><output>${formatCount(state.allocations[directive])}</output>
                 <button class="step-button" data-action="adjust" data-directive="${directive}" data-delta="1" ${
                   unassigned === 0n || state.allocations[directive] >= state.nanites ? "disabled" : ""
-                }>+</button>
+                } data-repeat="accelerated">+</button>
                 <button class="lock-button ${locked ? "locked" : ""}" data-action="lock" data-directive="${directive}" aria-pressed="${locked}">${
                   locked ? "LOCK" : "OPEN"
                 }</button>`
@@ -410,6 +420,7 @@ function researchHtml() {
   const incompleteResearch = revealedResearch.filter((definition) => !state.completedResearch.includes(definition.id));
   const completeResearch = revealedResearch.filter((definition) => state.completedResearch.includes(definition.id));
   const selectedResearch = activeResearchTab === "complete" ? completeResearch : incompleteResearch;
+  const contributingResearchers = activeResearchWorkers(state);
   const activeHtml = active
     ? `<div class="active-research"><div class="eyebrow">ACTIVE RESEARCH JOB</div><strong>${RESEARCH[active.id].name}</strong>
         <div class="progress-wrap" data-research-progress>
@@ -419,6 +430,29 @@ function researchHtml() {
           <span>${formatDuration(Number((RESEARCH[active.id].requiredNaniteMs - active.progressNaniteMs + capacity - 1n) / capacity))}</span>
         </div></div>`
     : `<p class="empty-state">NO ACTIVE RESEARCH JOB</p>`;
+  const queueHtml = state.researchQueue.length
+    ? `<div class="section-rule"><span>EDITABLE QUEUE · RESERVED INPUTS REFUND ON CANCELLATION</span></div>
+      <div class="research-queue-list">
+        ${state.researchQueue.map((item, index) => {
+          const definition = RESEARCH[item.id];
+          return `<div class="research-queue-row">
+            <span class="queue-index">${String(index + 1).padStart(2, "0")}</span>
+            <div><strong>${definition.name}</strong><small>${
+              index === 0 ? "ACTIVE" : "QUEUED"
+            } · ${percentage(item.progressNaniteMs, definition.requiredNaniteMs)} WORK COMPLETE</small></div>
+            <div class="queue-controls">
+              <button class="queue-button" data-action="research-move" data-research="${item.id}" data-direction="-1" ${
+                index === 0 ? "disabled" : ""
+              } aria-label="Move ${definition.name} up">↑</button>
+              <button class="queue-button" data-action="research-move" data-research="${item.id}" data-direction="1" ${
+                index === state.researchQueue.length - 1 ? "disabled" : ""
+              } aria-label="Move ${definition.name} down">↓</button>
+              <button class="queue-button cancel" data-action="research-cancel" data-research="${item.id}">CANCEL</button>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>`
+    : "";
 
   return `<section class="panel research-panel">
     <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${state.completedResearch.length}/${Object.keys(
@@ -426,10 +460,11 @@ function researchHtml() {
     ).length} COMPLETE · ${formatCount(
       capacity,
     )} n-eq</span></header>
-    <div class="research-capacity"><span>COMPUTRONIUM CONTRIBUTION</span><strong>max(100 nanites, ${
+    <div class="research-capacity"><span>COMPUTRONIUM + ACTIVE RESEARCHERS</span><strong>max(100 nanites, ${
       state.completedResearch.includes("distributed-computronium") ? "2%" : "1%"
-    } swarm)</strong></div>
+    } swarm) + ${formatCount(contributingResearchers)} / ${formatCount(state.allocations.research)} assigned</strong></div>
     ${activeHtml}
+    ${queueHtml}
     <nav class="research-tabs" aria-label="Research state">
       <button class="research-tab ${activeResearchTab === "incomplete" ? "active" : ""}" data-action="research-tab" data-tab="incomplete" aria-pressed="${
         activeResearchTab === "incomplete"
@@ -569,6 +604,14 @@ function renderGame(now = Date.now(), force = false) {
   }
   const previousLog = document.querySelector(".telemetry-log");
   const wasAtBottom = previousLog ? previousLog.scrollHeight - previousLog.scrollTop - previousLog.clientHeight < 40 : true;
+  const focusedPercentage = document.activeElement?.matches("input[data-action='set-share-percent']")
+    ? {
+        directive: document.activeElement.dataset.directive,
+        value: document.activeElement.value,
+        selectionStart: document.activeElement.selectionStart,
+        selectionEnd: document.activeElement.selectionEnd,
+      }
+    : null;
   const depositTotal = totalMatter(state.activeDeposit.matter);
   root.innerHTML = `<div class="game-shell">
     <header class="game-header">
@@ -595,6 +638,16 @@ function renderGame(now = Date.now(), force = false) {
   </div>`;
   const log = document.querySelector(".telemetry-log");
   if (wasAtBottom && log) log.scrollTop = log.scrollHeight;
+  if (focusedPercentage) {
+    const restoredInput = document.querySelector(
+      `input[data-action='set-share-percent'][data-directive='${focusedPercentage.directive}']`,
+    );
+    if (restoredInput) {
+      restoredInput.value = focusedPercentage.value;
+      restoredInput.focus({ preventScroll: true });
+      restoredInput.setSelectionRange(focusedPercentage.selectionStart, focusedPercentage.selectionEnd);
+    }
+  }
   lastStructuralSignature = signature;
 }
 
@@ -611,11 +664,10 @@ function acceptResult(result) {
   state = result.state;
   if (!result.ok) showFailure(result.reason);
   renderGame();
+  return result.ok;
 }
 
-root.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-action]");
-  if (!button) return;
+function performButtonAction(button) {
   const action = button.dataset.action;
   if (action === "begin") {
     state = createInitialState();
@@ -626,25 +678,43 @@ root.addEventListener("click", (event) => {
       renderGame(Date.now(), true);
     });
     renderGame();
+    return true;
   } else if (action === "start") {
-    acceptResult(startManualJob(state, button.dataset.directive));
+    return acceptResult(startManualJob(state, button.dataset.directive));
   } else if (action === "prospect") {
-    acceptResult(startProspecting(state));
+    return acceptResult(startProspecting(state));
   } else if (action === "adjust") {
     const directive = button.dataset.directive;
     const delta = BigInt(button.dataset.delta);
-    acceptResult(adjustAllocation(state, directive, delta));
+    return acceptResult(adjustAllocation(state, directive, delta));
+  } else if (action === "step-share") {
+    const directive = button.dataset.directive;
+    const shareDelta = BigInt(button.dataset.shareDelta) * ALLOCATION_SHARE_SCALE / 10_000n;
+    const current = state.allocationTargets[directive];
+    const target = current + shareDelta < 0n
+      ? 0n
+      : current + shareDelta > ALLOCATION_SHARE_SCALE
+        ? ALLOCATION_SHARE_SCALE
+        : current + shareDelta;
+    return acceptResult(setDirectiveAllocationShare(state, directive, target));
   } else if (action === "lock") {
     state = toggleAllocationLock(state, button.dataset.directive);
     renderGame();
+    return true;
   } else if (action === "research") {
-    acceptResult(queueResearch(state, button.dataset.research));
+    return acceptResult(queueResearch(state, button.dataset.research));
+  } else if (action === "research-cancel") {
+    return acceptResult(cancelResearch(state, button.dataset.research));
+  } else if (action === "research-move") {
+    return acceptResult(moveResearch(state, button.dataset.research, Number(button.dataset.direction)));
   } else if (action === "research-tab") {
     activeResearchTab = button.dataset.tab;
     renderGame(Date.now(), true);
+    return true;
   } else if (action === "log-filter") {
     activeLogTier = button.dataset.tier;
     renderGame(Date.now(), true);
+    return true;
   } else if (action === "audio") {
     if (sonicMind.enabled) {
       sonicMind.stop();
@@ -656,6 +726,7 @@ root.addEventListener("click", (event) => {
       });
     }
     renderGame(Date.now(), true);
+    return true;
   } else if (action === "reset" && window.confirm("Erase this local seed and replay the arrival sequence?")) {
     sonicMind.stop();
     clearGame();
@@ -665,7 +736,70 @@ root.addEventListener("click", (event) => {
     activeResearchTab = "incomplete";
     lastStructuralSignature = null;
     renderIntro();
+    return true;
   }
+  return false;
+}
+
+const repeatIdentity = (button) => [
+  button.dataset.action,
+  button.dataset.directive,
+  button.dataset.delta,
+  button.dataset.shareDelta,
+].join(":");
+let repeatSession = null;
+let repeatClickSuppression = null;
+
+function stopRepeating() {
+  if (repeatSession?.timer) clearTimeout(repeatSession.timer);
+  repeatSession = null;
+  if (repeatClickSuppression) repeatClickSuppression.until = Date.now() + 600;
+}
+
+function scheduleRepeat(session, delay = 420) {
+  session.timer = window.setTimeout(() => {
+    if (repeatSession !== session) return;
+    const succeeded = performButtonAction(session.button);
+    session.repetitions += 1;
+    if (!succeeded) {
+      stopRepeating();
+      return;
+    }
+    const nextDelay = Math.max(45, Math.round(210 * 0.82 ** session.repetitions));
+    scheduleRepeat(session, nextDelay);
+  }, delay);
+}
+
+root.addEventListener("pointerdown", (event) => {
+  const button = event.target.closest("button[data-repeat='accelerated']");
+  if (!button || button.disabled || event.button !== 0) return;
+  event.preventDefault();
+  stopRepeating();
+  const identity = repeatIdentity(button);
+  repeatClickSuppression = { identity, until: Number.POSITIVE_INFINITY };
+  const session = { button, repetitions: 0, timer: null };
+  repeatSession = session;
+  const succeeded = performButtonAction(button);
+  if (succeeded) scheduleRepeat(session);
+  else stopRepeating();
+});
+
+document.addEventListener("pointerup", stopRepeating);
+document.addEventListener("pointercancel", stopRepeating);
+window.addEventListener("blur", stopRepeating);
+
+root.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  if (
+    repeatClickSuppression?.identity === repeatIdentity(button) &&
+    Date.now() <= repeatClickSuppression.until
+  ) {
+    event.preventDefault();
+    return;
+  }
+  repeatClickSuppression = null;
+  performButtonAction(button);
 });
 
 root.addEventListener("input", (event) => {

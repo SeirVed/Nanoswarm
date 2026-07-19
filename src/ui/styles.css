@@ -342,7 +342,9 @@ body::after {
 .allocation-row output { color: var(--text); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
 .allocation-input { width: 54px; height: 30px; padding: 0 4px; border: 1px solid var(--line); color: var(--text); background: rgba(2, 7, 4, 0.55); font: inherit; font-size: 10px; text-align: center; }
 .allocation-input:focus { border-color: var(--line-bright); outline: 0; }
-.allocation-row.relative { grid-template-columns: minmax(130px, 1fr) 70px 48px; padding-bottom: 10px; }
+.allocation-row.relative { grid-template-columns: minmax(130px, 1fr) 124px 48px; padding-bottom: 10px; }
+.allocation-share-stepper { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; gap: 4px; }
+.allocation-share-stepper .step-button { width: 28px; }
 .allocation-share-box { display: grid; grid-template-columns: 1fr auto; align-items: center; }
 .allocation-share-box .allocation-input { width: 52px; }
 .allocation-share-box span { color: var(--muted); font-size: 8px; }
@@ -370,6 +372,18 @@ body::after {
 .research-card .research-effect { color: var(--green-dim); }
 .research-card small { color: var(--green-dim); font-size: 8px; }
 .compact-button { flex: 0 0 auto; padding: 8px 10px; font-size: 8px; }
+.research-queue-list { display: grid; border-bottom: 1px solid var(--line); }
+.research-queue-row { min-height: 54px; padding: 9px 12px; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 9px; border-top: 1px solid var(--line); }
+.research-queue-row:first-child { border-top: 0; }
+.research-queue-row > div:not(.queue-controls) { min-width: 0; display: grid; gap: 4px; }
+.research-queue-row strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+.research-queue-row small, .queue-index { color: var(--muted); font-size: 7px; }
+.queue-index { color: var(--green-dim); }
+.queue-controls { display: flex; gap: 4px; }
+.queue-button { min-width: 26px; height: 26px; padding: 0 6px; border: 1px solid var(--line); color: var(--muted); background: transparent; font-size: 7px; cursor: pointer; }
+.queue-button:hover:not(:disabled) { border-color: var(--line-bright); color: var(--green); }
+.queue-button:disabled { opacity: 0.22; cursor: not-allowed; }
+.queue-button.cancel:hover { border-color: rgba(216, 120, 103, 0.55); color: var(--danger); }
 
 .project-card { position: relative; padding: 18px; overflow: hidden; }
 .project-card::after { content: "90D"; position: absolute; right: -8px; top: 5px; color: rgba(105, 240, 138, 0.035); font: 700 72px/1 "Cascadia Mono", Consolas, monospace; }
@@ -476,6 +490,11 @@ body::after {
   .log-filter { flex: 1 0 72px; }
   .telemetry-line { grid-template-columns: 60px 46px minmax(0, 1fr); gap: 6px; }
   .allocation-row { grid-template-columns: minmax(110px, 1fr) 28px 38px 28px 44px; padding-inline: 8px; }
+  .allocation-row.relative { grid-template-columns: minmax(0, 1fr) 48px; }
+  .allocation-row.relative .allocation-label { grid-column: 1 / -1; }
+  .allocation-share-stepper { grid-column: 1; width: 124px; }
+  .research-queue-row { grid-template-columns: 20px minmax(0, 1fr); }
+  .queue-controls { grid-column: 2; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -16,7 +16,7 @@ import {
 } from "./content.js";
 import { addAtoms, addMatter, splitSortedMatter, takeMatterProportionally, totalMatter } from "./matter.js";
 import { formatCount, formatEnergy, formatInventoryMass } from "./quantities.js";
-import { activeWorkers, appendLog, cloneState, idleWorkers } from "./state.js";
+import { activeResearchWorkers, activeWorkers, appendLog, cloneState, idleWorkers } from "./state.js";
 
 const minBigInt = (...values) => values.reduce((smallest, value) => (value < smallest ? value : smallest));
 const ceilDiv = (value, divisor) => (divisor <= 0n ? 0n : (value + divisor - 1n) / divisor);
@@ -72,7 +72,7 @@ function researchCoreCapacity(state) {
 }
 
 export function effectiveResearchCapacity(state) {
-  return researchCoreCapacity(state) + state.allocations.research;
+  return researchCoreCapacity(state) + activeResearchWorkers(state);
 }
 
 function atomRecipeCapacity(state) {
@@ -448,7 +448,6 @@ export function advanceSimulation(input, targetTime) {
   if (targetTime <= state.simTime) return state;
   scheduleAllocations(state);
 
-  let eventsProcessed = 0;
   while (state.simTime < targetTime) {
     const cohortTime = state.cohorts.reduce(
       (soonest, cohort) => (soonest === null || cohort.completesAt < soonest ? cohort.completesAt : soonest),
@@ -459,6 +458,7 @@ export function advanceSimulation(input, targetTime) {
     if (cohortTime !== null && cohortTime < eventTime) eventTime = cohortTime;
     if (researchTime !== null && researchTime < eventTime) eventTime = researchTime;
 
+    const previousTime = state.simTime;
     advanceResearch(state, Math.max(0, eventTime - state.simTime));
     state.simTime = eventTime;
 
@@ -470,8 +470,9 @@ export function advanceSimulation(input, targetTime) {
     const researchCompleted = completeResearchIfReady(state);
     scheduleAllocations(state);
 
-    eventsProcessed += completed.length + (researchCompleted ? 1 : 0);
-    if (eventsProcessed > 100_000) throw new Error("Simulation event safety limit exceeded");
+    if (eventTime <= previousTime && completed.length === 0 && !researchCompleted) {
+      throw new Error("Simulation stalled without a processable event");
+    }
     if (eventTime === targetTime) break;
   }
   return state;
@@ -637,8 +638,48 @@ export function queueResearch(input, id, now = Date.now()) {
   }
   state.energy -= definition.cost.energy;
   for (const key of ATOM_KEYS) state.atoms[key] -= definition.cost.atoms[key];
-  state.researchQueue.push({ id, progressNaniteMs: 0n });
+  state.researchQueue.push({
+    id,
+    progressNaniteMs: 0n,
+    reservedCost: { energy: definition.cost.energy, atoms: { ...definition.cost.atoms } },
+  });
   appendLog(state, `RESEARCH QUEUED · ${definition.name.toUpperCase()}.`);
+  return { ok: true, state };
+}
+
+export function cancelResearch(input, id, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  const queueIndex = state.researchQueue.findIndex((item) => item.id === id);
+  if (queueIndex < 0) return failure(state, "Research is not queued.");
+
+  const [cancelled] = state.researchQueue.splice(queueIndex, 1);
+  const definition = RESEARCH[cancelled.id];
+  const reservedCost = cancelled.reservedCost ?? definition.cost;
+  state.energy += reservedCost.energy;
+  for (const key of ATOM_KEYS) state.atoms[key] += reservedCost.atoms[key];
+  appendLog(
+    state,
+    `RESEARCH CANCELLED · ${definition.name.toUpperCase()} · RESERVED INPUTS RELEASED.`,
+    "muted",
+  );
+  return { ok: true, state };
+}
+
+export function moveResearch(input, id, direction, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  const queueIndex = state.researchQueue.findIndex((item) => item.id === id);
+  if (queueIndex < 0) return failure(state, "Research is not queued.");
+  if (direction !== -1 && direction !== 1) return failure(state, "Invalid research queue direction.");
+  const targetIndex = queueIndex + direction;
+  if (targetIndex < 0 || targetIndex >= state.researchQueue.length) {
+    return failure(state, "Research is already at that end of the queue.");
+  }
+
+  [state.researchQueue[queueIndex], state.researchQueue[targetIndex]] = [
+    state.researchQueue[targetIndex],
+    state.researchQueue[queueIndex],
+  ];
+  appendLog(state, `RESEARCH QUEUE REORDERED · ${RESEARCH[id].name.toUpperCase()}.`, "muted");
   return { ok: true, state };
 }
 

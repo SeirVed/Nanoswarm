@@ -35,11 +35,14 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Exhausted deposits expose a discrete prospecting job. Success replaces the depleted field with a larger compositionally distinct solid deposit while retaining depletion history.
 - Beginning the first search identifies atmosphere as inexhaustible external feedstock at exactly 1% of effective solid collection throughput; most atmospheric matter remains unresolved N/O.
 - Offline progress calls the same event-jumping simulation used while the page is open.
+- Long offline spans are bounded by actual event progress rather than an arbitrary completion count, so a busy returning swarm is not rejected merely for completing many valid jobs.
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec.
 - Permanent log entries carry a significance tier independently of their visual tone; old saves infer tiers during migration.
 - At 12 nanites, Relative Directive Allocation research replaces single-worker controls with persistent percentage sliders and exact percentage entry. New nanites automatically enter those target shares while allocation locks preserve protected directives.
+- Allocation step buttons support accelerating press-and-hold input. Percentage fields retain focus and uncommitted text when an unrelated cohort completion refreshes the dashboard.
 - Research is split into incomplete and complete views. Long work estimates use live computronium capacity, so replication and explicit research allocation can collapse days into minutes without changing the job's required work.
+- Research inputs remain reserved while queued. Queue entries can be reordered or cancelled; cancellation discards work performed on that topic and releases its full reserved material and energy cost.
 - Throughput development is a ladder of additive 5% refinements rather than a handful of giant multipliers; completed nodes alter authoritative payloads, durations, synchronization, resonance, exploration automation, or computronium capacity.
 - Whole counts use `10^x` notation above 100 million. Energy advances through SI units at six significant digits, and every numeric matter inventory includes its estimated physical mass from yoctograms upward.
 - Active cohort summaries expose approximate per-second material, energy, or nanite flow without turning the underlying discrete jobs into continuous production.

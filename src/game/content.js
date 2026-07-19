@@ -335,7 +335,8 @@ function addIncrementalSeries(catalog, configuration) {
 const researchCatalog = {
   "relative-allocation": researchDefinition({
     ...INITIAL_RESEARCH["relative-allocation"],
-    requiredNaniteMs: 240_000_000n,
+    // The embedded computronium completes this in 2m 30s at its base 100 n-eq capacity.
+    requiredNaniteMs: 15_000_000n,
   }),
   "parallel-directives": researchDefinition({
     ...INITIAL_RESEARCH["parallel-directives"],

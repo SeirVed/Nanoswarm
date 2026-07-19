@@ -41,6 +41,8 @@ Allocation cohorts enter on 500 ms synchronization boundaries. When one phase re
 
 `advanceSimulation` moves between the next cohort completion, the next research completion, and the requested target time. It does not replay display frames. Leaving the game open and loading it later must produce identical state.
 
+The loop detects a genuine zero-time stall rather than imposing a fixed event-count ceiling. A long absence may contain hundreds of thousands of legitimate cohort completions and must not make an otherwise valid save unloadable.
+
 ## Permanent log
 
 Log significance and visual tone are separate fields. `world` records history-scale state changes, `critical` marks conditions requiring attention, `medium` records discoveries and unlocks, and `info` carries routine operations such as job starts and completions. Filters are a presentation concern and never remove entries from the permanent log. Version 3 saves infer the missing significance field during migration.
@@ -48,6 +50,8 @@ Log significance and visual tone are separate fields. `world` records history-sc
 ## Research
 
 Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. Prerequisites and environmental signals are validated by the simulation, not merely hidden by the interface. Completed research modifies capacity functions used when new cohorts reserve their payloads; already-running cohorts preserve the recipe and output with which they began.
+
+Queued topics retain their accumulated work when reordered. Cancelling a topic discards that work and releases its reserved input cost. Reassigning nanites from an indivisible production cohort into research changes the target immediately, but those workers do not contribute research capacity until their existing cohort returns.
 
 The embedded computronium initially supplies the greater of 100 nanite-equivalents or 1% of the total swarm; Distributed Computronium raises the proportional contribution to 2%. Explicitly allocated research nanites add to that capacity.
 

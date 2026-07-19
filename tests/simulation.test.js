@@ -13,11 +13,13 @@ import {
   adjustAllocation,
   atmosphericCollectionCapacity,
   advanceSimulation,
+  cancelResearch,
   cohortResonanceWindow,
   cohortSyncWindow,
   effectiveJobDuration,
   effectiveResearchCapacity,
   energyJobYield,
+  moveResearch,
   queueResearch,
   setDirectiveAllocation,
   solidCollectionCapacity,
@@ -26,7 +28,7 @@ import {
   startProspecting,
 } from "../src/game/engine.js";
 import { totalMatter } from "../src/game/matter.js";
-import { createInitialState } from "../src/game/state.js";
+import { activeWorkers, createInitialState } from "../src/game/state.js";
 import { deserializeState, serializeState } from "../src/game/storage.js";
 
 function success(result) {
@@ -163,6 +165,20 @@ describe("cohort simulation", () => {
     assert.equal(serializeState(stepped), serializeState(jumped));
   });
 
+  it("catches up long offline spans without rejecting a valid busy swarm", () => {
+    const now = 2_500_000;
+    let state = createInitialState(now);
+    state.nanites = 10n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state = success(adjustAllocation(state, "energy", 10n, now));
+
+    const target = now + 20 * 86_400_000;
+    const caughtUp = advanceSimulation(state, target);
+    assert.equal(caughtUp.simTime, target);
+    assert.ok(caughtUp.energy > state.energy);
+  });
+
   it("merges allocation changes made inside the 500ms synchronization window", () => {
     const now = 2_000_000;
     let state = createInitialState(now);
@@ -207,6 +223,28 @@ describe("cohort simulation", () => {
     assert.equal(almost.completedResearch.includes("parallel-directives"), false);
     const complete = advanceSimulation(almost, sorted.simTime + duration);
     assert.equal(complete.completedResearch.includes("parallel-directives"), true);
+  });
+
+  it("does not double-count workers reassigned from an indivisible cohort into research", () => {
+    const now = 3_250_000;
+    let state = createInitialState(now);
+    state.nanites = 2n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state = success(adjustAllocation(state, "collect", 2n, now));
+    state = success(adjustAllocation(state, "collect", -2n, now + 100));
+    state = success(adjustAllocation(state, "research", 2n, state.simTime));
+
+    assert.equal(activeWorkers(state), 2n);
+    assert.equal(effectiveResearchCapacity(state), 100n);
+    state = advanceSimulation(state, now + 10_500);
+    assert.equal(effectiveResearchCapacity(state), 102n);
+  });
+
+  it("completes relative allocation research in two and a half minutes on base computronium", () => {
+    const state = createInitialState(3_300_000);
+    assert.equal(effectiveResearchCapacity(state), 100n);
+    assert.equal(RESEARCH["relative-allocation"].requiredNaniteMs / 100n, 150_000n);
   });
 
   it("scales computronium research contribution to 1% when that exceeds 100", () => {
@@ -274,16 +312,16 @@ describe("cohort simulation", () => {
     assert.equal(energyJobYield(state), 52n);
   });
 
-  it("turns intimidating research estimates into minutes as the swarm compounds", () => {
+  it("accelerates early research further as the swarm compounds", () => {
     const state = createInitialState(3_725_000);
     state.nanites = 12n;
     const initialEta = RESEARCH["relative-allocation"].requiredNaniteMs / effectiveResearchCapacity(state);
-    assert.equal(initialEta, 2_400_000n);
+    assert.equal(initialEta, 150_000n);
 
     state.nanites *= 128n;
     state.allocations.research = state.nanites / 2n;
     const compoundedEta = RESEARCH["relative-allocation"].requiredNaniteMs / effectiveResearchCapacity(state);
-    assert.ok(compoundedEta < 300_000n);
+    assert.ok(compoundedEta < 20_000n);
   });
 
   it("enforces research prerequisites rather than exposing disconnected upgrades", () => {
@@ -293,6 +331,38 @@ describe("cohort simulation", () => {
     const result = queueResearch(state, "payload-frame-reinforcement", state.simTime);
     assert.equal(result.ok, false);
     assert.match(result.reason, /Parallel Directive Scheduling/);
+  });
+
+  it("reorders queued research without discarding accumulated work", () => {
+    let state = reachSortedStockpile(3_740_000);
+    state.energy = 1_000n;
+    state = success(queueResearch(state, "parallel-directives", state.simTime));
+    state = success(queueResearch(state, "expanded-spectral-catalog", state.simTime));
+    state = advanceSimulation(state, state.simTime + 1_000);
+    const parallelProgress = state.researchQueue[0].progressNaniteMs;
+
+    state = success(moveResearch(state, "expanded-spectral-catalog", -1, state.simTime));
+    assert.equal(state.researchQueue[0].id, "expanded-spectral-catalog");
+    assert.equal(state.researchQueue[1].id, "parallel-directives");
+    assert.equal(state.researchQueue[1].progressNaniteMs, parallelProgress);
+  });
+
+  it("cancels research and releases its fully reserved inputs", () => {
+    let state = reachSortedStockpile(3_745_000);
+    state.energy = 1_000n;
+    const before = structuredClone(state);
+    state = success(queueResearch(state, "parallel-directives", state.simTime));
+    state = success(queueResearch(state, "expanded-spectral-catalog", state.simTime));
+    state = advanceSimulation(state, state.simTime + 1_000);
+    state = success(cancelResearch(state, "parallel-directives", state.simTime));
+
+    const retainedCost = RESEARCH["expanded-spectral-catalog"].cost;
+    assert.equal(state.energy, before.energy - retainedCost.energy);
+    for (const key of Object.keys(state.atoms)) {
+      assert.equal(state.atoms[key], before.atoms[key] - retainedCost.atoms[key]);
+    }
+    assert.equal(state.researchQueue.length, 1);
+    assert.equal(state.researchQueue[0].id, "expanded-spectral-catalog");
   });
 
   it("launches autonomous prospecting after a depleted deposit", () => {
@@ -372,7 +442,7 @@ describe("cohort simulation", () => {
     };
     state.activeDeposit.initialAtoms = 5_000_000n;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 5);
+    assert.equal(restored.version, 6);
     assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
     assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
   });
@@ -387,7 +457,7 @@ describe("cohort simulation", () => {
     state.allocations.energy = 25n;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 5);
+    assert.equal(restored.version, 6);
     assert.equal(restored.allocationTargets.collect, (ALLOCATION_SHARE_SCALE * 65n) / 100n);
     assert.equal(restored.allocationTargets.energy, (ALLOCATION_SHARE_SCALE * 25n) / 100n);
   });
@@ -400,7 +470,7 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     const impact = restored.log.find((entry) => entry.message === "IMPACT.");
     const assembly = restored.log.find((entry) => entry.message === "ASSEMBLY COMPLETE.");
-    assert.equal(restored.version, 5);
+    assert.equal(restored.version, 6);
     assert.equal(impact.tier, "critical");
     assert.equal(assembly.tier, "world");
     assert.equal(restored.log.every((entry) => typeof entry.tier === "string"), true);
@@ -422,7 +492,7 @@ describe("cohort simulation", () => {
     delete state.discovery.residuumIndexed;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 5);
+    assert.equal(restored.version, 6);
     assert.equal(restored.nanites, 600_000_000_000_000_000n);
     assert.equal(restored.allocations.atmosphere, 0n);
     assert.equal(restored.discovery.atmosphereVisible, false);
@@ -437,5 +507,14 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     assert.deepEqual(restored, state);
     assert.equal(typeof restored.atoms.gold, "bigint");
+  });
+
+  it("migrates queued research with an explicit refundable reservation", () => {
+    const state = createInitialState(6_100_000);
+    state.version = 5;
+    state.researchQueue = [{ id: "parallel-directives", progressNaniteMs: 123n }];
+    const restored = deserializeState(serializeState(state));
+    assert.equal(restored.version, 6);
+    assert.deepEqual(restored.researchQueue[0].reservedCost, RESEARCH["parallel-directives"].cost);
   });
 });
