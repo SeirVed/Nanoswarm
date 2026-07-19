@@ -39,6 +39,7 @@ import {
 import { activeResearchWorkers, createInitialState, idleWorkers } from "../game/state.js";
 import { clearGame, loadGame, saveGame } from "../game/storage.js";
 import { SyntheticMind } from "../audio/mind.js";
+import { COHORT_SLOT_LABEL, COHORT_SLOT_ORDER, groupCohortsForDisplay } from "./cohort-groups.js";
 
 const root = document.querySelector("#root");
 const sonicMind = new SyntheticMind();
@@ -111,21 +112,7 @@ function renderIntro() {
 }
 
 function groupedCohorts() {
-  const groups = new Map();
-  for (const cohort of state.cohorts) {
-    if (!groups.has(cohort.directive)) groups.set(cohort.directive, []);
-    groups.get(cohort.directive).push(cohort);
-  }
-  return [...groups.entries()].map(([directive, cohorts]) => {
-    const phases = [...cohorts].sort((left, right) => left.completesAt - right.completesAt);
-    return {
-      directive,
-      phases,
-      lead: phases[0],
-      workers: phases.reduce((total, cohort) => total + cohort.workers, 0n),
-      spread: phases.at(-1).completesAt - phases[0].completesAt,
-    };
-  });
+  return groupCohortsForDisplay(state.cohorts);
 }
 
 const microsPerSecond = (phases, valueForPhase) =>
@@ -185,32 +172,37 @@ function operationsHtml(now) {
   const active = state.cohorts[0];
   if (state.discovery.directivesVisible) {
     const groups = groupedCohorts();
+    const groupByDirective = new Map(groups.map((group) => [group.directive, group]));
+    const visibleSlots = COHORT_SLOT_ORDER.filter(
+      (directive) => directive !== "atmosphere" || state.discovery.atmosphereVisible,
+    );
     return `<section class="panel operations-panel">
-      <header class="panel-heading"><span>ACTIVE COHORTS · ${groups.length} DIRECTIVES</span><span>SYNC ${cohortSyncWindow(state)}ms · RESONANCE ${(
+      <header class="panel-heading"><span>ACTIVE COHORTS · ${groups.length}/${visibleSlots.length} FIXED SLOTS</span><span>SYNC ${cohortSyncWindow(state)}ms · RESONANCE ${(
         cohortResonanceWindow(state) / 1000
       ).toFixed(1)}s</span></header>
       <div class="cohort-list">
-        ${
-          groups.length === 0
-            ? `<p class="empty-state">NO JOBS IN FLIGHT</p>`
-            : groups
-                .map(
-                  (group) => `<div class="cohort-row">
-                    <div><strong>${group.directive.toUpperCase()}</strong><small>${formatCount(group.workers)} workers · ${
-                      group.phases.length === 1
-                        ? "resonant cohort"
-                        : `${group.phases.length} phases converging · Δ${(group.spread / 1000).toFixed(1)}s`
-                    }</small></div>
-                    <div class="cohort-progress">${progressBar(
-                      (now - group.lead.startedAt) / (group.lead.completesAt - group.lead.startedAt),
-                      cohortTimeLabel(group.lead.startedAt, group.lead.completesAt, now),
-                      group.lead.startedAt,
-                      group.lead.completesAt,
-                    )}<small class="cohort-rate">${cohortRateLabel(group)}</small></div>
-                  </div>`,
-                )
-                .join("")
-        }
+        ${visibleSlots.map((directive) => {
+          const group = groupByDirective.get(directive);
+          if (!group) {
+            return `<div class="cohort-row cohort-row-idle" data-cohort-slot="${directive}">
+              <div><strong>${COHORT_SLOT_LABEL[directive]}</strong><small>STANDBY</small></div>
+              <div class="cohort-idle-state">NO JOB IN FLIGHT</div>
+            </div>`;
+          }
+          return `<div class="cohort-row" data-cohort-slot="${directive}">
+            <div><strong>${COHORT_SLOT_LABEL[directive]}</strong><small>${formatCount(group.workers)} workers · ${
+              group.phases.length === 1
+                ? "resonant cohort"
+                : `${group.phases.length} phases converging · Δ${(group.spread / 1000).toFixed(1)}s`
+            }</small></div>
+            <div class="cohort-progress">${progressBar(
+              (now - group.lead.startedAt) / (group.lead.completesAt - group.lead.startedAt),
+              cohortTimeLabel(group.lead.startedAt, group.lead.completesAt, now),
+              group.lead.startedAt,
+              group.lead.completesAt,
+            )}<small class="cohort-rate">${cohortRateLabel(group)}</small></div>
+          </div>`;
+        }).join("")}
       </div>
     </section>`;
   }
@@ -561,6 +553,7 @@ function structuralSignature() {
     state.researchQueue.map((item) => item.id).join(","),
     state.completedResearch.join(","),
     state.log.length,
+    state.log.at(-1)?.id ?? "",
     activeLogTier,
     activeResearchTab,
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
@@ -604,6 +597,10 @@ function renderGame(now = Date.now(), force = false) {
   }
   const previousLog = document.querySelector(".telemetry-log");
   const wasAtBottom = previousLog ? previousLog.scrollHeight - previousLog.scrollTop - previousLog.clientHeight < 40 : true;
+  const previousColumnScroll = [...document.querySelectorAll(".dashboard-column")].map(
+    (column) => column.scrollTop,
+  );
+  const previousScroll = { x: window.scrollX, y: window.scrollY };
   const focusedPercentage = document.activeElement?.matches("input[data-action='set-share-percent']")
     ? {
         directive: document.activeElement.dataset.directive,
@@ -638,6 +635,9 @@ function renderGame(now = Date.now(), force = false) {
   </div>`;
   const log = document.querySelector(".telemetry-log");
   if (wasAtBottom && log) log.scrollTop = log.scrollHeight;
+  document.querySelectorAll(".dashboard-column").forEach((column, index) => {
+    column.scrollTop = previousColumnScroll[index] ?? 0;
+  });
   if (focusedPercentage) {
     const restoredInput = document.querySelector(
       `input[data-action='set-share-percent'][data-directive='${focusedPercentage.directive}']`,
@@ -648,6 +648,7 @@ function renderGame(now = Date.now(), force = false) {
       restoredInput.setSelectionRange(focusedPercentage.selectionStart, focusedPercentage.selectionEnd);
     }
   }
+  window.scrollTo(previousScroll.x, previousScroll.y);
   lastStructuralSignature = signature;
 }
 

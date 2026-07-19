@@ -2,7 +2,7 @@
 
 NanoSwarm is a long-horizon incremental game about rebuilding a stranded nanite seed into an industrial and eventually interstellar swarm.
 
-The current playable slice begins with the seed's deep-time arrival, then reveals the interface only as the player discovers it: one active assembler, a physically scaled DDR3 package, collection, Feedstock, exact elemental sorting, Residuum, energy acquisition, replication, cohort allocation, research, prospecting, atmospheric harvesting, and the first distant project. The permanent log separates world, critical, medium, and routine information, while the operations display consolidates nearby cohort phases by directive.
+The current playable slice begins with the seed's deep-time arrival, then reveals the interface only as the player discovers it: one active assembler, a physically scaled DDR3 package, collection, Feedstock, exact elemental sorting, Residuum, energy acquisition, replication, cohort allocation, research, prospecting, atmospheric harvesting, and the first distant project. The running log separates permanent significant events from a rolling 200-item routine record, while the operations display consolidates nearby cohort phases into fixed directive slots.
 
 ## Run locally
 
@@ -38,9 +38,10 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Long offline spans are bounded by actual event progress rather than an arbitrary completion count, so a busy returning swarm is not rejected merely for completing many valid jobs.
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec.
-- Permanent log entries carry a significance tier independently of their visual tone; old saves infer tiers during migration.
+- Log entries carry a significance tier independently of their visual tone. World, critical, and medium events remain permanent; only routine info events roll off after the newest 200. Old saves infer tiers during migration.
 - At 12 nanites, Relative Directive Allocation research replaces single-worker controls with persistent percentage sliders and exact percentage entry. New nanites automatically enter those target shares while allocation locks preserve protected directives.
 - Allocation step buttons support accelerating press-and-hold input. Percentage fields retain focus and uncommitted text when an unrelated cohort completion refreshes the dashboard.
+- The operations panel keeps replication, collection, sorting, and miscellaneous work in fixed slots, and structural refreshes preserve the page scroll position.
 - Research is split into incomplete and complete views. Long work estimates use live computronium capacity, so replication and explicit research allocation can collapse days into minutes without changing the job's required work.
 - Research inputs remain reserved while queued. Queue entries can be reordered or cancelled; cancellation discards work performed on that topic and releases its full reserved material and energy cost.
 - Throughput development is a ladder of additive 5% refinements rather than a handful of giant multipliers; completed nodes alter authoritative payloads, durations, synchronization, resonance, exploration automation, or computronium capacity.

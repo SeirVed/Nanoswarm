@@ -13,13 +13,25 @@ export function cloneState(state) {
   return structuredClone(state);
 }
 
+export const INFO_LOG_LIMIT = 200;
+
+export function trimInfoLog(log, limit = INFO_LOG_LIMIT) {
+  let excess = log.reduce((count, entry) => count + (entry.tier === "info" ? 1 : 0), 0) - limit;
+  if (excess <= 0) return log;
+  return log.filter((entry) => {
+    if (entry.tier !== "info" || excess <= 0) return true;
+    excess -= 1;
+    return false;
+  });
+}
+
 export function appendLog(state, message, tone = "system", elapsedLabel, tier = "info") {
   const id = `log-${state.nextId}`;
   state.nextId += 1n;
   const entry = { id, at: state.simTime, message, tone, tier };
   if (elapsedLabel !== undefined) entry.elapsedLabel = elapsedLabel;
   state.log.push(entry);
-  if (state.log.length > 200) state.log.splice(0, state.log.length - 200);
+  state.log = trimInfoLog(state.log);
 }
 
 export function createInitialState(now = Date.now()) {

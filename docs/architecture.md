@@ -45,7 +45,7 @@ The loop detects a genuine zero-time stall rather than imposing a fixed event-co
 
 ## Permanent log
 
-Log significance and visual tone are separate fields. `world` records history-scale state changes, `critical` marks conditions requiring attention, `medium` records discoveries and unlocks, and `info` carries routine operations such as job starts and completions. Filters are a presentation concern and never remove entries from the permanent log. Version 3 saves infer the missing significance field during migration.
+Log significance and visual tone are separate fields. `world` records history-scale state changes, `critical` marks conditions requiring attention, `medium` records discoveries and unlocks, and `info` carries routine operations such as job starts and completions. World, critical, and medium history is permanent; only the oldest info entries are removed once 200 routine events are retained. Filters are a presentation concern and never alter retention. Version 3 saves infer the missing significance field during migration.
 
 ## Research
 

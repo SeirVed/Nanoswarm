@@ -28,7 +28,7 @@ import {
   startProspecting,
 } from "../src/game/engine.js";
 import { totalMatter } from "../src/game/matter.js";
-import { activeWorkers, createInitialState } from "../src/game/state.js";
+import { INFO_LOG_LIMIT, activeWorkers, appendLog, createInitialState } from "../src/game/state.js";
 import { deserializeState, serializeState } from "../src/game/storage.js";
 
 function success(result) {
@@ -50,6 +50,26 @@ function reachSortedStockpile(now = 1_000_000) {
 }
 
 describe("cohort simulation", () => {
+  it("caps only routine info events while preserving every significant log entry", () => {
+    const state = createInitialState(500_000);
+    const significant = [
+      ["WORLD EVENT", "world"],
+      ["CRITICAL EVENT", "critical"],
+      ["MEDIUM EVENT", "medium"],
+    ];
+    for (const [message, tier] of significant) appendLog(state, message, "system", undefined, tier);
+    for (let index = 0; index < INFO_LOG_LIMIT + 5; index += 1) appendLog(state, `INFO ${index}`);
+
+    const info = state.log.filter((entry) => entry.tier === "info");
+    assert.equal(info.length, INFO_LOG_LIMIT);
+    assert.equal(info[0].message, "INFO 5");
+    for (const [message, tier] of significant) {
+      assert.equal(state.log.some((entry) => entry.message === message && entry.tier === tier), true);
+    }
+    assert.equal(state.log.some((entry) => entry.message === "ASSEMBLY COMPLETE."), true);
+    assert.equal(state.log.some((entry) => entry.message === "IMPACT."), true);
+  });
+
   it("derives the observed six-hundred-quadrillion swarm boundary from starter carbon", () => {
     assert.equal(
       STARTER_DEPOSIT_MATTER.carbon / NANITE_RECIPE.atoms.carbon,
