@@ -1,4 +1,4 @@
-export const TOOLTIP_DELAY_MS = 3_000;
+export const TOOLTIP_DELAY_MS = 1_500;
 
 export const ACTION_TOOLTIPS = Object.freeze({
   begin: "Assume control of the stranded seed and begin the local simulation.",
@@ -14,6 +14,9 @@ export const ACTION_TOOLTIPS = Object.freeze({
   prospect: "Commit one available nanite to search for another material field.",
   audio: "Enable or silence the procedural synthetic-mind soundscape.",
   reset: "Erase the current local save and restart the seed arrival sequence.",
+  volume: "Adjust the gain of the procedural synthetic-mind soundscape.",
+  "set-share": "Set this directive's persistent allocation percentage.",
+  "set-share-percent": "Type an exact persistent allocation percentage from 0 to 100.",
 });
 
 export function tooltipTextFor(target) {
@@ -22,7 +25,10 @@ export function tooltipTextFor(target) {
   if (explicit) return explicit;
   const action = target.dataset?.action;
   if (action && ACTION_TOOLTIPS[action]) return ACTION_TOOLTIPS[action];
-  return target.getAttribute?.("aria-label") ?? "";
+  const accessibleLabel = target.getAttribute?.("aria-label");
+  if (accessibleLabel) return accessibleLabel;
+  if (target.matches?.("button")) return target.textContent?.trim().replace(/\s+/g, " ") ?? "";
+  return "";
 }
 
 export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
@@ -33,12 +39,18 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
   document.body.append(tooltip);
 
   let activeTarget = null;
+  let activeText = "";
+  let hoverStartedAt = 0;
+  let pointer = null;
   let timer = null;
 
-  function hide() {
+  function hide(clearPointer = true) {
     clearTimeout(timer);
     timer = null;
     activeTarget = null;
+    activeText = "";
+    hoverStartedAt = 0;
+    if (clearPointer) pointer = null;
     tooltip.hidden = true;
   }
 
@@ -58,18 +70,56 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
     tooltip.style.top = `${top}px`;
   }
 
+  function schedule(target, text, remaining = delay) {
+    clearTimeout(timer);
+    activeTarget = target;
+    activeText = text;
+    tooltip.hidden = true;
+    timer = setTimeout(() => show(target, text), remaining);
+  }
+
+  function refresh() {
+    if (!pointer) return;
+    const hovered = document.elementFromPoint(pointer.x, pointer.y);
+    if (!hovered || !root.contains(hovered)) {
+      hide();
+      return;
+    }
+    const target = hovered.closest?.("[data-tooltip], [data-action], [aria-label], button, input, select, textarea");
+    const text = tooltipTextFor(target);
+    if (!target || !text) {
+      hide();
+      return;
+    }
+    if (text !== activeText) {
+      hoverStartedAt = Date.now();
+      schedule(target, text);
+      return;
+    }
+    activeTarget = target;
+    if (!tooltip.hidden) {
+      show(target, text);
+      return;
+    }
+    schedule(target, text, Math.max(0, delay - (Date.now() - hoverStartedAt)));
+  }
+
   root.addEventListener("pointerover", (event) => {
-    const target = event.target.closest?.("[data-tooltip], [data-action], [aria-label]");
+    pointer = { x: event.clientX, y: event.clientY };
+    const target = event.target.closest?.("[data-tooltip], [data-action], [aria-label], button, input, select, textarea");
     const text = tooltipTextFor(target);
     if (!target || !text || target === activeTarget) return;
-    hide();
-    activeTarget = target;
-    timer = setTimeout(() => show(target, text), delay);
+    hoverStartedAt = Date.now();
+    schedule(target, text);
+  });
+
+  root.addEventListener("pointermove", (event) => {
+    pointer = { x: event.clientX, y: event.clientY };
   });
 
   root.addEventListener("pointerout", (event) => {
     if (!activeTarget || activeTarget.contains(event.relatedTarget)) return;
-    const departed = event.target.closest?.("[data-tooltip], [data-action], [aria-label]");
+    const departed = event.target.closest?.("[data-tooltip], [data-action], [aria-label], button, input, select, textarea");
     if (departed === activeTarget || !activeTarget.contains(event.target)) hide();
   });
   root.addEventListener("pointerdown", hide);
@@ -77,5 +127,5 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
   window.addEventListener("scroll", hide, { passive: true });
   window.addEventListener("resize", hide);
 
-  return Object.freeze({ hide });
+  return Object.freeze({ hide, refresh });
 }

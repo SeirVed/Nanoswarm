@@ -503,7 +503,7 @@ describe("cohort simulation", () => {
     };
     state.activeDeposit.initialAtoms = 5_000_000n;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 6);
+    assert.equal(restored.version, 7);
     assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
     assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
   });
@@ -518,7 +518,7 @@ describe("cohort simulation", () => {
     state.allocations.energy = 25n;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 6);
+    assert.equal(restored.version, 7);
     assert.equal(restored.allocationTargets.collect, (ALLOCATION_SHARE_SCALE * 65n) / 100n);
     assert.equal(restored.allocationTargets.energy, (ALLOCATION_SHARE_SCALE * 25n) / 100n);
   });
@@ -531,7 +531,7 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     const impact = restored.log.find((entry) => entry.message === "IMPACT.");
     const assembly = restored.log.find((entry) => entry.message === "ASSEMBLY COMPLETE.");
-    assert.equal(restored.version, 6);
+    assert.equal(restored.version, 7);
     assert.equal(impact.tier, "critical");
     assert.equal(assembly.tier, "world");
     assert.equal(restored.log.every((entry) => typeof entry.tier === "string"), true);
@@ -553,7 +553,7 @@ describe("cohort simulation", () => {
     delete state.discovery.residuumIndexed;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 6);
+    assert.equal(restored.version, 7);
     assert.equal(restored.nanites, 600_000_000_000_000_000n);
     assert.equal(restored.allocations.atmosphere, 0n);
     assert.equal(restored.discovery.atmosphereVisible, false);
@@ -575,7 +575,7 @@ describe("cohort simulation", () => {
     state.version = 5;
     state.researchQueue = [{ id: "parallel-directives", progressNaniteMs: 123n }];
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 6);
+    assert.equal(restored.version, 7);
     assert.deepEqual(restored.researchQueue[0].reservedCost, RESEARCH["parallel-directives"].cost);
   });
 });

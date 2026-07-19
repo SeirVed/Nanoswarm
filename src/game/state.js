@@ -44,7 +44,7 @@ export function createInitialState(now = Date.now()) {
     tier: entry.tier ?? "info",
   }));
   const state = {
-    version: 6,
+    version: 7,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,
@@ -71,6 +71,7 @@ export function createInitialState(now = Date.now()) {
     allocationLocks: emptyLocks(),
     researchQueue: [],
     completedResearch: [],
+    seenUnlocks: [],
     discovery: {
       surveyComplete: false,
       feedstockVisible: false,

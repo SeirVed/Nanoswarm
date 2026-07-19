@@ -3,11 +3,12 @@ import { describe, it } from "node:test";
 import { ACTION_TOOLTIPS, TOOLTIP_DELAY_MS, tooltipTextFor } from "../src/ui/tooltips.js";
 
 describe("delayed tooltips", () => {
-  it("waits three seconds and supplies explanations for every interface action", () => {
-    assert.equal(TOOLTIP_DELAY_MS, 3_000);
+  it("waits one and a half seconds and supplies explanations for every interface action", () => {
+    assert.equal(TOOLTIP_DELAY_MS, 1_500);
     for (const action of [
       "begin", "start", "adjust", "step-share", "lock", "research", "research-move",
-      "research-cancel", "research-tab", "log-filter", "prospect", "audio", "reset",
+      "research-cancel", "research-tab", "log-filter", "prospect", "audio", "reset", "volume",
+      "set-share", "set-share-percent",
     ]) {
       assert.equal(typeof ACTION_TOOLTIPS[action], "string");
       assert.ok(ACTION_TOOLTIPS[action].length > 12);

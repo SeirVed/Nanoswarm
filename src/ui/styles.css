@@ -459,6 +459,24 @@ body::after {
 }
 .delayed-tooltip[hidden] { display: none; }
 
+@keyframes new-unlock-pulse {
+  0%, 100% { outline-color: rgba(105, 240, 138, 0.25); box-shadow: 0 0 5px rgba(105, 240, 138, 0.08), inset 0 0 8px rgba(105, 240, 138, 0.025); }
+  50% { outline-color: rgba(105, 240, 138, 0.9); box-shadow: 0 0 18px rgba(105, 240, 138, 0.38), inset 0 0 18px rgba(105, 240, 138, 0.1); }
+}
+.new-unlock {
+  outline: 1px solid rgba(105, 240, 138, 0.25);
+  outline-offset: -1px;
+  animation: new-unlock-pulse 1.7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-unlock {
+    outline-color: rgba(105, 240, 138, 0.85);
+    box-shadow: 0 0 12px rgba(105, 240, 138, 0.25), inset 0 0 12px rgba(105, 240, 138, 0.08);
+    animation: none;
+  }
+}
+
 @media (min-width: 1121px) {
   body { overflow: hidden; }
   .game-shell { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

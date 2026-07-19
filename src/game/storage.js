@@ -9,9 +9,10 @@ import {
   inferLogTier,
 } from "./content.js";
 import { totalMatter } from "./matter.js";
+import { unlockedIdsForState } from "./unlocks.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 6;
+const CURRENT_SAVE_VERSION = 7;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -76,6 +77,11 @@ function migrateState(state) {
         item.reservedCost = { energy: cost.energy, atoms: { ...cost.atoms } };
       }
     }
+    state.version = 6;
+  }
+  if (state.version === 6) {
+    // Existing discoveries predate unlock acknowledgements, so do not present them as newly found.
+    state.seenUnlocks = unlockedIdsForState(state);
     state.version = CURRENT_SAVE_VERSION;
   }
   return state;

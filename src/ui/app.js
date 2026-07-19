@@ -39,6 +39,7 @@ import {
 } from "../game/quantities.js";
 import { activeResearchWorkers, createInitialState, idleWorkers } from "../game/state.js";
 import { clearGame, loadGame, saveGame } from "../game/storage.js";
+import { acknowledgeUnlockIds } from "../game/unlocks.js";
 import { SyntheticMind } from "../audio/mind.js";
 import { COHORT_SLOT_LABEL, groupCohortsForDisplay, revealedCohortSlots } from "./cohort-groups.js";
 import { installDelayedTooltips } from "./tooltips.js";
@@ -54,6 +55,13 @@ let lastSave = Date.now();
 let lastStructuralSignature = null;
 let activeLogTier = "all";
 let activeResearchTab = "incomplete";
+
+const escapeAttribute = (value) => String(value)
+  .replaceAll("&", "&amp;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;");
+const newUnlockClass = (id) => state && !state.seenUnlocks.includes(id) ? " new-unlock" : "";
 
 const formatDuration = (milliseconds) => {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
@@ -88,15 +96,14 @@ const progressBar = (progress, label = "", startedAt, completesAt) => `
   </div>`;
 
 function renderIntro() {
-  delayedTooltips.hide();
   root.innerHTML = `
     <main class="arrival-shell" aria-label="NanoSwarm arrival telemetry">
-      <section class="arrival-terminal">
-        <div class="terminal-status"><span>DEEP-TIME TRANSIT RECORD</span><span class="status-light">RECEIVING</span></div>
+      <section class="arrival-terminal" data-tooltip="A recovered deep-time transit record from the stranded nanite seed.">
+        <div class="terminal-status" data-tooltip="Recorded telemetry is arriving in chronological order."><span>DEEP-TIME TRANSIT RECORD</span><span class="status-light">RECEIVING</span></div>
         <div class="arrival-log" aria-live="polite">
           ${INTRO_LOG.slice(0, introVisible)
             .map(
-              (entry) => `<div class="arrival-line tone-${entry.tone ?? "system"}">
+              (entry) => `<div class="arrival-line tone-${entry.tone ?? "system"}" data-tooltip="${escapeAttribute(`${entry.elapsedLabel}: ${entry.message}`)}">
                 <time>${entry.elapsedLabel}</time><span>${entry.message}</span>
               </div>`,
             )
@@ -105,7 +112,7 @@ function renderIntro() {
         </div>
         ${
           introVisible >= INTRO_LOG.length
-            ? `<div class="begin-zone">
+            ? `<div class="begin-zone" data-tooltip="Accept local control of the seed and enter the live simulation.">
                 <button class="terminal-button begin-button" data-action="begin">BEGIN</button>
                 <p>ASSUME LOCAL DIRECTIVE AUTHORITY · AWAKEN SONIC MIND</p>
               </div>`
@@ -113,6 +120,7 @@ function renderIntro() {
         }
       </section>
     </main>`;
+  delayedTooltips.refresh();
 }
 
 function groupedCohorts() {
@@ -186,12 +194,12 @@ function operationsHtml(now) {
         ${visibleSlots.map((directive) => {
           const group = groupByDirective.get(directive);
           if (!group) {
-            return `<div class="cohort-row cohort-row-idle" data-cohort-slot="${directive}" data-tooltip="${COHORT_SLOT_LABEL[directive]} is known but has no job in flight.">
+            return `<div class="cohort-row cohort-row-idle${newUnlockClass(`directive:${directive}`)}" data-unlock-id="directive:${directive}" data-cohort-slot="${directive}" data-tooltip="${COHORT_SLOT_LABEL[directive]} is known but has no job in flight.">
               <div><strong>${COHORT_SLOT_LABEL[directive]}</strong><small>STANDBY</small></div>
               <div class="cohort-idle-state">NO JOB IN FLIGHT</div>
             </div>`;
           }
-          return `<div class="cohort-row" data-cohort-slot="${directive}" data-tooltip="${COHORT_SLOT_LABEL[directive]} has ${formatCount(group.workers)} workers across ${group.phases.length} active phase${group.phases.length === 1 ? "" : "s"}.">
+          return `<div class="cohort-row${newUnlockClass(`directive:${directive}`)}" data-unlock-id="directive:${directive}" data-cohort-slot="${directive}" data-tooltip="${COHORT_SLOT_LABEL[directive]} has ${formatCount(group.workers)} workers across ${group.phases.length} active phase${group.phases.length === 1 ? "" : "s"}.">
             <div><strong>${COHORT_SLOT_LABEL[directive]}</strong><small>${formatCount(group.workers)} workers · ${
               group.phases.length === 1
                 ? "resonant cohort"
@@ -256,7 +264,7 @@ function operationsHtml(now) {
               : true,
         )
         .map(
-          ([directive, label, hint]) => `<button class="action-row" data-action="start" data-directive="${directive}">
+          ([directive, label, hint]) => `<button class="action-row${newUnlockClass(`directive:${directive}`)}" data-unlock-id="directive:${directive}" data-action="start" data-directive="${directive}">
             <span><strong>${label}</strong><small>${hint}</small></span><em>${effectiveJobDuration(state, directive) / 1000}s</em>
           </button>`,
         )
@@ -270,7 +278,7 @@ function resourcesHtml() {
   const depositExhausted = depositTotal === 0n;
   const prospecting = state.cohorts.some((cohort) => cohort.directive === "prospect");
   const substrate = state.discovery.surveyComplete
-    ? `<section class="panel substrate-panel" data-tooltip="The active material field is finite; inputs are reserved when collection starts.">
+    ? `<section class="panel substrate-panel${newUnlockClass("substrate")}" data-unlock-id="substrate" data-tooltip="The active material field is finite; inputs are reserved when collection starts.">
         <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${
           depositExhausted ? "EXHAUSTED" : `${percentage(depositTotal, state.activeDeposit.initialAtoms)} REMAINS`
         }</span></header>
@@ -283,7 +291,7 @@ function resourcesHtml() {
         )} per collector</small>
         ${
           depositExhausted
-            ? `<div class="exhaustion-state"><strong>${String(
+            ? `<div class="exhaustion-state${newUnlockClass("directive:prospect")}" data-unlock-id="directive:prospect"><strong>${String(
                 state.activeDeposit.limitingElement ?? "material",
               ).toUpperCase()} BOTTLENECK CONFIRMED</strong><p>The local solid inventory is committed. A new material field must be located.</p>
                 <button class="terminal-button search-button" data-action="prospect" ${
@@ -295,7 +303,7 @@ function resourcesHtml() {
         }
         ${
           state.discovery.atmosphereVisible
-            ? `<div class="atmosphere-state"><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatCount(
+            ? `<div class="atmosphere-state${newUnlockClass("directive:atmosphere")}" data-unlock-id="directive:atmosphere"><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatCount(
                 atmosphericCollectionCapacity(state),
               )} atoms (≈${formatInventoryMass({ unknown: atmosphericCollectionCapacity(state) })}) per nanite per job · 1% base capture plus completed refinements</p></div>`
             : ""
@@ -304,7 +312,7 @@ function resourcesHtml() {
     : "";
 
   if (!state.discovery.feedstockVisible) return substrate;
-  const material = `<section class="panel resources-panel" data-tooltip="Exact available inventories exclude inputs already reserved by active cohorts.">
+  const material = `<section class="panel resources-panel${newUnlockClass("materials")}" data-unlock-id="materials" data-tooltip="Exact available inventories exclude inputs already reserved by active cohorts.">
     <header class="panel-heading"><span>MATERIAL CONTROL</span><span>EXACT INVENTORY</span></header>
     <div class="resource-summary">
       <div><span>FEEDSTOCK</span><strong>${formatCount(totalMatter(state.feedstock))} atoms</strong><small>≈${formatInventoryMass(
@@ -313,7 +321,7 @@ function resourcesHtml() {
       <div><span>ENERGY</span><strong>${formatEnergy(state.energy)}</strong><small>locally stored</small></div>
       ${
         state.discovery.residuumVisible
-          ? `<div><span>RESIDUUM</span><strong>${formatCount(totalMatter(state.residuum))} atoms</strong><small>≈${formatInventoryMass(
+          ? `<div class="resource-unlock${newUnlockClass("residuum")}" data-unlock-id="residuum"><span>RESIDUUM</span><strong>${formatCount(totalMatter(state.residuum))} atoms</strong><small>≈${formatInventoryMass(
               state.residuum,
             )} · retained · ${
               state.discovery.residuumIndexed ? "indexed" : "unresolved"
@@ -324,7 +332,7 @@ function resourcesHtml() {
     ${
       state.discovery.elementsVisible
         ? `<div class="section-rule"><span>IDENTIFIED ELEMENTS</span></div>
-          <div class="atom-grid">
+          <div class="atom-grid${newUnlockClass("elements")}" data-unlock-id="elements">
             ${[
               ["carbon", "C", "Carbon"],
               ["silicon", "Si", "Silicon"],
@@ -367,7 +375,7 @@ function allocationsHtml() {
       ? `<strong class="directive-alert">PRODUCTION HALTED · INSUFFICIENT ${haltedResources}</strong>`
       : ""
   }`;
-  return `<section class="panel allocation-panel" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
+  return `<section class="panel allocation-panel${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
     <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatCount(unassigned)} UNASSIGNED${
       relativeAllocation ? " · RELATIVE AUTO" : ""
     }</span></header>
@@ -379,7 +387,7 @@ function allocationsHtml() {
             ALLOCATION_SHARE_SCALE
           : 0n;
         const shareText = `${shareHundredths / 100n}.${(shareHundredths % 100n).toString().padStart(2, "0")}`;
-        return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}" data-tooltip="${
+        return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}${newUnlockClass(`directive:${directive}`)}" data-unlock-id="directive:${directive}" data-tooltip="${
           directive === "replicate"
             ? `${recipeText}${haltDetail ? `. Production halted: ${haltDetail}.` : "."}`
             : `Assign active nanites to ${DIRECTIVE_LABEL[directive].toLowerCase()}.`
@@ -463,7 +471,7 @@ function researchHtml() {
       </div>`
     : "";
 
-  return `<section class="panel research-panel" data-tooltip="Research uses embedded computronium plus any free nanites assigned to research.">
+  return `<section class="panel research-panel${newUnlockClass("research")}" data-unlock-id="research" data-tooltip="Research uses embedded computronium plus any free nanites assigned to research.">
     <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${state.completedResearch.length}/${Object.keys(
       RESEARCH,
     ).length} COMPLETE · ${formatCount(
@@ -488,7 +496,7 @@ function researchHtml() {
           const queued = state.researchQueue.some((item) => item.id === definition.id);
           const complete = state.completedResearch.includes(definition.id);
           const eta = (definition.requiredNaniteMs + capacity - 1n) / capacity;
-          return `<article class="research-card" data-tooltip="${definition.effect}"><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
+          return `<article class="research-card${newUnlockClass(`research:${definition.id}`)}" data-unlock-id="research:${definition.id}" data-tooltip="${definition.effect}"><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
             <small>${
               complete
                 ? `RESOLVED · WORK ${formatCount(definition.requiredNaniteMs)} n·ms`
@@ -513,7 +521,7 @@ function researchHtml() {
 
 function projectsHtml() {
   if (!state.discovery.projectsVisible) return "";
-  return `<section class="panel project-panel" data-tooltip="Long-horizon projects expose distant objectives before their requirements are resolved.">
+  return `<section class="panel project-panel${newUnlockClass("projects")}" data-unlock-id="projects" data-tooltip="Long-horizon projects expose distant objectives before their requirements are resolved.">
     <header class="panel-heading"><span>LONG-HORIZON PROJECTS</span><span>1 DETECTED</span></header>
     <div class="project-card"><div class="project-index">LAN—01</div><strong>Lanthanide Definition</strong>
       <p>Construct the analytical substrate required to distinguish the lanthanide series from retained matter.</p>
@@ -548,7 +556,7 @@ function logHtml() {
       ${visibleLog.map((entry) => {
         const elapsed = Math.max(0, entry.at - state.createdAt + 9_247);
         const label = entry.elapsedLabel ?? (elapsed < 60_000 ? `+${(elapsed / 1000).toFixed(3)}s` : `+${Math.floor(elapsed / 60_000)}m`);
-        return `<div class="telemetry-line tone-${entry.tone}"><time>${label}</time><span class="tier-badge tier-${entry.tier}">${entry.tier.toUpperCase()}</span><span>${entry.message}</span></div>`;
+        return `<div class="telemetry-line tone-${entry.tone}" data-tooltip="${escapeAttribute(`${entry.tier.toUpperCase()} event at ${label}: ${entry.message}`)}"><time>${label}</time><span class="tier-badge tier-${entry.tier}">${entry.tier.toUpperCase()}</span><span>${entry.message}</span></div>`;
       }).join("")}
       ${visibleLog.length === 0 ? `<p class="log-empty">NO ${activeLogTier.toUpperCase()} EVENTS RECORDED</p>` : ""}
       <div id="log-end"></div>
@@ -569,6 +577,7 @@ function structuralSignature() {
     ...Object.values(state.discovery),
     state.researchQueue.map((item) => item.id).join(","),
     state.completedResearch.join(","),
+    state.seenUnlocks.join(","),
     state.log.length,
     state.log.at(-1)?.id ?? "",
     activeLogTier,
@@ -627,7 +636,6 @@ function renderGame(now = Date.now(), force = false) {
       }
     : null;
   const depositTotal = totalMatter(state.activeDeposit.matter);
-  delayedTooltips.hide();
   root.innerHTML = `<div class="game-shell">
     <header class="game-header">
       <div class="brand-lockup"><span class="brand-mark">◈</span><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>
@@ -667,6 +675,7 @@ function renderGame(now = Date.now(), force = false) {
     }
   }
   window.scrollTo(previousScroll.x, previousScroll.y);
+  delayedTooltips.refresh();
   lastStructuralSignature = signature;
 }
 
@@ -769,6 +778,11 @@ const repeatIdentity = (button) => [
 let repeatSession = null;
 let repeatClickSuppression = null;
 
+function acknowledgeUnlocks(event) {
+  if (!state) return false;
+  return acknowledgeUnlockIds(state, event.composedPath().map((target) => target?.dataset?.unlockId));
+}
+
 function stopRepeating() {
   if (repeatSession?.timer) clearTimeout(repeatSession.timer);
   repeatSession = null;
@@ -792,6 +806,7 @@ function scheduleRepeat(session, delay = 420) {
 root.addEventListener("pointerdown", (event) => {
   const button = event.target.closest("button[data-repeat='accelerated']");
   if (!button || button.disabled || event.button !== 0) return;
+  const acknowledged = acknowledgeUnlocks(event);
   event.preventDefault();
   stopRepeating();
   const identity = repeatIdentity(button);
@@ -799,6 +814,7 @@ root.addEventListener("pointerdown", (event) => {
   const session = { button, repetitions: 0, timer: null };
   repeatSession = session;
   const succeeded = performButtonAction(button);
+  if (acknowledged && state) saveGame(state);
   if (succeeded) scheduleRepeat(session);
   else stopRepeating();
 });
@@ -808,8 +824,15 @@ document.addEventListener("pointercancel", stopRepeating);
 window.addEventListener("blur", stopRepeating);
 
 root.addEventListener("click", (event) => {
+  const acknowledged = acknowledgeUnlocks(event);
   const button = event.target.closest("button[data-action]");
-  if (!button) return;
+  if (!button) {
+    if (acknowledged) {
+      saveGame(state);
+      renderGame(Date.now(), true);
+    }
+    return;
+  }
   if (
     repeatClickSuppression?.identity === repeatIdentity(button) &&
     Date.now() <= repeatClickSuppression.until
@@ -819,6 +842,7 @@ root.addEventListener("click", (event) => {
   }
   repeatClickSuppression = null;
   performButtonAction(button);
+  if (acknowledged && state) saveGame(state);
 });
 
 root.addEventListener("input", (event) => {

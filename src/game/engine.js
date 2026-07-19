@@ -17,6 +17,7 @@ import {
 import { addAtoms, addMatter, splitSortedMatter, takeMatterProportionally, totalMatter } from "./matter.js";
 import { formatCount, formatEnergy, formatInventoryMass } from "./quantities.js";
 import { activeResearchWorkers, activeWorkers, appendLog, cloneState, idleWorkers } from "./state.js";
+import { researchIsUnlocked } from "./unlocks.js";
 
 const minBigInt = (...values) => values.reduce((smallest, value) => (value < smallest ? value : smallest));
 const ceilDiv = (value, divisor) => (divisor <= 0n ? 0n : (value + divisor - 1n) / divisor);
@@ -713,10 +714,7 @@ export function moveResearch(input, id, direction, now = Date.now()) {
 }
 
 export function researchIsRevealed(state, definition) {
-  if (state.completedResearch.includes(definition.id)) return true;
-  if (definition.unlockNanites && state.nanites < definition.unlockNanites) return false;
-  if (definition.requiresDiscovery && !state.discovery[definition.requiresDiscovery]) return false;
-  return definition.requires.every((requirement) => state.completedResearch.includes(requirement));
+  return researchIsUnlocked(state, definition);
 }
 
 export function assignmentTotal(state) {
