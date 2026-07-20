@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { COHORT_SLOT_ORDER, groupCohortsForDisplay, revealedCohortSlots } from "../src/ui/cohort-groups.js";
 
 describe("cohort display groups", () => {
-  it("keeps active work in the fixed replication, collection, sorting, misc order", () => {
+  it("keeps recurring active work in fixed operational order and omits substrate searches", () => {
     const cohorts = [
       { directive: "prospect", workers: 1n, startedAt: 10, completesAt: 40 },
       { directive: "sort", workers: 2n, startedAt: 10, completesAt: 30 },
@@ -12,10 +12,10 @@ describe("cohort display groups", () => {
       { directive: "collect", workers: 5n, startedAt: 10, completesAt: 25 },
     ];
 
-    assert.deepEqual(COHORT_SLOT_ORDER, ["replicate", "collect", "atmosphere", "energy", "sort", "prospect"]);
+    assert.deepEqual(COHORT_SLOT_ORDER, ["replicate", "collect", "atmosphere", "energy", "sort"]);
     assert.deepEqual(
       groupCohortsForDisplay(cohorts).map((group) => group.directive),
-      ["replicate", "collect", "energy", "sort", "prospect"],
+      ["replicate", "collect", "energy", "sort"],
     );
   });
 
@@ -30,7 +30,7 @@ describe("cohort display groups", () => {
     assert.equal(groups[0].spread, 20);
   });
 
-  it("keeps undiscovered fixed slots hidden and retains them after their first reveal", () => {
+  it("keeps undiscovered fixed slots hidden and never promotes a substrate search into them", () => {
     const state = {
       discovery: {
         surveyComplete: true,
@@ -45,7 +45,7 @@ describe("cohort display groups", () => {
     assert.deepEqual(revealedCohortSlots(state), ["replicate", "collect", "energy", "sort"]);
 
     state.cohorts.push({ directive: "prospect" });
-    assert.deepEqual(revealedCohortSlots(state), ["replicate", "collect", "energy", "sort", "prospect"]);
+    assert.deepEqual(revealedCohortSlots(state), ["replicate", "collect", "energy", "sort"]);
     state.cohorts = [];
     state.prospecting.searchesCompleted = 1;
     state.discovery.atmosphereVisible = true;

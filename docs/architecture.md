@@ -31,6 +31,8 @@ The planned Residuum extension preserves provenance as well as identity. Every f
 
 When all accessible matter in an active shell has been reserved, the simulation records exhaustion once and exposes a scale-aware local survey cohort. Searches one through four commit 0.5%, 1%, 2%, and 4% of the current active swarm, rounded upward to a whole nanite, for 30, 45, 60, and 90 seconds. The original close survey remains a ten-second, one-worker job because the solitary seed has no larger cohort to send. Completion archives the depleted shell and advances through the authored nested object: +0.9 g remaining DRAM package, +9 g circuit-board fragment, +90 g motherboard region and +900 g broken chassis. There is no repeating or randomly scaled solid deposit after the chassis.
 
+These nested-object searches are substrate-expansion actions, so their controls, committed workforce and live timer remain in the substrate panel rather than occupying a recurring operational slot. Later free-ranging biomass searches or hunting parties may become full directives when the swarm reaches a genuinely local-area scale.
+
 Acquiring the chassis begins Stage 2 and identifies atmospheric matter. Atmosphere is an open environmental source rather than a finite deposit, so its harvested atoms enter the tracked system at job completion. Base atmospheric throughput is exactly 1% of the current effective solid-collection payload. Its canonical dry-air constituent-atom ratio contains nitrogen, oxygen, argon and carbon; only carbon is part of the seed catalogue, and all other atoms are retained by hidden identity pending later research.
 
 ## Cohorts

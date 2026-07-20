@@ -399,6 +399,9 @@ body::after {
 .exhaustion-state p, .atmosphere-state p { margin: 6px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .search-button { width: 100%; margin-top: 10px; padding: 10px; display: flex; justify-content: space-between; gap: 12px; text-align: left; }
 .search-button span { color: var(--muted); font-size: 8px; }
+.substrate-search-progress { margin-top: 8px; padding: 10px; border: 1px solid rgba(216, 120, 103, 0.22); background: rgba(216, 120, 103, 0.035); }
+.substrate-search-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 8px; letter-spacing: 0.1em; }
+.substrate-search-progress .progress-wrap { margin-top: 8px; }
 .resource-stack { min-width: 0; max-width: 100%; display: grid; gap: 16px; }
 .resource-summary { display: grid; grid-template-columns: repeat(3, 1fr); }
 .resource-summary > div { min-width: 0; padding: 15px; display: grid; gap: 6px; border-right: 1px solid var(--line); }

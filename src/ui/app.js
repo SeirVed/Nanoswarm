@@ -313,10 +313,11 @@ function operationsHtml(now) {
   </section>`;
 }
 
-function resourcesHtml() {
+function resourcesHtml(now) {
   const depositTotal = totalMatter(state.activeDeposit.matter);
   const depositExhausted = depositTotal === 0n;
-  const prospecting = state.cohorts.some((cohort) => cohort.directive === "prospect");
+  const prospectCohort = state.cohorts.find((cohort) => cohort.directive === "prospect");
+  const prospecting = Boolean(prospectCohort);
   const nextShellAvailable = state.prospecting.searchesCompleted < LOCAL_SHELL_COUNT;
   const nextSearchIndex = state.prospecting.searchesCompleted + 1;
   const searchWorkers = prospectingWorkerRequirement(state, nextSearchIndex);
@@ -345,8 +346,20 @@ function resourcesHtml() {
                 ${nextShellAvailable ? `<button class="terminal-button search-button" data-action="prospect" ${
                   prospecting || idleWorkers(state) < searchWorkers ? "disabled" : ""
                 }>${prospecting ? "SURVEY IN PROGRESS" : "EXTEND LOCAL SURVEY"}<span>${
-                  prospecting ? "cohort deployed" : `${formatDuration(searchDuration)} · ${formatCount(searchWorkers)} nanites`
-                }</span></button>` : `<small>NO FURTHER AUTHORED LOCAL SOLID SHELL</small>`}</div>`
+                  prospecting
+                    ? `${formatCount(prospectCohort.workers)} nanites deployed`
+                    : `${formatDuration(searchDuration)} · ${formatCount(searchWorkers)} nanites`
+                }</span></button>${prospecting ? `<div class="substrate-search-progress" data-tooltip-key="substrate:search-progress" data-tooltip="This cohort is surveying the next physical layer of the current object. It belongs to substrate expansion rather than the swarm's recurring economic directives; later free-ranging search and hunting parties may become operational cohorts.">
+                  <div class="substrate-search-meta"><span>LOCAL SEARCH ${prospectCohort.payload.depositIndex}</span><span>${formatCount(
+                    prospectCohort.workers,
+                  )} NANITES</span></div>
+                  ${progressBar(
+                    (now - prospectCohort.startedAt) / (prospectCohort.completesAt - prospectCohort.startedAt),
+                    cohortTimeLabel(prospectCohort.startedAt, prospectCohort.completesAt, now),
+                    prospectCohort.startedAt,
+                    prospectCohort.completesAt,
+                  )}
+                </div>` : ""}` : `<small>NO FURTHER AUTHORED LOCAL SOLID SHELL</small>`}</div>`
             : ""
         }
         ${
@@ -851,7 +864,7 @@ function renderGame(now = Date.now(), force = false) {
     ${notice ? `<div class="notice" role="status">${notice}</div>` : ""}
     ${feedbackSelecting ? `<div class="feedback-select-banner" role="status">FEEDBACK SELECTOR ACTIVE · CLICK ANY INTERFACE ELEMENT · CLICK ◈ TO CANCEL</div>` : ""}
     <main class="dashboard-grid">
-      <div class="dashboard-column">${operationsHtml(now)}${resourcesHtml()}${projectsHtml()}</div>
+      <div class="dashboard-column">${operationsHtml(now)}${resourcesHtml(now)}${projectsHtml()}</div>
       <div class="dashboard-column">${allocationsHtml()}${researchHtml()}</div>
       <div class="dashboard-column log-column">${logHtml()}</div>
     </main>

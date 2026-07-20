@@ -10,6 +10,7 @@
 - [x] Stage 1 nested DRAM, circuit-board and motherboard shells with full hidden elemental compositions.
 - [x] Stage 2 chassis boundary and delayed atmospheric discovery.
 - [x] Scale outward material-search cohorts and durations with each local mass horizon.
+- [x] Keep nested-substrate survey controls and progress in the substrate panel rather than the recurring cohort board.
 - [x] Event-led catalogue research split into Residuum Indexing, chassis iron analysis and atmospheric spectroscopy without overloading the first material horizons.
 - [ ] Apply completed catalogue research to re-sort retained matter into usable elemental inventories.
 - [ ] Preserve one authoritative Residuum lot per finite substrate and separate bulk lots for atmosphere, regolith and later open sources.
@@ -19,6 +20,7 @@
 - [ ] Author physical specialist assembly, populations, recipes and role-specific construction times for later morphology tiers.
 - [ ] Phase-aware bulk collection, recovery, tailings and specialist morphology efficiencies.
 - [ ] Authored soil, water and flora fields following the chassis boundary.
+- [ ] Introduce free-ranging biomass search or hunting parties as operational directives at local-area scale.
 - [x] Formalize the seven-stage, seventeen-horizon 0.1 g–1 Gt pathway.
 - [ ] Review and fill—or deliberately preserve—the research-empty bridge between Relative Directive Allocation and material search 1.
 
