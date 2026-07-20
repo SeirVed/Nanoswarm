@@ -968,4 +968,28 @@ describe("cohort simulation", () => {
       assert.equal(restored.atoms[key], state.atoms[key] + reservation.atoms[key]);
     }
   });
+
+  it("releases old queued research whose horizon price was recalibrated", () => {
+    const state = createInitialState(6_400_000);
+    state.version = 10;
+    delete state.replicationTuning;
+    const oldReservation = {
+      energy: 400n,
+      atoms: { carbon: 10_000n, silicon: 4_000n, copper: 1_000n, gold: 100n },
+    };
+    state.energy = 0n;
+    for (const key of Object.keys(state.atoms)) state.atoms[key] = 0n;
+    state.researchQueue = [{
+      id: "capacitive-buffer-lattice",
+      progressNaniteMs: 120_000_000n,
+      reservedCost: oldReservation,
+    }];
+
+    const restored = deserializeState(serializeState(state));
+    assert.equal(restored.version, 11);
+    assert.deepEqual(restored.researchQueue, []);
+    assert.equal(restored.energy, oldReservation.energy);
+    for (const key of Object.keys(state.atoms)) assert.equal(restored.atoms[key], oldReservation.atoms[key]);
+    assert.equal(restored.log.at(-1).message.includes("RESEARCH CALIBRATION UPDATED"), true);
+  });
 });

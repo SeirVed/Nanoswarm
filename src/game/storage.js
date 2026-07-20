@@ -12,6 +12,7 @@ import {
   inferLogTier,
 } from "./content.js";
 import { addMatter, totalMatter } from "./matter.js";
+import { appendLog } from "./state.js";
 import { unlockedIdsForState } from "./unlocks.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
@@ -30,6 +31,9 @@ const reviver = (_key, value) =>
 
 const normalizedMatter = (matter) => ({ ...emptyMatter(), ...(matter ?? {}) });
 const atomsAsMatter = (atoms) => ({ ...emptyMatter(), ...atoms });
+const researchCostsMatch = (left, right) => left && right &&
+  left.energy === right.energy &&
+  ATOM_KEYS.every((key) => left.atoms[key] === right.atoms[key]);
 
 function normalizeMatterState(state) {
   state.feedstock = normalizedMatter(state.feedstock);
@@ -195,11 +199,33 @@ function migrateState(state) {
     state.version = 10;
   }
   if (state.version === 10) {
+    const retainedQueue = [];
+    let recalibrated = 0;
+    for (const item of state.researchQueue) {
+      const currentCost = RESEARCH[item.id]?.cost;
+      if (!currentCost || !item.reservedCost || researchCostsMatch(item.reservedCost, currentCost)) {
+        retainedQueue.push(item);
+        continue;
+      }
+      state.energy += item.reservedCost.energy;
+      for (const key of ATOM_KEYS) state.atoms[key] += item.reservedCost.atoms[key];
+      recalibrated += 1;
+    }
+    state.researchQueue = retainedQueue;
     state.replicationTuning = {
       qualifyingMs: 0,
       burst: null,
     };
     state.version = 11;
+    if (recalibrated > 0) {
+      appendLog(
+        state,
+        `RESEARCH CALIBRATION UPDATED · ${recalibrated} QUEUED TOPIC${recalibrated === 1 ? "" : "S"} RELEASED · RESERVED INPUTS RETURNED.`,
+        "muted",
+        undefined,
+        "medium",
+      );
+    }
   }
   return state;
 }
