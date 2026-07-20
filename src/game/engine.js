@@ -388,6 +388,7 @@ function completeCohort(state, cohort) {
   } else if (payload.kind === "collect") {
     const firstCollection = !state.discovery.feedstockVisible;
     state.feedstock = addMatter(state.feedstock, payload.matter);
+    state.lifetime.collected = addMatter(state.lifetime.collected, payload.matter);
     state.discovery.feedstockVisible = true;
     appendLog(state, `${
       cohort.directive === "atmosphere" ? "ATMOSPHERIC HARVEST" : "COLLECTION RUN"
@@ -401,6 +402,7 @@ function completeCohort(state, cohort) {
     state.discovery.residuumVisible = totalMatter(state.residuum) > 0n;
     state.discovery.researchVisible = true;
     const sortedMatter = { ...payload.atoms, unknown: payload.residuum.unknown };
+    state.lifetime.processed = addMatter(state.lifetime.processed, sortedMatter);
     appendLog(
       state,
       `SORTING RUN COMPLETE · ${formatCount(totalMatter(sortedMatter))} constituent atoms · ≈${formatInventoryMass(sortedMatter)} processed.`,
@@ -418,6 +420,11 @@ function completeCohort(state, cohort) {
   } else if (payload.kind === "replicate") {
     const previousNanites = state.nanites;
     state.nanites += payload.nanites;
+    state.lifetime.spent = addMatter(state.lifetime.spent, {
+      ...Object.fromEntries(ATOM_KEYS.map((key) => [key, NANITE_RECIPE.atoms[key] * payload.nanites])),
+      unknown: 0n,
+    });
+    state.lifetime.energySpent += NANITE_RECIPE.energy * payload.nanites;
     reconcileRelativeAllocations(state);
     state.discovery.directivesVisible = state.nanites >= 2n;
     state.discovery.projectsVisible = true;
@@ -463,6 +470,9 @@ function completeResearchIfReady(state) {
   const definition = RESEARCH[item.id];
   if (item.progressNaniteMs < definition.requiredNaniteMs) return false;
   state.researchQueue.shift();
+  const spentCost = item.reservedCost ?? definition.cost;
+  state.lifetime.spent = addMatter(state.lifetime.spent, { ...spentCost.atoms, unknown: 0n });
+  state.lifetime.energySpent += spentCost.energy;
   if (!state.completedResearch.includes(item.id)) state.completedResearch.push(item.id);
   if (item.id === "relative-allocation") {
     initializeAllocationTargets(state);

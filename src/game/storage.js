@@ -1,18 +1,21 @@
 import { advanceSimulation } from "./engine.js";
 import {
   ALLOCATION_SHARE_SCALE,
+  ATOM_KEYS,
   DIRECTIVES,
   MATTER_KEYS,
+  NANITE_RECIPE,
   RESEARCH,
   STARTER_DEPOSIT_MATTER,
   emptyAllocationTargets,
+  emptyMatter,
   inferLogTier,
 } from "./content.js";
-import { totalMatter } from "./matter.js";
+import { addMatter, totalMatter } from "./matter.js";
 import { unlockedIdsForState } from "./unlocks.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 7;
+const CURRENT_SAVE_VERSION = 8;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -24,6 +27,46 @@ const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
 const replacer = (_key, value) => (typeof value === "bigint" ? { $bigint: value.toString() } : value);
 const reviver = (_key, value) =>
   value && typeof value === "object" && typeof value.$bigint === "string" ? BigInt(value.$bigint) : value;
+
+const atomsAsMatter = (atoms) => ({ ...atoms, unknown: 0n });
+
+function reconstructedLifetime(state) {
+  let spent = emptyMatter();
+  let energySpent = 0n;
+  const replicated = state.nanites > 1n ? state.nanites - 1n : 0n;
+  if (replicated > 0n) {
+    spent = addMatter(spent, atomsAsMatter(Object.fromEntries(
+      ATOM_KEYS.map((key) => [key, NANITE_RECIPE.atoms[key] * replicated]),
+    )));
+    energySpent += NANITE_RECIPE.energy * replicated;
+  }
+  for (const id of state.completedResearch) {
+    const cost = RESEARCH[id]?.cost;
+    if (!cost) continue;
+    spent = addMatter(spent, atomsAsMatter(cost.atoms));
+    energySpent += cost.energy;
+  }
+
+  let processed = addMatter(atomsAsMatter(state.atoms), state.residuum);
+  processed = addMatter(processed, spent);
+  for (const item of state.researchQueue) {
+    const cost = item.reservedCost ?? RESEARCH[item.id]?.cost;
+    if (cost) processed = addMatter(processed, atomsAsMatter(cost.atoms));
+  }
+  for (const cohort of state.cohorts) {
+    if (cohort.payload.kind !== "replicate") continue;
+    processed = addMatter(processed, atomsAsMatter(Object.fromEntries(
+      ATOM_KEYS.map((key) => [key, NANITE_RECIPE.atoms[key] * cohort.payload.nanites]),
+    )));
+  }
+
+  let collected = addMatter(state.feedstock, processed);
+  for (const cohort of state.cohorts) {
+    if (cohort.payload.kind !== "sort") continue;
+    collected = addMatter(collected, { ...cohort.payload.atoms, unknown: cohort.payload.residuum.unknown });
+  }
+  return { collected, processed, spent, energySpent };
+}
 
 export function serializeState(state) {
   return JSON.stringify(state, replacer);
@@ -82,7 +125,11 @@ function migrateState(state) {
   if (state.version === 6) {
     // Existing discoveries predate unlock acknowledgements, so do not present them as newly found.
     state.seenUnlocks = unlockedIdsForState(state);
-    state.version = CURRENT_SAVE_VERSION;
+    state.version = 7;
+  }
+  if (state.version === 7) {
+    state.lifetime = reconstructedLifetime(state);
+    state.version = 8;
   }
   return state;
 }

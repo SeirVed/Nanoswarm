@@ -406,14 +406,21 @@ body::after {
 .resource-summary span { color: var(--muted); font-size: 8px; letter-spacing: 0.13em; }
 .resource-summary strong { overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; }
 .resource-summary small { color: var(--muted); font-size: 8px; }
+.lifetime-summary { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid rgba(105, 240, 138, 0.06); }
+.lifetime-summary > div { min-width: 0; padding: 12px 15px; display: grid; gap: 5px; border-right: 1px solid var(--line); background: rgba(105, 240, 138, 0.018); }
+.lifetime-summary > div:last-child { border-right: 0; }
+.lifetime-summary span { color: var(--green-dim); font-size: 7px; letter-spacing: 0.14em; }
+.lifetime-summary strong { overflow: hidden; color: var(--text); font-size: 10px; text-overflow: ellipsis; }
+.lifetime-summary small { color: var(--muted); font-size: 7px; line-height: 1.45; }
 .section-rule { border-top: 1px solid var(--line); padding: 9px 13px; color: var(--muted); font-size: 8px; letter-spacing: 0.15em; }
 .atom-grid { display: grid; grid-template-columns: repeat(2, 1fr); }
-.atom-card { position: relative; min-width: 0; min-height: 88px; padding: 12px 12px 12px 49px; display: grid; align-content: center; gap: 2px; overflow: hidden; border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
+.atom-card { position: relative; min-width: 0; min-height: 104px; padding: 12px 12px 12px 49px; display: grid; align-content: center; gap: 2px; overflow: hidden; border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
 .atom-card:nth-child(2n) { border-right: 0; }
 .atom-symbol { position: absolute; left: 12px; top: 15px; color: var(--green-dim); font: 700 18px/1 "Cascadia Mono", Consolas, monospace; }
 .atom-card > span:not(.atom-symbol) { color: var(--muted); font-size: 8px; text-transform: uppercase; }
 .atom-card strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; }
 .atom-card small { color: var(--muted); font-size: 8px; }
+.atom-card .atom-lifetime { margin-top: 4px; color: var(--green-dim); font-size: 6px; line-height: 1.45; letter-spacing: 0.04em; }
 
 .allocation-list { display: grid; }
 .allocation-row { min-height: 60px; padding: 9px 12px; display: grid; grid-template-columns: minmax(130px, 1fr) 30px 54px 30px; align-items: center; gap: 7px; border-bottom: 1px solid var(--line); }
@@ -422,6 +429,11 @@ body::after {
 .allocation-label small { color: var(--muted); font-size: 8px; }
 .allocation-label .directive-recipe { color: var(--green-dim); line-height: 1.5; }
 .allocation-label .directive-alert { color: var(--danger); font-size: 7px; line-height: 1.4; letter-spacing: 0.08em; }
+.production-stalled { border-color: rgba(216, 120, 103, 0.34); }
+.production-halt-alert { margin: 11px 12px 4px; padding: 11px 13px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; border: 1px solid rgba(216, 120, 103, 0.58); background: rgba(68, 17, 13, 0.38); box-shadow: inset 3px 0 var(--danger), 0 0 18px rgba(216, 120, 103, 0.08); }
+.production-halt-alert strong { color: var(--danger); font-size: 11px; letter-spacing: 0.12em; }
+.production-halt-alert span { color: #f0b2a8; font-size: 9px; letter-spacing: 0.1em; text-align: right; }
+.production-halt-alert small { grid-column: 1 / -1; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .step-button, .lock-button { height: 30px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
 .step-button:hover:not(:disabled), .lock-button:hover { border-color: var(--line-bright); color: var(--green); }
 .step-button:disabled { opacity: 0.25; cursor: not-allowed; }
@@ -613,6 +625,11 @@ body::after {
   .allocation-row.relative { grid-template-columns: minmax(0, 1fr) 48px; }
   .allocation-row.relative .allocation-label { grid-column: 1 / -1; }
   .allocation-share-stepper { grid-column: 1; width: 124px; }
+  .lifetime-summary { grid-template-columns: 1fr; }
+  .lifetime-summary > div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .lifetime-summary > div:last-child { border-bottom: 0; }
+  .production-halt-alert { grid-template-columns: 1fr; }
+  .production-halt-alert span, .production-halt-alert small { grid-column: 1; text-align: left; }
   .research-queue-row { grid-template-columns: 20px minmax(0, 1fr); }
   .queue-controls { grid-column: 2; }
   .feedback-overlay { padding: 8px; }

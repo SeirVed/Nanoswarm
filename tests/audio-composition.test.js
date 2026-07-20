@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { deriveActivity, deriveHarmony, derivePatternStep } from "../src/audio/composition.js";
+import { SONIC_OUTPUT_MULTIPLIER, sonicOutputGain } from "../src/audio/gain.js";
 
 function sonicState() {
   return {
@@ -25,6 +26,13 @@ function sonicState() {
 }
 
 describe("procedural composition", () => {
+  it("drives the Sonic Mind output at twice the selected gain", () => {
+    assert.equal(SONIC_OUTPUT_MULTIPLIER, 2);
+    assert.equal(sonicOutputGain(0.48), 0.96);
+    assert.equal(sonicOutputGain(1), 2);
+    assert.equal(sonicOutputGain(0), 0.0001);
+  });
+
   it("derives the musical section from real job ratios", () => {
     const activity = deriveActivity(sonicState());
     assert.equal(activity.dominant, "collect");

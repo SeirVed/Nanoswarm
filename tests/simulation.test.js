@@ -164,14 +164,29 @@ describe("cohort simulation", () => {
 
   it("consumes one exact recipe and creates one whole nanite at completion", () => {
     const sorted = reachSortedStockpile();
+    assert.equal(totalMatter(sorted.lifetime.collected), COLLECTION_ATOMS_PER_NANITE);
+    assert.equal(totalMatter(sorted.lifetime.processed), COLLECTION_ATOMS_PER_NANITE);
+    assert.equal(totalMatter(sorted.lifetime.spent), 0n);
     const started = success(startManualJob(sorted, "replicate", sorted.simTime));
     assert.equal(started.nanites, 1n);
     assert.equal(started.energy, 0n);
     assert.equal(started.atoms.carbon, 6_000n - NANITE_RECIPE.atoms.carbon);
+    assert.equal(totalMatter(started.lifetime.spent), 0n);
 
     const complete = advanceSimulation(started, sorted.simTime + 55_000);
     assert.equal(complete.nanites, 2n);
     assert.equal(complete.discovery.directivesVisible, true);
+    assert.equal(totalMatter(complete.lifetime.spent), totalMatter({ ...NANITE_RECIPE.atoms, unknown: 0n }));
+    assert.equal(complete.lifetime.energySpent, NANITE_RECIPE.energy);
+  });
+
+  it("records research inputs as spent only when research completes", () => {
+    const sorted = reachSortedStockpile(1_200_000);
+    const queued = success(queueResearch(sorted, "parallel-directives", sorted.simTime));
+    assert.equal(totalMatter(queued.lifetime.spent), 0n);
+    const completed = advanceSimulation(queued, queued.simTime + 240_000);
+    assert.deepEqual(completed.lifetime.spent, { ...RESEARCH["parallel-directives"].cost.atoms, unknown: 0n });
+    assert.equal(completed.lifetime.energySpent, RESEARCH["parallel-directives"].cost.energy);
   });
 
   it("produces identical state for event-jump and stepped progression", () => {
@@ -520,7 +535,7 @@ describe("cohort simulation", () => {
     };
     state.activeDeposit.initialAtoms = 5_000_000n;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 7);
+    assert.equal(restored.version, 8);
     assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
     assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
   });
@@ -535,7 +550,7 @@ describe("cohort simulation", () => {
     state.allocations.energy = 25n;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 7);
+    assert.equal(restored.version, 8);
     assert.equal(restored.allocationTargets.collect, (ALLOCATION_SHARE_SCALE * 65n) / 100n);
     assert.equal(restored.allocationTargets.energy, (ALLOCATION_SHARE_SCALE * 25n) / 100n);
   });
@@ -548,7 +563,7 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     const impact = restored.log.find((entry) => entry.message === "IMPACT.");
     const assembly = restored.log.find((entry) => entry.message === "ASSEMBLY COMPLETE.");
-    assert.equal(restored.version, 7);
+    assert.equal(restored.version, 8);
     assert.equal(impact.tier, "critical");
     assert.equal(assembly.tier, "world");
     assert.equal(restored.log.every((entry) => typeof entry.tier === "string"), true);
@@ -570,7 +585,7 @@ describe("cohort simulation", () => {
     delete state.discovery.residuumIndexed;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 7);
+    assert.equal(restored.version, 8);
     assert.equal(restored.nanites, 600_000_000_000_000_000n);
     assert.equal(restored.allocations.atmosphere, 0n);
     assert.equal(restored.discovery.atmosphereVisible, false);
@@ -587,12 +602,23 @@ describe("cohort simulation", () => {
     assert.equal(typeof restored.atoms.gold, "bigint");
   });
 
+  it("reconstructs lifetime material flow when upgrading a version-seven save", () => {
+    const state = reachSortedStockpile(6_000_000);
+    state.version = 7;
+    delete state.lifetime;
+    const restored = deserializeState(serializeState(state));
+    assert.equal(restored.version, 8);
+    assert.equal(totalMatter(restored.lifetime.collected), COLLECTION_ATOMS_PER_NANITE);
+    assert.equal(totalMatter(restored.lifetime.processed), COLLECTION_ATOMS_PER_NANITE);
+    assert.equal(totalMatter(restored.lifetime.spent), 0n);
+  });
+
   it("migrates queued research with an explicit refundable reservation", () => {
     const state = createInitialState(6_100_000);
     state.version = 5;
     state.researchQueue = [{ id: "parallel-directives", progressNaniteMs: 123n }];
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 7);
+    assert.equal(restored.version, 8);
     assert.deepEqual(restored.researchQueue[0].reservedCost, RESEARCH["parallel-directives"].cost);
   });
 });

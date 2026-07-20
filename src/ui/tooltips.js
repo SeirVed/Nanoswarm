@@ -1,4 +1,5 @@
 export const TOOLTIP_DELAY_MS = 1_500;
+export const TOOLTIP_UPDATE_GRACE_MS = 300;
 const TOOLTIP_TARGET_SELECTOR = "[data-tooltip], [data-action], [aria-label], button, input, select, textarea";
 
 export const ACTION_TOOLTIPS = Object.freeze({
@@ -60,6 +61,13 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
   let hoverStartedAt = 0;
   let pointer = null;
   let timer = null;
+  let preserveUntil = 0;
+
+  function preserve(duration = TOOLTIP_UPDATE_GRACE_MS) {
+    preserveUntil = Math.max(preserveUntil, Date.now() + duration);
+  }
+
+  const updateIsSettling = () => Date.now() < preserveUntil;
 
   function hide(clearPointer = true) {
     clearTimeout(timer);
@@ -98,6 +106,7 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
   }
 
   function refresh() {
+    preserve();
     if (!pointer) return;
     let target = null;
     if (activeIdentity) {
@@ -145,14 +154,19 @@ export function installDelayedTooltips(root, delay = TOOLTIP_DELAY_MS) {
   });
 
   root.addEventListener("pointerout", (event) => {
+    if (updateIsSettling()) return;
     if (!activeTarget || activeTarget.contains(event.relatedTarget)) return;
     const departed = event.target.closest?.(TOOLTIP_TARGET_SELECTOR);
     if (departed === activeTarget || !activeTarget.contains(event.target)) hide();
   });
   root.addEventListener("pointerdown", hide);
-  root.addEventListener("scroll", hide, true);
-  window.addEventListener("scroll", hide, { passive: true });
+  root.addEventListener("scroll", () => {
+    if (!updateIsSettling()) hide();
+  }, true);
+  window.addEventListener("scroll", () => {
+    if (!updateIsSettling()) hide();
+  }, { passive: true });
   window.addEventListener("resize", hide);
 
-  return Object.freeze({ hide, refresh });
+  return Object.freeze({ hide, preserve, refresh });
 }

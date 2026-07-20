@@ -44,7 +44,7 @@ export function createInitialState(now = Date.now()) {
     tier: entry.tier ?? "info",
   }));
   const state = {
-    version: 7,
+    version: 8,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,
@@ -54,6 +54,12 @@ export function createInitialState(now = Date.now()) {
     feedstock: emptyMatter(),
     residuum: emptyMatter(),
     atoms: emptyAtoms(),
+    lifetime: {
+      collected: emptyMatter(),
+      processed: emptyMatter(),
+      spent: emptyMatter(),
+      energySpent: 0n,
+    },
     activeDeposit: {
       id: "ddr3-module",
       index: 0,

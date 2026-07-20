@@ -126,6 +126,7 @@ const progressBar = (progress, label = "", startedAt, completesAt) => `
   </div>`;
 
 function renderIntro() {
+  delayedTooltips.preserve();
   root.innerHTML = `
     <main class="arrival-shell" aria-label="NanoSwarm arrival telemetry">
       <section class="arrival-terminal" data-tooltip="A recovered deep-time transit record from the stranded nanite seed.">
@@ -359,6 +360,17 @@ function resourcesHtml() {
           : ""
       }
     </div>
+    <div class="section-rule"><span>LIFETIME MATERIAL FLOW</span></div>
+    <div class="lifetime-summary">
+      ${[
+        ["COLLECTED", "collected", "Matter successfully returned from solid deposits or atmospheric harvests. Inputs still travelling inside collection cohorts are not counted until they arrive."],
+        ["PROCESSED", "processed", "Matter that has completed elemental sorting. This includes material now stored, reserved, or permanently consumed; it never counts the same atom twice."],
+        ["SPENT", "spent", `Identified atoms permanently incorporated into completed nanites and research, plus ${formatEnergy(state.lifetime.energySpent)} of all-time energy consumption. Cancelled research is refunded and excluded.`],
+      ].map(([label, key, tooltip]) => `<div data-tooltip-key="lifetime:${key}" data-tooltip="${tooltip}">
+        <span>${label}</span><strong>${formatCount(totalMatter(state.lifetime[key]))} atoms</strong>
+        <small>≈${formatInventoryMass(state.lifetime[key])}${key === "spent" ? ` · ${formatEnergy(state.lifetime.energySpent)} energy` : ""}</small>
+      </div>`).join("")}
+    </div>
     ${
       state.discovery.elementsVisible
         ? `<div class="section-rule"><span>IDENTIFIED ELEMENTS</span></div>
@@ -379,6 +391,7 @@ function resourcesHtml() {
                   <span class="atom-symbol">${symbol}</span><span>${name}</span>
                   <strong>${formatCount(state.atoms[key])}</strong>
                   <small>≈${formatInventoryMass({ [key]: state.atoms[key] })}</small>
+                  <small class="atom-lifetime">ALL TIME · ${formatCount(state.lifetime.collected[key])} IN · ${formatCount(state.lifetime.processed[key])} SORTED · ${formatCount(state.lifetime.spent[key])} SPENT</small>
                 </div>`,
               )
               .join("")}
@@ -410,10 +423,18 @@ function allocationsHtml() {
       ? `<strong class="directive-alert">PRODUCTION HALTED · INSUFFICIENT ${haltedResources}</strong>`
       : ""
   }`;
-  return `<section class="panel allocation-panel${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
+  const replicationAlertHtml = replicateHalt.length > 0
+    ? `<div class="production-halt-alert" role="status" data-tooltip-key="replication:halt" data-tooltip="Replication cannot start the requested cohort because reserved-free inventory is short. ${haltDetail}. Existing jobs remain safe; assigned replicators will resume automatically when every recipe input is available.">
+        <strong>REPLICATION PRODUCTION HALTED</strong>
+        <span>INSUFFICIENT ${haltedResources}</span>
+        <small>${haltDetail}</small>
+      </div>`
+    : "";
+  return `<section class="panel allocation-panel${replicateHalt.length > 0 ? " production-stalled" : ""}${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
     <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatCount(unassigned)} UNASSIGNED${
       relativeAllocation ? " · RELATIVE AUTO" : ""
     }</span></header>
+    ${replicationAlertHtml}
     <div class="allocation-list">
       ${DIRECTIVES.filter((directive) => directiveIsVisible(state, directive)).map((directive) => {
         const locked = state.allocationLocks[directive];
@@ -730,6 +751,7 @@ function renderGame(now = Date.now(), force = false) {
   const previousScroll = { x: window.scrollX, y: window.scrollY };
   const focusedControl = captureFocusedControl();
   const depositTotal = totalMatter(state.activeDeposit.matter);
+  delayedTooltips.preserve();
   root.innerHTML = `<div class="game-shell${feedbackSelecting ? " feedback-selecting" : ""}">
     <header class="game-header">
       <div class="brand-lockup"><button type="button" class="brand-mark${feedbackSelecting ? " active" : ""}" data-action="feedback" aria-pressed="${feedbackSelecting}" data-tooltip="Activate feedback selection, then click any interface element to describe it in a public GitHub issue. Click the symbol again to cancel selection.">◈</button><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>

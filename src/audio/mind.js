@@ -5,6 +5,7 @@ import {
   deriveHarmony,
   derivePatternStep,
 } from "./composition.js";
+import { sonicOutputGain } from "./gain.js";
 
 const VOLUME_KEY = "nanoswarm.audio.volume";
 const AudioContextConstructor = window.AudioContext ?? window.webkitAudioContext;
@@ -155,7 +156,7 @@ export class SyntheticMind {
     this.snapshot(state);
     const resume = this.context.resume();
     this.master.gain.cancelScheduledValues(this.context.currentTime);
-    this.master.gain.setTargetAtTime(Math.max(0.0001, this.volume), this.context.currentTime, 0.35);
+    this.master.gain.setTargetAtTime(sonicOutputGain(this.volume), this.context.currentTime, 0.35);
     this.nextPulseTime = this.context.currentTime + 0.25;
     this.startScheduler();
     await resume;
@@ -183,7 +184,7 @@ export class SyntheticMind {
       // Private browsing can deny persistent storage; audio still works for this session.
     }
     if (this.enabled && this.context) {
-      this.master.gain.setTargetAtTime(Math.max(0.0001, this.volume), this.context.currentTime, 0.04);
+      this.master.gain.setTargetAtTime(sonicOutputGain(this.volume), this.context.currentTime, 0.04);
     }
   }
 
