@@ -15,7 +15,7 @@ import { addMatter, totalMatter } from "./matter.js";
 import { unlockedIdsForState } from "./unlocks.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 8;
+const CURRENT_SAVE_VERSION = 9;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -28,7 +28,23 @@ const replacer = (_key, value) => (typeof value === "bigint" ? { $bigint: value.
 const reviver = (_key, value) =>
   value && typeof value === "object" && typeof value.$bigint === "string" ? BigInt(value.$bigint) : value;
 
-const atomsAsMatter = (atoms) => ({ ...atoms, unknown: 0n });
+const normalizedMatter = (matter) => ({ ...emptyMatter(), ...(matter ?? {}) });
+const atomsAsMatter = (atoms) => ({ ...emptyMatter(), ...atoms });
+
+function normalizeMatterState(state) {
+  state.feedstock = normalizedMatter(state.feedstock);
+  state.residuum = normalizedMatter(state.residuum);
+  if (state.activeDeposit) state.activeDeposit.matter = normalizedMatter(state.activeDeposit.matter);
+  for (const cohort of state.cohorts ?? []) {
+    if (cohort.payload?.kind === "collect") cohort.payload.matter = normalizedMatter(cohort.payload.matter);
+    if (cohort.payload?.kind === "sort") cohort.payload.residuum = normalizedMatter(cohort.payload.residuum);
+  }
+  if (state.lifetime) {
+    state.lifetime.collected = normalizedMatter(state.lifetime.collected);
+    state.lifetime.processed = normalizedMatter(state.lifetime.processed);
+    state.lifetime.spent = normalizedMatter(state.lifetime.spent);
+  }
+}
 
 function reconstructedLifetime(state) {
   let spent = emptyMatter();
@@ -63,7 +79,7 @@ function reconstructedLifetime(state) {
   let collected = addMatter(state.feedstock, processed);
   for (const cohort of state.cohorts) {
     if (cohort.payload.kind !== "sort") continue;
-    collected = addMatter(collected, { ...cohort.payload.atoms, unknown: cohort.payload.residuum.unknown });
+    collected = addMatter(collected, addMatter(atomsAsMatter(cohort.payload.atoms), cohort.payload.residuum));
   }
   return { collected, processed, spent, energySpent };
 }
@@ -73,10 +89,12 @@ export function serializeState(state) {
 }
 
 function migrateState(state) {
+  normalizeMatterState(state);
   if (state.version === 1) {
     if (state.activeDeposit?.id !== "ddr3-module") throw new Error("Unsupported legacy deposit");
     for (const key of MATTER_KEYS) {
-      state.activeDeposit.matter[key] += STARTER_DEPOSIT_MATTER[key] - LEGACY_STARTER_DEPOSIT_MATTER[key];
+      state.activeDeposit.matter[key] +=
+        STARTER_DEPOSIT_MATTER[key] - (LEGACY_STARTER_DEPOSIT_MATTER[key] ?? 0n);
     }
     state.activeDeposit.initialAtoms = totalMatter(STARTER_DEPOSIT_MATTER);
     if (state.discovery.surveyComplete) state.activeDeposit.name = "DDR3 SDRAM package · damaged";
@@ -130,6 +148,12 @@ function migrateState(state) {
   if (state.version === 7) {
     state.lifetime = reconstructedLifetime(state);
     state.version = 8;
+  }
+  if (state.version === 8) {
+    normalizeMatterState(state);
+    state.stage ??= state.discovery.atmosphereVisible ? 2 : state.nanites > 1n ? 1 : 0;
+    state.activeDeposit.cumulativeMass ??= "legacy field";
+    state.version = 9;
   }
   return state;
 }

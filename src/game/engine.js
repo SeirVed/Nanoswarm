@@ -8,13 +8,22 @@ import {
   DIRECTIVES,
   ENERGY_PER_JOB,
   JOB_DURATION_MS,
+  LOCAL_SHELL_COUNT,
   NANITE_RECIPE,
   RESEARCH,
   SORT_ATOMS_PER_NANITE,
   WORK_DIRECTIVES,
   createProspectedDeposit,
+  emptyMatter,
 } from "./content.js";
-import { addAtoms, addMatter, splitSortedMatter, takeMatterProportionally, totalMatter } from "./matter.js";
+import {
+  addAtoms,
+  addMatter,
+  matterFromAtomWeights,
+  splitSortedMatter,
+  takeMatterProportionally,
+  totalMatter,
+} from "./matter.js";
 import { formatCount, formatEnergy, formatInventoryMass } from "./quantities.js";
 import { activeResearchWorkers, activeWorkers, appendLog, cloneState, idleWorkers } from "./state.js";
 import { researchIsUnlocked } from "./unlocks.js";
@@ -150,10 +159,11 @@ function mergePayload(target, addition) {
 }
 
 function atmosphericMatter(amount) {
-  // Roughly 200 carbon atoms per million atmospheric atoms; the unresolved balance is chiefly N/O.
-  const carbon = amount / 5_000n;
-  return { carbon, silicon: 0n, copper: 0n, gold: 0n, unknown: amount - carbon };
+  // Canonical dry-air constituent-atom ratio derived from N2/O2/Ar/CO2 abundance.
+  return matterFromAtomWeights(amount, { nitrogen: 156_168n, oxygen: 41_976n, argon: 934n, carbon: 42n });
 }
+
+const knownAtomsAsMatter = (atoms) => ({ ...emptyMatter(), ...atoms });
 
 function reserveJob(state, directive, requestedWorkers, origin) {
   const available = idleWorkers(state);
@@ -165,6 +175,7 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     workers = 1n;
     payload = { kind: "survey" };
   } else if (directive === "prospect") {
+    if (state.prospecting.searchesCompleted >= LOCAL_SHELL_COUNT) return 0n;
     workers = 1n;
     payload = { kind: "prospect", depositIndex: state.prospecting.searchesCompleted + 1 };
   } else if (directive === "energy") {
@@ -252,7 +263,9 @@ function noteDepositExhaustion(state) {
   );
   appendLog(
     state,
-    `REPLICATION GROWTH ${String(state.activeDeposit.limitingElement ?? "material").toUpperCase()}-LIMITED · PROSPECTING REQUIRED.`,
+    state.prospecting.searchesCompleted < LOCAL_SHELL_COUNT
+      ? `REPLICATION GROWTH ${String(state.activeDeposit.limitingElement ?? "material").toUpperCase()}-LIMITED · LOCAL SURVEY REQUIRED.`
+      : "AUTHORED LOCAL SOLID ENVELOPE EXHAUSTED · EXTERNAL MATERIAL SYSTEM REQUIRED.",
     "muted",
     undefined,
     "medium",
@@ -262,17 +275,6 @@ function noteDepositExhaustion(state) {
 function beginProspecting(state, origin) {
   const started = reserveJob(state, "prospect", 1n, origin);
   if (started <= 0n) return false;
-  if (!state.discovery.atmosphereVisible) {
-    state.discovery.atmosphereVisible = true;
-    appendLog(
-      state,
-      "ATMOSPHERIC ENVELOPE HARVESTABLE · DIFFUSE COLLECTION RATE 1.00% OF BASE SOLID MATERIAL.",
-      "good",
-      undefined,
-      "medium",
-    );
-    appendLog(state, "RESEARCH SIGNAL RESOLVED · ATMOSPHERIC FRACTIONATION.", "good", undefined, "medium");
-  }
   appendLog(
     state,
     `${origin === "autonomous" ? "AUTONOMOUS" : "LOCAL"} PROSPECTING COHORT DEPARTED · ${effectiveJobDuration(state, "prospect") / 1000}s.`,
@@ -301,6 +303,7 @@ function scheduleAllocations(state) {
   noteDepositExhaustion(state);
   if (
     hasResearch(state, "autonomous-prospecting") &&
+    state.prospecting.searchesCompleted < LOCAL_SHELL_COUNT &&
     totalMatter(state.activeDeposit.matter) === 0n &&
     !state.cohorts.some((cohort) => cohort.directive === "prospect") &&
     idleWorkers(state) > 0n
@@ -351,13 +354,14 @@ function completeCohort(state, cohort) {
   const payload = cohort.payload;
   if (payload.kind === "survey") {
     state.discovery.surveyComplete = true;
-    state.activeDeposit.name = "DDR3 SDRAM package · damaged";
+    state.activeDeposit.name = "Impact-fused DDR3 contact site";
     appendLog(state, "SUBSTRATE SURVEY COMPLETE.", "good", undefined, "medium");
     appendLog(state, "ARTIFICIAL POLYMER DETECTED.");
     appendLog(state, "COPPER CONDUCTOR DETECTED.");
     appendLog(state, "SILICON STRUCTURE DETECTED.");
     appendLog(state, "GOLD TRACE DETECTED.");
-    appendLog(state, "OBJECT CLASSIFICATION: DDR3 SDRAM PACKAGE · DAMAGED", "good", undefined, "medium");
+    appendLog(state, "OBJECT CLASSIFICATION: IMPACT-FUSED DDR3 CONTACT SITE", "good", undefined, "medium");
+    appendLog(state, "MATERIAL RATIO MATCHES ONE WHOLE-NANITE RECIPE PACKET EXACTLY.", "good", undefined, "medium");
   } else if (payload.kind === "prospect") {
     state.depletedDeposits.push({
       id: state.activeDeposit.id,
@@ -375,6 +379,20 @@ function completeCohort(state, cohort) {
       undefined,
       "medium",
     );
+    if (payload.depositIndex === LOCAL_SHELL_COUNT) {
+      state.stage = 2;
+      state.discovery.atmosphereVisible = true;
+      appendLog(state, "STAGE 2 · ENVIRONMENTAL BREACH.", "good", undefined, "world");
+      appendLog(state, "FERROMAGNETIC BULK PHASE DETECTED · ELEMENTAL CATALOG INSUFFICIENT.", "warn", undefined, "critical");
+      appendLog(
+        state,
+        "ATMOSPHERIC ENVELOPE HARVESTABLE · DIFFUSE COLLECTION RATE 1.00% OF BASE SOLID MATERIAL.",
+        "good",
+        undefined,
+        "medium",
+      );
+      appendLog(state, "RESEARCH SIGNAL RESOLVED · ATMOSPHERIC FRACTIONATION.", "good", undefined, "medium");
+    }
     appendLog(
       state,
       `ACCESSIBLE SOLID INVENTORY · ${formatCount(totalMatter(state.activeDeposit.matter))} CONSTITUENT ATOMS · ≈${formatInventoryMass(state.activeDeposit.matter)}.`,
@@ -401,7 +419,7 @@ function completeCohort(state, cohort) {
     state.discovery.elementsVisible = true;
     state.discovery.residuumVisible = totalMatter(state.residuum) > 0n;
     state.discovery.researchVisible = true;
-    const sortedMatter = { ...payload.atoms, unknown: payload.residuum.unknown };
+    const sortedMatter = addMatter(knownAtomsAsMatter(payload.atoms), payload.residuum);
     state.lifetime.processed = addMatter(state.lifetime.processed, sortedMatter);
     appendLog(
       state,
@@ -420,10 +438,9 @@ function completeCohort(state, cohort) {
   } else if (payload.kind === "replicate") {
     const previousNanites = state.nanites;
     state.nanites += payload.nanites;
-    state.lifetime.spent = addMatter(state.lifetime.spent, {
-      ...Object.fromEntries(ATOM_KEYS.map((key) => [key, NANITE_RECIPE.atoms[key] * payload.nanites])),
-      unknown: 0n,
-    });
+    state.lifetime.spent = addMatter(state.lifetime.spent, knownAtomsAsMatter(
+      Object.fromEntries(ATOM_KEYS.map((key) => [key, NANITE_RECIPE.atoms[key] * payload.nanites])),
+    ));
     state.lifetime.energySpent += NANITE_RECIPE.energy * payload.nanites;
     reconcileRelativeAllocations(state);
     state.discovery.directivesVisible = state.nanites >= 2n;
@@ -434,6 +451,8 @@ function completeCohort(state, cohort) {
       "good",
     );
     if (state.nanites === 2n) {
+      state.stage = 1;
+      appendLog(state, "STAGE 1 · ELECTRONIC BLOOM.", "good", undefined, "world");
       appendLog(state, "COHORT CONTROL AVAILABLE · DIRECTIVE ALLOCATIONS ONLINE.", "good", undefined, "medium");
       appendLog(state, "LONG-HORIZON PROJECT ENVELOPE DETECTED.", "muted", undefined, "medium");
     }
@@ -471,7 +490,7 @@ function completeResearchIfReady(state) {
   if (item.progressNaniteMs < definition.requiredNaniteMs) return false;
   state.researchQueue.shift();
   const spentCost = item.reservedCost ?? definition.cost;
-  state.lifetime.spent = addMatter(state.lifetime.spent, { ...spentCost.atoms, unknown: 0n });
+  state.lifetime.spent = addMatter(state.lifetime.spent, knownAtomsAsMatter(spentCost.atoms));
   state.lifetime.energySpent += spentCost.energy;
   if (!state.completedResearch.includes(item.id)) state.completedResearch.push(item.id);
   if (item.id === "relative-allocation") {
@@ -548,6 +567,9 @@ export function startProspecting(input, now = Date.now()) {
   if (!state.discovery.surveyComplete) return failure(state, "Survey the immediate substrate first.");
   if (totalMatter(state.activeDeposit.matter) > 0n) {
     return failure(state, "Accessible solid matter remains in the active deposit.");
+  }
+  if (state.prospecting.searchesCompleted >= LOCAL_SHELL_COUNT) {
+    return failure(state, "No additional local material shell has been identified.");
   }
   if (state.cohorts.some((cohort) => cohort.directive === "prospect")) {
     return failure(state, "A prospecting cohort is already searching the local environment.");

@@ -1,4 +1,6 @@
-export const MATTER_KEYS = ["carbon", "silicon", "copper", "gold", "unknown"];
+import { ELEMENT_KEYS, emptyElementMatter, matterForMassComposition } from "./elements.js";
+
+export const MATTER_KEYS = ELEMENT_KEYS;
 export const ATOM_KEYS = ["carbon", "silicon", "copper", "gold"];
 export const WORK_DIRECTIVES = ["collect", "atmosphere", "sort", "energy", "replicate"];
 export const DIRECTIVES = [...WORK_DIRECTIVES, "research"];
@@ -27,7 +29,7 @@ export const COHORT_RESONANCE_WINDOW_MS = 2_000;
 export const ALLOCATION_SHARE_SCALE = 1_000_000_000_000n;
 export const LOG_TIERS = Object.freeze(["world", "critical", "medium", "info"]);
 
-export const emptyMatter = () => ({ carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n });
+export const emptyMatter = emptyElementMatter;
 export const emptyAtoms = () => ({ carbon: 0n, silicon: 0n, copper: 0n, gold: 0n });
 export const emptyAllocations = () => ({ energy: 0n, collect: 0n, atmosphere: 0n, sort: 0n, replicate: 0n, research: 0n });
 export const emptyAllocationTargets = () => ({ energy: 0n, collect: 0n, atmosphere: 0n, sort: 0n, replicate: 0n, research: 0n });
@@ -43,70 +45,85 @@ export const DIRECTIVE_LABEL = Object.freeze({
 });
 
 export const STARTER_DEPOSIT_MATTER = Object.freeze({
-  // Rounded physical inventory for one damaged 11 x 7.5 x 1.1 mm DDR3 FBGA package.
-  carbon: 3_000_000_000_000_000_000_000n,
-  silicon: 1_250_000_000_000_000_000_000n,
-  copper: 500_000_000_000_000_000_000n,
-  gold: 150_000_000_000_000_000_000n,
-  unknown: 100_000_000_000_000_000_000n,
+  ...emptyMatter(),
+  // 702,327,557,648,247,539 whole recipe packets: the closest inventory at or below 0.1 g.
+  carbon: 3_511_637_788_241_237_695_000n,
+  silicon: 280_931_023_059_299_015_600n,
+  copper: 105_349_133_647_237_130_850n,
+  gold: 17_558_188_941_206_188_475n,
 });
 
-const PROSPECTED_DEPOSIT_TEMPLATES = Object.freeze([
+const LOCAL_SHELL_TEMPLATES = Object.freeze([
   Object.freeze({
-    name: "Copper-clad circuit board fragment",
-    description: "Glass-epoxy laminate · copper planes · silicon packages · gold-plated contacts",
+    id: "ddr3-package",
+    name: "DDR3 memory package · damaged",
+    description: "Silica-filled mould compound · silicon die · copper land · SAC solder · incidental metals",
     limitingElement: "gold",
-    matter: Object.freeze({
-      carbon: 20_000_000_000_000_000_000_000_000n,
-      silicon: 5_000_000_000_000_000_000_000_000n,
-      copper: 17_500_000_000_000_000_000_000_000n,
-      gold: 50_000_000_000_000_000_000_000n,
-      unknown: 7_450_000_000_000_000_000_000_000n,
-    }),
+    cumulativeMass: "1 g",
+    matter: Object.freeze(matterForMassComposition(900_000_000_000_000_000_000_000n, {
+      silicon: 400_516n, oxygen: 401_143n, carbon: 109_375n, hydrogen: 13_542n,
+      copper: 50_083n, tin: 16_083n, silver: 500n, nickel: 5_556n,
+      aluminum: 2_646n, gold: 556n,
+    })),
   }),
   Object.freeze({
-    name: "Gold-plated edge connector assembly",
-    description: "Copper contact bank · polymer carrier · silicon debris · concentrated gold plating",
-    limitingElement: "carbon",
-    matter: Object.freeze({
-      carbon: 2_000_000_000_000_000_000_000_000_000n,
-      silicon: 400_000_000_000_000_000_000_000_000n,
-      copper: 12_000_000_000_000_000_000_000_000_000n,
-      gold: 600_000_000_000_000_000_000_000_000n,
-      unknown: 5_000_000_000_000_000_000_000_000_000n,
-    }),
+    id: "circuit-board",
+    name: "Copper-clad circuit-board fragment",
+    description: "E-glass laminate · epoxy · copper planes · populated packages · lead-free solder",
+    limitingElement: "gold",
+    cumulativeMass: "10 g",
+    matter: Object.freeze(matterForMassComposition(9_000_000_000_000_000_000_000_000n, {
+      silicon: 157_832n, oxygen: 286_738n, aluminum: 44_634n, calcium: 23_585n,
+      magnesium: 2_211n, carbon: 204_185n, hydrogen: 25_278n, copper: 179_194n,
+      nickel: 6_000n, tin: 58_972n, silver: 2_167n, iron: 8_782n,
+      manganese: 89n, gold: 222n, palladium: 111n,
+    })),
   }),
   Object.freeze({
-    name: "Buried technological debris aggregate",
-    description: "Mixed polymers · semiconductor dies · structural metals · trace noble-metal deposits",
+    id: "motherboard",
+    name: "Motherboard region · fractured",
+    description: "Multilayer glass-epoxy · copper network · packages · solder · structural and trace metals",
     limitingElement: "gold",
-    matter: Object.freeze({
-      carbon: 40_000_000_000_000_000_000_000_000_000_000n,
-      silicon: 10_000_000_000_000_000_000_000_000_000_000n,
-      copper: 15_000_000_000_000_000_000_000_000_000_000n,
-      gold: 100_000_000_000_000_000_000_000_000_000n,
-      unknown: 34_900_000_000_000_000_000_000_000_000_000n,
-    }),
+    cumulativeMass: "100 g",
+    matter: Object.freeze(matterForMassComposition(90_000_000_000_000_000_000_000_000n, {
+      silicon: 132_747n, oxygen: 246_354n, aluminum: 83_822n, calcium: 23_156n,
+      magnesium: 2_171n, carbon: 170_725n, hydrogen: 21_125n, copper: 160_450n,
+      tin: 87_294n, silver: 3_700n, iron: 49_400n, manganese: 500n,
+      nickel: 10_000n, zinc: 5_000n, bromine: 2_000n, gold: 200n,
+      palladium: 100n, chromium: 667n, lead: 222n, antimony: 167n,
+      molybdenum: 111n, cobalt: 89n,
+    })),
+  }),
+  Object.freeze({
+    id: "pc-chassis",
+    name: "Broken PC chassis · local debris",
+    description: "Low-carbon steel · ABS fascia · aluminium · copper wiring · PVC · glass and coatings",
+    limitingElement: "iron",
+    cumulativeMass: "1 kg",
+    matter: Object.freeze(matterForMassComposition(900_000_000_000_000_000_000_000_000n, {
+      iron: 741_000n, manganese: 7_500n, carbon: 95_426n, hydrogen: 9_110n,
+      nitrogen: 7_000n, aluminum: 61_826n, copper: 40_000n, chlorine: 11_345n,
+      silicon: 4_698n, oxygen: 9_242n, calcium: 1_265n, magnesium: 90n,
+      zinc: 10_000n, titanium: 1_498n,
+    })),
   }),
 ]);
 
-const scaledMatter = (matter, scale) =>
-  Object.fromEntries(MATTER_KEYS.map((key) => [key, matter[key] * scale]));
+export const LOCAL_SHELL_COUNT = LOCAL_SHELL_TEMPLATES.length;
 
 export function createProspectedDeposit(index) {
-  if (!Number.isInteger(index) || index < 1) throw new Error("Prospected deposit index must be positive");
-  const templateIndex = (index - 1) % PROSPECTED_DEPOSIT_TEMPLATES.length;
-  const generation = Math.floor((index - 1) / PROSPECTED_DEPOSIT_TEMPLATES.length);
-  let scale = 1n;
-  for (let level = 0; level < generation; level += 1) scale *= 1_000_000_000n;
-  const template = PROSPECTED_DEPOSIT_TEMPLATES[templateIndex];
-  const matter = scaledMatter(template.matter, scale);
+  if (!Number.isInteger(index) || index < 1 || index > LOCAL_SHELL_COUNT) {
+    throw new Error("Local shell index is outside the authored material envelope");
+  }
+  const template = LOCAL_SHELL_TEMPLATES[index - 1];
+  const matter = { ...template.matter };
   return {
-    id: `prospected-${index}`,
+    id: template.id,
     index,
-    name: generation === 0 ? template.name : `${template.name} · field ${generation + 1}`,
+    name: template.name,
     description: template.description,
     limitingElement: template.limitingElement,
+    cumulativeMass: template.cumulativeMass,
     matter,
     initialAtoms: MATTER_KEYS.reduce((total, key) => total + matter[key], 0n),
   };

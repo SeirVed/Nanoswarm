@@ -1,14 +1,10 @@
+import {
+  ATOMIC_WEIGHT_MILLI_U,
+  U_TO_YOCTOGRAMS_DENOMINATOR,
+  U_TO_YOCTOGRAMS_NUMERATOR,
+} from "./elements.js";
+
 const COUNT_SCIENTIFIC_THRESHOLD = 100_000_000n;
-const ATOMIC_WEIGHT_MILLI_U = Object.freeze({
-  carbon: 12_011n,
-  silicon: 28_085n,
-  copper: 63_546n,
-  gold: 196_967n,
-  // Unresolved matter is displayed using a silicon/nitrogen-scale average only.
-  unknown: 28_000n,
-});
-const U_TO_YOCTOGRAMS_NUMERATOR = 1_660_539n;
-const U_TO_YOCTOGRAMS_DENOMINATOR = 1_000_000n;
 
 const ENERGY_UNITS = Object.freeze([
   "pJ", "nJ", "µJ", "mJ", "J", "kJ", "MJ", "GJ", "TJ", "PJ", "EJ", "ZJ", "YJ", "RJ", "QJ",

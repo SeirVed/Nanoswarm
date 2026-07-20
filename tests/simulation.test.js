@@ -4,10 +4,12 @@ import {
   ALLOCATION_SHARE_SCALE,
   ATMOSPHERE_ATOMS_PER_NANITE,
   COLLECTION_ATOMS_PER_NANITE,
+  LOCAL_SHELL_COUNT,
   NANITE_RECIPE,
   RESEARCH,
   STARTER_DEPOSIT_MATTER,
   createProspectedDeposit,
+  emptyMatter,
 } from "../src/game/content.js";
 import {
   adjustAllocation,
@@ -30,6 +32,7 @@ import {
   startProspecting,
 } from "../src/game/engine.js";
 import { totalMatter } from "../src/game/matter.js";
+import { massYoctograms } from "../src/game/quantities.js";
 import { INFO_LOG_LIMIT, activeWorkers, appendLog, createInitialState } from "../src/game/state.js";
 import { deserializeState, serializeState } from "../src/game/storage.js";
 
@@ -72,20 +75,39 @@ describe("cohort simulation", () => {
     assert.equal(state.log.some((entry) => entry.message === "IMPACT."), true);
   });
 
-  it("derives the observed six-hundred-quadrillion swarm boundary from starter carbon", () => {
-    assert.equal(
-      STARTER_DEPOSIT_MATTER.carbon / NANITE_RECIPE.atoms.carbon,
-      600_000_000_000_000_000n,
-    );
+  it("builds the 0.1 gram contact from exact whole nanite recipes", () => {
+    const recipes = 702_327_557_648_247_539n;
+    for (const [key, atoms] of Object.entries(NANITE_RECIPE.atoms)) {
+      assert.equal(STARTER_DEPOSIT_MATTER[key], atoms * recipes);
+    }
   });
 
   it("keeps every successive prospected field larger than its predecessor", () => {
     let previous = totalMatter(STARTER_DEPOSIT_MATTER);
-    for (let index = 1; index <= 12; index += 1) {
+    for (let index = 1; index <= LOCAL_SHELL_COUNT; index += 1) {
       const current = totalMatter(createProspectedDeposit(index).matter);
       assert.ok(current > previous, `deposit ${index} should exceed the preceding field`);
       previous = current;
     }
+    assert.throws(() => createProspectedDeposit(LOCAL_SHELL_COUNT + 1), /authored material envelope/);
+  });
+
+  it("targets the authored 0.1, 0.9, 9, 90, and 900 gram shell masses", () => {
+    const targets = [
+      100_000_000_000_000_000_000_000n,
+      900_000_000_000_000_000_000_000n,
+      9_000_000_000_000_000_000_000_000n,
+      90_000_000_000_000_000_000_000_000n,
+      900_000_000_000_000_000_000_000_000n,
+    ];
+    const inventories = [
+      STARTER_DEPOSIT_MATTER,
+      ...Array.from({ length: LOCAL_SHELL_COUNT }, (_, index) => createProspectedDeposit(index + 1).matter),
+    ];
+    inventories.forEach((matter, index) => {
+      const difference = targets[index] - massYoctograms(matter);
+      assert.ok(difference >= 0n && difference < 1_000_000n, `shell ${index} mass should be exact to sub-attogram scale`);
+    });
   });
 
   it("does not produce fractional or early survey output", () => {
@@ -115,28 +137,46 @@ describe("cohort simulation", () => {
     const state = reachSortedStockpile();
     const identified = Object.values(state.atoms).reduce((sum, value) => sum + value, 0n);
     assert.equal(identified + totalMatter(state.residuum), 10_000n);
-    assert.deepEqual(state.atoms, { carbon: 6_000n, silicon: 2_500n, copper: 1_000n, gold: 300n });
-    assert.equal(state.residuum.unknown, 200n);
+    assert.deepEqual(state.atoms, { carbon: 8_969n, silicon: 717n, copper: 269n, gold: 45n });
+    assert.equal(totalMatter(state.residuum), 0n);
   });
 
-  it("unlocks diffuse atmospheric harvesting when prospecting begins", () => {
+  it("retains uncatalogued real-world elements by identity inside residuum", () => {
+    let state = createInitialState(1_300_000);
+    state.discovery.surveyComplete = true;
+    state.activeDeposit = createProspectedDeposit(1);
+    state = finishManual(state, "collect", 10_000);
+    state = finishManual(state, "sort", 12_000);
+    const identified = Object.values(state.atoms).reduce((sum, value) => sum + value, 0n);
+    assert.equal(identified + totalMatter(state.residuum), COLLECTION_ATOMS_PER_NANITE);
+    assert.ok(state.residuum.oxygen > 0n);
+    assert.ok(state.residuum.tin > 0n);
+    assert.ok(state.residuum.hydrogen > 0n);
+    assert.equal(Object.hasOwn(state.atoms, "oxygen"), false);
+  });
+
+  it("advances through local shells and reveals atmosphere only at the chassis", () => {
     const now = 1_500_000;
     let state = createInitialState(now);
     state.discovery.surveyComplete = true;
     state.activeDeposit.matter = { carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n };
 
-    state = success(startProspecting(state, now));
+    for (let shell = 1; shell <= LOCAL_SHELL_COUNT; shell += 1) {
+      state.activeDeposit.matter = emptyMatter();
+      state = success(startProspecting(state, state.simTime));
+      assert.equal(state.discovery.atmosphereVisible, false);
+      state = advanceSimulation(state, state.simTime + 30_000);
+      assert.equal(state.activeDeposit.id, createProspectedDeposit(shell).id);
+      assert.equal(state.prospecting.searchesCompleted, shell);
+    }
+    assert.equal(state.activeDeposit.id, "pc-chassis");
+    assert.equal(state.stage, 2);
     assert.equal(state.discovery.atmosphereVisible, true);
-    assert.equal(state.cohorts.some((cohort) => cohort.directive === "prospect"), true);
-    assert.equal(
-      state.log.some((entry) => entry.message.includes("DIFFUSE COLLECTION RATE 1.00%")),
-      true,
-    );
-
-    state = advanceSimulation(state, now + 30_000);
-    assert.equal(state.activeDeposit.id, "prospected-1");
-    assert.equal(state.prospecting.searchesCompleted, 1);
-    assert.equal(totalMatter(state.activeDeposit.matter), totalMatter(createProspectedDeposit(1).matter));
+    assert.equal(state.log.some((entry) => entry.message.includes("ENVIRONMENTAL BREACH")), true);
+    state.activeDeposit.matter = emptyMatter();
+    const beyondChassis = startProspecting(state, state.simTime);
+    assert.equal(beyondChassis.ok, false);
+    assert.match(beyondChassis.reason, /No additional local material shell/);
   });
 
   it("collects atmosphere at exactly one percent of base solid payload", () => {
@@ -170,13 +210,14 @@ describe("cohort simulation", () => {
     const started = success(startManualJob(sorted, "replicate", sorted.simTime));
     assert.equal(started.nanites, 1n);
     assert.equal(started.energy, 0n);
-    assert.equal(started.atoms.carbon, 6_000n - NANITE_RECIPE.atoms.carbon);
+    assert.equal(started.atoms.carbon, sorted.atoms.carbon - NANITE_RECIPE.atoms.carbon);
     assert.equal(totalMatter(started.lifetime.spent), 0n);
 
     const complete = advanceSimulation(started, sorted.simTime + 55_000);
     assert.equal(complete.nanites, 2n);
     assert.equal(complete.discovery.directivesVisible, true);
-    assert.equal(totalMatter(complete.lifetime.spent), totalMatter({ ...NANITE_RECIPE.atoms, unknown: 0n }));
+    assert.equal(totalMatter(complete.lifetime.spent), totalMatter({ ...emptyMatter(), ...NANITE_RECIPE.atoms }));
+    assert.equal(complete.stage, 1);
     assert.equal(complete.lifetime.energySpent, NANITE_RECIPE.energy);
   });
 
@@ -185,7 +226,7 @@ describe("cohort simulation", () => {
     const queued = success(queueResearch(sorted, "parallel-directives", sorted.simTime));
     assert.equal(totalMatter(queued.lifetime.spent), 0n);
     const completed = advanceSimulation(queued, queued.simTime + 240_000);
-    assert.deepEqual(completed.lifetime.spent, { ...RESEARCH["parallel-directives"].cost.atoms, unknown: 0n });
+    assert.deepEqual(completed.lifetime.spent, { ...emptyMatter(), ...RESEARCH["parallel-directives"].cost.atoms });
     assert.equal(completed.lifetime.energySpent, RESEARCH["parallel-directives"].cost.energy);
   });
 
@@ -444,12 +485,15 @@ describe("cohort simulation", () => {
 
     const advanced = advanceSimulation(state, now + 1);
     assert.equal(advanced.cohorts.some((cohort) => cohort.directive === "prospect"), true);
-    assert.equal(advanced.discovery.atmosphereVisible, true);
+    assert.equal(advanced.discovery.atmosphereVisible, false);
   });
 
   it("unlocks relative allocation research at twelve nanites", () => {
     const state = reachSortedStockpile();
     state.energy = 1_000n;
+    state.atoms.silicon = 10_000n;
+    state.atoms.copper = 10_000n;
+    state.atoms.gold = 10_000n;
     state.completedResearch.push("parallel-directives");
     state.nanites = 11n;
     const locked = queueResearch(state, "relative-allocation", state.simTime);
@@ -526,6 +570,7 @@ describe("cohort simulation", () => {
   it("migrates legacy deposits without erasing material already collected", () => {
     const state = createInitialState(5_000_000);
     state.version = 1;
+    state.activeDeposit.id = "ddr3-module";
     state.activeDeposit.matter = {
       carbon: 3_000_000n - 1_234n,
       silicon: 1_250_000n,
@@ -535,7 +580,7 @@ describe("cohort simulation", () => {
     };
     state.activeDeposit.initialAtoms = 5_000_000n;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 8);
+    assert.equal(restored.version, 9);
     assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
     assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
   });
@@ -550,7 +595,7 @@ describe("cohort simulation", () => {
     state.allocations.energy = 25n;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 8);
+    assert.equal(restored.version, 9);
     assert.equal(restored.allocationTargets.collect, (ALLOCATION_SHARE_SCALE * 65n) / 100n);
     assert.equal(restored.allocationTargets.energy, (ALLOCATION_SHARE_SCALE * 25n) / 100n);
   });
@@ -563,7 +608,7 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     const impact = restored.log.find((entry) => entry.message === "IMPACT.");
     const assembly = restored.log.find((entry) => entry.message === "ASSEMBLY COMPLETE.");
-    assert.equal(restored.version, 8);
+    assert.equal(restored.version, 9);
     assert.equal(impact.tier, "critical");
     assert.equal(assembly.tier, "world");
     assert.equal(restored.log.every((entry) => typeof entry.tier === "string"), true);
@@ -585,7 +630,7 @@ describe("cohort simulation", () => {
     delete state.discovery.residuumIndexed;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 8);
+    assert.equal(restored.version, 9);
     assert.equal(restored.nanites, 600_000_000_000_000_000n);
     assert.equal(restored.allocations.atmosphere, 0n);
     assert.equal(restored.discovery.atmosphereVisible, false);
@@ -607,7 +652,7 @@ describe("cohort simulation", () => {
     state.version = 7;
     delete state.lifetime;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 8);
+    assert.equal(restored.version, 9);
     assert.equal(totalMatter(restored.lifetime.collected), COLLECTION_ATOMS_PER_NANITE);
     assert.equal(totalMatter(restored.lifetime.processed), COLLECTION_ATOMS_PER_NANITE);
     assert.equal(totalMatter(restored.lifetime.spent), 0n);
@@ -618,7 +663,21 @@ describe("cohort simulation", () => {
     state.version = 5;
     state.researchQueue = [{ id: "parallel-directives", progressNaniteMs: 123n }];
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 8);
+    assert.equal(restored.version, 9);
     assert.deepEqual(restored.researchQueue[0].reservedCost, RESEARCH["parallel-directives"].cost);
+  });
+
+  it("expands version-eight generic matter into the hidden element ledger", () => {
+    const state = createInitialState(6_200_000);
+    state.version = 8;
+    delete state.stage;
+    state.feedstock = { carbon: 7n, silicon: 0n, copper: 0n, gold: 0n, unknown: 11n };
+    const restored = deserializeState(serializeState(state));
+    assert.equal(restored.version, 9);
+    assert.equal(restored.stage, 0);
+    assert.equal(restored.feedstock.carbon, 7n);
+    assert.equal(restored.feedstock.unknown, 11n);
+    assert.equal(restored.feedstock.oxygen, 0n);
+    assert.deepEqual(Object.keys(restored.feedstock), Object.keys(emptyMatter()));
   });
 });

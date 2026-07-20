@@ -21,13 +21,15 @@ advanceSimulation(targetTime) ── jumps to completion event
 
 Feedstock and Residuum are inventories of constituent atoms. The simulation knows the underlying composition, while the interface may hide unidentified constituents. This conserves matter without floating-point percentages or a mutable generic-mass currency.
 
-The starter deposit is one damaged DDR3 FBGA package with a rounded physical inventory of `5 × 10^21` constituent atoms. Its `3 × 10^21` carbon atoms permit exactly `6 × 10^17` complete nanite recipes before other carbon spending is considered, making the first apparent swarm ceiling a physical bottleneck rather than a numeric cap. Version 1 saves are migrated by adding the corrected unconsumed bulk to the deposit; material already collected, sorted, reserved in cohorts, or retained as Residuum is left untouched.
+The starter deposit is a 0.1 g impact-fused contact site containing exactly `702,327,557,648,247,539` whole multiples of the C/Si/Cu/Au nanite recipe. Full exhaustion therefore strands none of the four seed-catalogued elements. The contact is an intentional arrival anomaly; it is not presented as the natural composition of ordinary solder.
+
+Every later shell uses a fixed integer mass-composition recipe containing all physically authored elements. `MATTER_KEYS` is the full internal element ledger, while `ATOM_KEYS` is the smaller catalogue currently understood by the seed. Sorting transfers catalogued atoms into available storage and retains every other element under its real hidden key in Residuum. The UI may sum that ledger, but it must not erase or prematurely identify it. Legacy `unknown` atoms remain a separate honest key because an older save contains insufficient information to reconstruct their identity.
 
 ## Prospecting and open environments
 
-When all accessible matter in an active deposit has been reserved, the simulation records exhaustion once and exposes a 30-second, one-worker prospecting cohort. Completion archives a summary of the depleted deposit and installs the next deterministic material field. Later fields have distinct compositions and scale by nine orders of magnitude when the authored sequence repeats, keeping every successive field larger than its predecessor.
+When all accessible matter in an active shell has been reserved, the simulation records exhaustion once and exposes a 30-second, one-worker local survey cohort. Completion archives the depleted shell and advances through the authored nested object: +0.9 g remaining DRAM package, +9 g circuit-board fragment, +90 g motherboard region and +900 g broken chassis. There is no repeating or randomly scaled solid deposit after the chassis.
 
-The first prospecting departure also identifies atmospheric matter. Atmosphere is an open environmental source rather than a finite deposit, so its harvested atoms enter the tracked system at job completion. Base atmospheric throughput is exactly 1% of the current effective solid-collection payload. Approximately 200 carbon atoms per million are classified immediately; the unresolved balance is retained physically as chiefly nitrogen and oxygen pending future elemental definitions.
+Acquiring the chassis begins Stage 2 and identifies atmospheric matter. Atmosphere is an open environmental source rather than a finite deposit, so its harvested atoms enter the tracked system at job completion. Base atmospheric throughput is exactly 1% of the current effective solid-collection payload. Its canonical dry-air constituent-atom ratio contains nitrogen, oxygen, argon and carbon; only carbon is part of the seed catalogue, and all other atoms are retained by hidden identity pending later research.
 
 ## Cohorts
 

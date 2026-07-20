@@ -5,8 +5,10 @@ import {
   DIRECTIVE_LABEL,
   INTRO_LOG,
   LOG_TIERS,
+  LOCAL_SHELL_COUNT,
   NANITE_RECIPE,
   RESEARCH,
+  emptyMatter,
 } from "../game/content.js";
 import {
   adjustAllocation,
@@ -29,7 +31,7 @@ import {
   startProspecting,
   toggleAllocationLock,
 } from "../game/engine.js";
-import { totalMatter } from "../game/matter.js";
+import { addMatter, matterFromAtomWeights, totalMatter } from "../game/matter.js";
 import {
   formatCount,
   formatEnergy,
@@ -185,7 +187,7 @@ function cohortRateLabel(group) {
     ).replace(/^≈/, "")}`;
   }
   if (group.directive === "sort") {
-    const matterForPhase = (phase) => ({ ...phase.payload.atoms, unknown: phase.payload.residuum.unknown });
+    const matterForPhase = (phase) => addMatter({ ...emptyMatter(), ...phase.payload.atoms }, phase.payload.residuum);
     const atomRate = microsPerSecond(group.phases, (phase) => totalMatter(matterForPhase(phase)));
     const massRate = microsPerSecond(group.phases, (phase) => massYoctograms(matterForPhase(phase)));
     return `PROCESS ${formatMicroRate(atomRate, (value) => `${formatCount(value)} atoms`, "atoms")} · ≈${formatMicroRate(
@@ -195,7 +197,7 @@ function cohortRateLabel(group) {
     ).replace(/^≈/, "")}`;
   }
   const naniteRate = microsPerSecond(group.phases, (phase) => phase.payload.nanites);
-  const recipeMatter = { ...NANITE_RECIPE.atoms, unknown: 0n };
+  const recipeMatter = { ...emptyMatter(), ...NANITE_RECIPE.atoms };
   const matterRate = microsPerSecond(
     group.phases,
     (phase) => massYoctograms(recipeMatter) * phase.payload.nanites,
@@ -308,6 +310,7 @@ function resourcesHtml() {
   const depositTotal = totalMatter(state.activeDeposit.matter);
   const depositExhausted = depositTotal === 0n;
   const prospecting = state.cohorts.some((cohort) => cohort.directive === "prospect");
+  const nextShellAvailable = state.prospecting.searchesCompleted < LOCAL_SHELL_COUNT;
   const substrate = state.discovery.surveyComplete
     ? `<section class="panel substrate-panel${newUnlockClass("substrate")}" data-unlock-id="substrate" data-tooltip="The active material field is finite; inputs are reserved when collection starts.">
         <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${
@@ -315,7 +318,7 @@ function resourcesHtml() {
         }</span></header>
         <strong data-tooltip-key="substrate:identity" data-tooltip="This is the swarm's current finite solid material field. Its classification describes likely composition, while exact accessible inventory below excludes matter already reserved by collection cohorts.">${state.activeDeposit.name}</strong>
         <p data-tooltip-key="substrate:composition" data-tooltip="Composition is inferred from the survey and guides the mixture returned by collection. It does not guarantee that every atom is currently identifiable by the sorting catalog.">${state.activeDeposit.description}</p>
-        <small data-tooltip-key="substrate:inventory" data-tooltip="Accessible atoms are unreserved matter still present in this field. Collector capacity is the maximum discrete payload one nanite can reserve when a collection job starts.">${formatCount(depositTotal)} constituent atoms · ≈${formatInventoryMass(
+        <small data-tooltip-key="substrate:inventory" data-tooltip="Accessible atoms are unreserved matter still present in this field. Collector capacity is the maximum discrete payload one nanite can reserve when a collection job starts.">${state.activeDeposit.cumulativeMass ?? "local shell"} cumulative context · ${formatCount(depositTotal)} constituent atoms · ≈${formatInventoryMass(
           state.activeDeposit.matter,
         )} accessible · ${formatCount(
           solidCollectionCapacity(state),
@@ -325,18 +328,20 @@ function resourcesHtml() {
             ? `<div class="exhaustion-state${newUnlockClass("directive:prospect")}" data-unlock-id="directive:prospect" data-tooltip-key="substrate:exhaustion" data-tooltip="Every accessible solid atom in this field has been collected or reserved. Production can continue from stored inventory, but new solid matter requires a prospecting search."><strong>${String(
                 state.activeDeposit.limitingElement ?? "material",
               ).toUpperCase()} BOTTLENECK CONFIRMED</strong><p>The local solid inventory is committed. A new material field must be located.</p>
-                <button class="terminal-button search-button" data-action="prospect" ${
+                ${nextShellAvailable ? `<button class="terminal-button search-button" data-action="prospect" ${
                   prospecting || idleWorkers(state) < 1n ? "disabled" : ""
-                }>${prospecting ? "SEARCH IN PROGRESS" : "SEARCH FOR MORE"}<span>${
+                }>${prospecting ? "SURVEY IN PROGRESS" : "EXTEND LOCAL SURVEY"}<span>${
                   prospecting ? "cohort deployed" : `${effectiveJobDuration(state, "prospect") / 1000}s · 1 nanite`
-                }</span></button></div>`
+                }</span></button>` : `<small>NO FURTHER AUTHORED LOCAL SOLID SHELL</small>`}</div>`
             : ""
         }
         ${
           state.discovery.atmosphereVisible
             ? `<div class="atmosphere-state${newUnlockClass("directive:atmosphere")}" data-unlock-id="directive:atmosphere" data-tooltip-key="substrate:atmosphere" data-tooltip="Atmospheric harvesting is inexhaustible but diffuse: each nanite captures only one percent of the base solid payload before research bonuses. Its output enters mixed Feedstock and still requires sorting."><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatCount(
                 atmosphericCollectionCapacity(state),
-              )} atoms (≈${formatInventoryMass({ unknown: atmosphericCollectionCapacity(state) })}) per nanite per job · 1% base capture plus completed refinements</p></div>`
+              )} atoms (≈${formatInventoryMass(matterFromAtomWeights(atmosphericCollectionCapacity(state), {
+                nitrogen: 156_168n, oxygen: 41_976n, argon: 934n, carbon: 42n,
+              }))}) per nanite per job · 1% base capture plus completed refinements</p></div>`
             : ""
         }
       </section>`
