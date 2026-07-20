@@ -25,6 +25,8 @@ The starter deposit is a 0.1 g impact-fused contact site containing exactly `702
 
 Every later shell uses a fixed integer mass-composition recipe containing all physically authored elements. `MATTER_KEYS` is the full internal element ledger, while `ATOM_KEYS` is the smaller catalogue currently understood by the seed. Sorting transfers catalogued atoms into available storage and retains every other element under its real hidden key in Residuum. The UI may sum that ledger, but it must not erase or prematurely identify it. Legacy `unknown` atoms remain a separate honest key because an older save contains insufficient information to reconstruct their identity.
 
+The planned Residuum extension preserves provenance as well as identity. Every finite local substrate creates its own retained lot; atmosphere, regolith and other open extraction modes create independent bulk lots. The early interface may aggregate these lots, but the simulation must not merge their underlying compositions. A newly catalogued element becomes extractable only after a re-sorting job processes an eligible lot. Spectral Binning may group lots by observed composition without homogenizing them or revealing still-unknown elements.
+
 ## Prospecting and open environments
 
 When all accessible matter in an active shell has been reserved, the simulation records exhaustion once and exposes a 30-second, one-worker local survey cohort. Completion archives the depleted shell and advances through the authored nested object: +0.9 g remaining DRAM package, +9 g circuit-board fragment, +90 g motherboard region and +900 g broken chassis. There is no repeating or randomly scaled solid deposit after the chassis.
@@ -61,6 +63,8 @@ Most throughput branches are authored as additive five-percent refinement series
 
 Each research definition may carry a revealing observation. These are player-facing traces of the swarm's growing model rather than flavour detached from mechanics. Residuum Indexing follows the first imperfect material catalogue; the chassis then independently permits Ferromagnetic Phase Analysis and Atmospheric Spectroscopy. Specialized Morphologies I records behavioural role persistence only: it has no capacity bonus and does not alter `NANITE_RECIPE`.
 
+Later morphology research equips the canonical nanite with interchangeable tools, coatings, reservoirs or assembled temporary structures. It must not silently replace the base recipe. Compound recognition and compound decomposition remain separate research layers on the path to universal molecular disassembly and assembly. Elemental transmutation is outside the chemical assembler model and belongs to a much later flux-based nuclear system.
+
 Relative allocation targets are stored as fixed-point shares of `10^12`. Replication reapportions the enlarged integer swarm with the largest-remainder method, so targets persist without fractional nanites or cumulative rounding loss. Target shares may sum to less than 100%; that remainder deliberately stays unassigned.
 
 ## Presentation units
@@ -84,3 +88,5 @@ Audio is deliberately absent from saves and simulation commands. Muting, browser
 ## Scale path
 
 Resource and worker counts use `bigint`. Wall-clock timestamps are integer milliseconds. Future efficiency values should use fixed-point basis points rather than floating-point state. Cohorts may later include recipe revisions, targets, and failure modes without changing the event model.
+
+Future loss states should distinguish active, damaged, immobilized, captured, dispersed and destroyed nanites. Destruction does not automatically delete their constituent matter: recoverable bodies become scrap or Residuum, while genuinely dispersed or inaccessible material remains tracked by its physical destination. Human detection is a strategy-sensitive system driven by observable emissions and consequences rather than a fixed nanite-count timer.

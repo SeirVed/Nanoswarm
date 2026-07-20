@@ -51,6 +51,12 @@
 
 .planner-back:hover { color: var(--green); }
 
+.planner-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .planner-main {
   width: min(1800px, 100%);
   margin: 0 auto;

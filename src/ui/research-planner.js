@@ -54,7 +54,10 @@ root.innerHTML = `
         <span class="planner-brand-mark">◈</span>
         <span><h1>NANOSWARM</h1><p>RESEARCH ARCHITECTURE WORKBENCH</p></span>
       </a>
-      <a class="planner-back" href="../">RETURN TO SIMULATION</a>
+      <nav class="planner-header-nav" aria-label="Workbench navigation">
+        <a class="planner-back" href="../horizon-planner/">MASS HORIZONS</a>
+        <a class="planner-back" href="../">RETURN TO SIMULATION</a>
+      </nav>
     </header>
     <main class="planner-main">
       <section class="planner-intro">

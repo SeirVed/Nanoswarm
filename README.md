@@ -18,6 +18,8 @@ Open `http://127.0.0.1:4173` after starting the development server. The producti
 
 The research workbench is available at `http://127.0.0.1:4173/research-planner/`. It loads the live catalogue, supports zooming, panning, draggable layouts, editable dependencies, observation/stage/search gates and freeform suggestions, retains drafts in browser storage, and exports either a compact review diff or the full plan as JSON.
 
+The mass-horizon workbench is available at `http://127.0.0.1:4173/horizon-planner/`. It authors the complete 0.1 g–1 Gt pathway, stage assignments, observations, discoveries, research opportunities, source-specific Residuum, losses, and strategy-dependent human response. It also exposes the current research-empty bridge after Relative Directive Allocation for review.
+
 ## Play online
 
 The `main` branch deploys automatically to GitHub Pages:
@@ -40,7 +42,7 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Offline progress calls the same event-jumping simulation used while the page is open.
 - Long offline spans are bounded by actual event progress rather than an arbitrary completion count, so a busy returning swarm is not rejected merely for completing many valid jobs.
 - UI controls issue commands; they never mutate resources directly.
-- Saves use an explicit version and a BigInt-aware codec. Version 9 expands old generic matter into the full hidden-element ledger without inventing identities for legacy `unknown` atoms.
+- Saves use an explicit version and a BigInt-aware codec. Version 10 migrates renamed research and retired morphology refinements while preserving the version 9 hidden-element ledger without inventing identities for legacy `unknown` atoms.
 - Log entries carry a significance tier independently of their visual tone. World, critical, and medium events remain permanent; only routine info events roll off after the newest 200. Old saves infer tiers during migration.
 - Parallel Directive Scheduling is the sole initial research signal and takes four minutes on the embedded 100 n-eq seed reasoning substrate. Research appears with the second nanite and Stage 1; at 12 nanites it reveals Relative Directive Allocation, and every other research signal requires both roots. The research header deliberately withholds the catalog-wide completion fraction.
 - Allocation step buttons support accelerating press-and-hold input. Percentage fields retain focus and uncommitted text when an unrelated cohort completion refreshes the dashboard.
@@ -60,3 +62,5 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Sound is synthesized live with Web Audio. Job ratios select the harmonic field, while digits of π and e govern its pulse and drift; no recorded soundtrack or audio dependency is shipped.
 
 See `docs/architecture.md` for the model boundary and extension rules.
+
+See `docs/design-goals.md` and `docs/horizon-roadmap.md` for the approved long-horizon direction.
