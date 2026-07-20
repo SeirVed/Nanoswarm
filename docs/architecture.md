@@ -69,6 +69,8 @@ Fixed operation slots are a presentation rule. A slot appears only after its dir
 
 Progressive interface targets have stable unlock identifiers. Version 7 saves retain the identifiers the player has acknowledged; any currently visible target absent from that set receives the new-unlock pulse until a click bubbles through it. Migration seeds acknowledgements from the old save's existing discoveries so established interfaces do not relight. Tooltip delegation covers controls, timers, individually keyed resource cards, intro lore, status regions, and individual log events after a 1.5-second hover. Semantic tooltip keys rebind an active inspection to replacement DOM after a structural render, while focus snapshots restore the matching control and any uncommitted percentage text.
 
+Feedback selection is presentation-only. A capture-phase click intercepts the chosen interface target before its normal action, derives a stable semantic key and descriptive context, and opens a form whose draft survives structural renders. The static client never holds a GitHub credential: it constructs a public new-issue URL containing the player's report and optional coarse diagnostics, then GitHub performs authentication and requires the player to confirm submission.
+
 ## Procedural sound
 
 The synthetic-mind sound engine is a read-only observer of authoritative game state. Active job ratios choose a harmonic field, cohort boundaries provide gestures, and digits of π and e deterministically gate rhythm, voicing, spacing, and slow filter motion. New voices emerge with swarm magnitude and discoveries rather than with raw loudness.

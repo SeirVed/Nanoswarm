@@ -42,7 +42,8 @@ import { clearGame, loadGame, saveGame } from "../game/storage.js";
 import { acknowledgeUnlockIds } from "../game/unlocks.js";
 import { SyntheticMind } from "../audio/mind.js";
 import { COHORT_SLOT_LABEL, groupCohortsForDisplay, revealedCohortSlots } from "./cohort-groups.js";
-import { installDelayedTooltips } from "./tooltips.js";
+import { buildFeedbackIssueUrl } from "./feedback.js";
+import { installDelayedTooltips, tooltipTextFor } from "./tooltips.js";
 
 const root = document.querySelector("#root");
 const delayedTooltips = installDelayedTooltips(root);
@@ -55,6 +56,15 @@ let lastSave = Date.now();
 let lastStructuralSignature = null;
 let activeLogTier = "all";
 let activeResearchTab = "incomplete";
+let feedbackSelecting = false;
+let feedbackSelection = null;
+let feedbackOpened = false;
+let feedbackDraft = {
+  category: "Bug",
+  summary: "",
+  details: "",
+  includeDiagnostics: true,
+};
 
 const escapeAttribute = (value) => String(value)
   .replaceAll("&", "&amp;")
@@ -62,6 +72,11 @@ const escapeAttribute = (value) => String(value)
   .replaceAll("<", "&lt;")
   .replaceAll(">", "&gt;");
 const newUnlockClass = (id) => state && !state.seenUnlocks.includes(id) ? " new-unlock" : "";
+
+function resetFeedbackDraft() {
+  feedbackDraft = { category: "Bug", summary: "", details: "", includeDiagnostics: true };
+  feedbackOpened = false;
+}
 
 const formatDuration = (milliseconds) => {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
@@ -580,6 +595,45 @@ function logHtml() {
   </section>`;
 }
 
+function feedbackDiagnostics() {
+  return {
+    page: window.location.href,
+    saveVersion: state.version,
+    nanites: state.nanites.toString(),
+    energy: state.energy.toString(),
+    activeCohorts: state.cohorts.length,
+    completedResearch: state.completedResearch.join(", ") || "none",
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    userAgent: navigator.userAgent,
+  };
+}
+
+function feedbackFormHtml() {
+  if (!feedbackSelection) return "";
+  const categories = ["Bug", "Suggestion", "Balance", "Accessibility", "Question"];
+  return `<div class="feedback-overlay" role="presentation">
+    <section class="feedback-dialog" role="dialog" aria-modal="true" aria-labelledby="feedback-title" data-tooltip="Report the selected interface element. The game composes a public issue, then GitHub asks the player to sign in and confirm submission.">
+      <header><div><span class="eyebrow">SELECTED INTERFACE · ${escapeAttribute(feedbackSelection.key)}</span><h2 id="feedback-title">GIVE FEEDBACK</h2></div>
+        <button type="button" class="feedback-close" data-action="feedback-cancel" aria-label="Close feedback form">×</button></header>
+      <div class="feedback-selection-summary"><span>ABOUT</span><strong>${escapeAttribute(feedbackSelection.label)}</strong><small>${escapeAttribute(feedbackSelection.description)}</small></div>
+      <form class="feedback-form" data-feedback-form>
+        <label><span>CATEGORY</span><select data-action="feedback-category" data-feedback-field="category" data-tooltip="Choose the kind of report so its public GitHub issue title can be scanned quickly.">
+          ${categories.map((category) => `<option value="${category}" ${feedbackDraft.category === category ? "selected" : ""}>${category}</option>`).join("")}
+        </select></label>
+        <label><span>SHORT SUMMARY</span><input type="text" maxlength="120" required value="${escapeAttribute(feedbackDraft.summary)}" data-action="feedback-summary" data-feedback-field="summary" placeholder="What should Pete look at?" data-tooltip="A concise summary becomes the public GitHub issue title. Avoid personal information."></label>
+        <label><span>DETAILS</span><textarea rows="7" maxlength="4000" required data-action="feedback-details" data-feedback-field="details" placeholder="What happened, what did you expect, and can you reproduce it?" data-tooltip="Describe the behaviour, expected result, and reproduction steps. This text will be public on GitHub.">${escapeAttribute(feedbackDraft.details)}</textarea></label>
+        <label class="feedback-diagnostics"><input type="checkbox" ${feedbackDraft.includeDiagnostics ? "checked" : ""} data-action="feedback-diagnostics" data-feedback-field="includeDiagnostics"><span>INCLUDE GAME AND BROWSER DIAGNOSTICS</span></label>
+        <p class="feedback-privacy">Reports are public. Diagnostics include game counts, completed research, viewport, and browser identification—not the full save or personal account data. GitHub requires sign-in and final confirmation.</p>
+        ${feedbackOpened ? `<p class="feedback-opened" role="status">PREFILLED ISSUE OPENED · REVIEW IT ON GITHUB, THEN SELECT “SUBMIT NEW ISSUE”</p>` : ""}
+        <div class="feedback-actions">
+          <button type="button" class="terminal-button" data-action="feedback-reselect" data-tooltip="Close this form and choose a different interface element.">RESELECT ELEMENT</button>
+          <button type="submit" class="terminal-button feedback-submit" data-action="feedback-submit" data-tooltip="Open GitHub's public new-issue page with this report and the selected interface context already filled in.">OPEN PREFILLED GITHUB ISSUE</button>
+        </div>
+      </form>
+    </section>
+  </div>`;
+}
+
 function structuralSignature() {
   return [
     state.nanites,
@@ -602,6 +656,9 @@ function structuralSignature() {
     sonicMind.enabled,
     sonicMind.volumePercent,
     notice ?? "",
+    feedbackSelecting,
+    feedbackSelection?.key ?? "",
+    feedbackOpened,
   ].join("|");
 }
 
@@ -673,9 +730,9 @@ function renderGame(now = Date.now(), force = false) {
   const previousScroll = { x: window.scrollX, y: window.scrollY };
   const focusedControl = captureFocusedControl();
   const depositTotal = totalMatter(state.activeDeposit.matter);
-  root.innerHTML = `<div class="game-shell">
+  root.innerHTML = `<div class="game-shell${feedbackSelecting ? " feedback-selecting" : ""}">
     <header class="game-header">
-      <div class="brand-lockup"><span class="brand-mark">◈</span><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>
+      <div class="brand-lockup"><button type="button" class="brand-mark${feedbackSelecting ? " active" : ""}" data-action="feedback" aria-pressed="${feedbackSelecting}" data-tooltip="Activate feedback selection, then click any interface element to describe it in a public GitHub issue. Click the symbol again to cancel selection.">◈</button><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>
       <div class="header-metrics"><div data-tooltip="Total functioning nanites in the local swarm."><span>ACTIVE NANITES</span><strong>${formatCount(state.nanites)}</strong></div>
         ${state.discovery.surveyComplete ? `<div class="substrate-metric" data-tooltip="Unreserved matter remaining in the active finite deposit."><span>SUBSTRATE</span><strong>${percentage(depositTotal, state.activeDeposit.initialAtoms)}</strong></div>` : ""}
         <div class="audio-controls">
@@ -690,11 +747,13 @@ function renderGame(now = Date.now(), force = false) {
       </div>
     </header>
     ${notice ? `<div class="notice" role="status">${notice}</div>` : ""}
+    ${feedbackSelecting ? `<div class="feedback-select-banner" role="status">FEEDBACK SELECTOR ACTIVE · CLICK ANY INTERFACE ELEMENT · CLICK ◈ TO CANCEL</div>` : ""}
     <main class="dashboard-grid">
       <div class="dashboard-column">${operationsHtml(now)}${resourcesHtml()}${projectsHtml()}</div>
       <div class="dashboard-column">${allocationsHtml()}${researchHtml()}</div>
       <div class="dashboard-column log-column">${logHtml()}</div>
     </main>
+    ${feedbackFormHtml()}
   </div>`;
   const log = document.querySelector(".telemetry-log");
   if (wasAtBottom && log) log.scrollTop = log.scrollHeight;
@@ -704,6 +763,9 @@ function renderGame(now = Date.now(), force = false) {
   restoreFocusedControl(focusedControl);
   window.scrollTo(previousScroll.x, previousScroll.y);
   delayedTooltips.refresh();
+  if (feedbackSelection && !focusedControl?.data.action.startsWith("feedback-")) {
+    document.querySelector("[data-action='feedback-summary']")?.focus({ preventScroll: true });
+  }
   lastStructuralSignature = signature;
 }
 
@@ -725,7 +787,29 @@ function acceptResult(result) {
 
 function performButtonAction(button) {
   const action = button.dataset.action;
-  if (action === "begin") {
+  if (action === "feedback") {
+    if (feedbackSelecting) {
+      feedbackSelecting = false;
+    } else {
+      feedbackSelection = null;
+      feedbackSelecting = true;
+      resetFeedbackDraft();
+    }
+    renderGame(Date.now(), true);
+    return true;
+  } else if (action === "feedback-cancel") {
+    feedbackSelecting = false;
+    feedbackSelection = null;
+    resetFeedbackDraft();
+    renderGame(Date.now(), true);
+    return true;
+  } else if (action === "feedback-reselect") {
+    feedbackSelection = null;
+    feedbackSelecting = true;
+    feedbackOpened = false;
+    renderGame(Date.now(), true);
+    return true;
+  } else if (action === "begin") {
     state = createInitialState();
     saveGame(state);
     void sonicMind.start(state).catch(() => {
@@ -790,12 +874,45 @@ function performButtonAction(button) {
     introVisible = 0;
     activeLogTier = "all";
     activeResearchTab = "incomplete";
+    feedbackSelecting = false;
+    feedbackSelection = null;
+    resetFeedbackDraft();
     lastStructuralSignature = null;
     renderIntro();
     return true;
   }
   return false;
 }
+
+function describeFeedbackTarget(origin) {
+  const element = origin.closest?.(
+    "[data-feedback-label], [data-tooltip-key], [data-action], [data-unlock-id], [data-cohort-slot], .panel, .game-header, .dashboard-column, main",
+  ) ?? origin;
+  const heading = element.matches?.(".panel")
+    ? element.querySelector(".panel-heading span:first-child")?.textContent
+    : "";
+  const compactText = element.textContent?.trim().replace(/\s+/g, " ").slice(0, 120) ?? "";
+  const label = element.dataset?.feedbackLabel || element.getAttribute?.("aria-label") || heading || compactText || element.tagName;
+  const actionContext = element.dataset?.action
+    ? [element.dataset.action, element.dataset.directive, element.dataset.research, element.dataset.tab, element.dataset.tier]
+      .filter(Boolean)
+      .join(":")
+    : "";
+  const key = element.dataset?.tooltipKey || element.dataset?.unlockId || element.dataset?.cohortSlot || actionContext ||
+    [...(element.classList ?? [])].slice(0, 3).join(".") || element.tagName.toLowerCase();
+  const description = tooltipTextFor(element) || `Selected ${element.tagName.toLowerCase()} interface region.`;
+  return { label, key, description };
+}
+
+root.addEventListener("click", (event) => {
+  if (!feedbackSelecting || event.target.closest?.("[data-action='feedback']")) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  feedbackSelection = describeFeedbackTarget(event.target);
+  feedbackSelecting = false;
+  resetFeedbackDraft();
+  renderGame(Date.now(), true);
+}, true);
 
 const repeatIdentity = (button) => [
   button.dataset.action,
@@ -873,7 +990,32 @@ root.addEventListener("click", (event) => {
   if (acknowledged && state) saveGame(state);
 });
 
+function syncFeedbackDraft(control) {
+  const field = control?.dataset?.feedbackField;
+  if (!field) return false;
+  feedbackDraft[field] = control.type === "checkbox" ? control.checked : control.value;
+  feedbackOpened = false;
+  return true;
+}
+
+root.addEventListener("submit", (event) => {
+  const form = event.target.closest?.("form[data-feedback-form]");
+  if (!form || !state || !feedbackSelection) return;
+  event.preventDefault();
+  form.querySelectorAll("[data-feedback-field]").forEach(syncFeedbackDraft);
+  const issueUrl = buildFeedbackIssueUrl({
+    ...feedbackDraft,
+    selection: feedbackSelection,
+    diagnostics: feedbackDraft.includeDiagnostics ? feedbackDiagnostics() : null,
+  });
+  saveGame(state);
+  window.open(issueUrl, "_blank", "noopener,noreferrer");
+  feedbackOpened = true;
+  renderGame(Date.now(), true);
+});
+
 root.addEventListener("input", (event) => {
+  if (syncFeedbackDraft(event.target.closest?.("[data-feedback-field]"))) return;
   const control = event.target.closest("input[data-action='volume']");
   if (!control) return;
   sonicMind.setVolume(Number(control.value) / 100);
@@ -881,6 +1023,7 @@ root.addEventListener("input", (event) => {
 
 root.addEventListener("change", (event) => {
   if (!state) return;
+  if (syncFeedbackDraft(event.target.closest?.("[data-feedback-field]"))) return;
   const control = event.target.closest("input[data-action='set-share'], input[data-action='set-share-percent']");
   if (!control) return;
   let target;
