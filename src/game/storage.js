@@ -15,7 +15,7 @@ import { addMatter, totalMatter } from "./matter.js";
 import { unlockedIdsForState } from "./unlocks.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 9;
+const CURRENT_SAVE_VERSION = 10;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -154,6 +154,45 @@ function migrateState(state) {
     state.stage ??= state.discovery.atmosphereVisible ? 2 : state.nanites > 1n ? 1 : 0;
     state.activeDeposit.cumulativeMass ??= "legacy field";
     state.version = 9;
+  }
+  if (state.version === 9) {
+    const renamedResearch = {
+      "expanded-spectral-catalog": "residuum-indexing",
+      "distributed-computronium": "distributed-reasoning-mesh",
+    };
+    const removedResearch = new Set([
+      "specialized-morphologies-02",
+      "specialized-morphologies-03",
+      "specialized-morphologies-04",
+    ]);
+    state.completedResearch = [...new Set(state.completedResearch
+      .map((id) => renamedResearch[id] ?? id)
+      .filter((id) => !removedResearch.has(id)))];
+    const migratedQueue = [];
+    const queuedIds = new Set();
+    for (const item of state.researchQueue) {
+      const id = renamedResearch[item.id] ?? item.id;
+      const shouldRelease = removedResearch.has(id) || state.completedResearch.includes(id) || queuedIds.has(id);
+      if (shouldRelease) {
+        const reserved = item.reservedCost;
+        if (reserved) {
+          state.energy += reserved.energy;
+          for (const key of ATOM_KEYS) state.atoms[key] += reserved.atoms[key];
+        }
+        continue;
+      }
+      item.id = id;
+      migratedQueue.push(item);
+      queuedIds.add(id);
+    }
+    state.researchQueue = migratedQueue;
+    state.discovery.residuumIndexed ||= state.completedResearch.includes("residuum-indexing");
+    state.discovery.ironCatalogued ??= state.completedResearch.includes("ferromagnetic-phase-analysis");
+    state.discovery.atmosphereCatalogued ??= state.completedResearch.includes("atmospheric-spectroscopy");
+    state.discovery.behaviouralMorphologies ??= state.completedResearch.includes("specialized-morphologies");
+    state.discovery.radioSignalDetected ??= false;
+    state.discovery.externalMaterialRoutes ??= false;
+    state.version = 10;
   }
   return state;
 }

@@ -18,6 +18,8 @@ describe("unlock acknowledgements", () => {
     state.discovery.directivesVisible = true;
     state.discovery.researchVisible = true;
     state.discovery.projectsVisible = true;
+    state.nanites = 2n;
+    state.stage = 1;
     const ids = unlockedIdsForState(state);
     for (const id of [
       "materials", "elements", "residuum", "allocations", "research",
@@ -36,7 +38,7 @@ describe("unlock acknowledgements", () => {
     delete state.seenUnlocks;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 9);
+    assert.equal(restored.version, 10);
     assert.deepEqual(restored.seenUnlocks, unlockedIdsForState(restored));
     assert.equal(restored.seenUnlocks.includes("substrate"), true);
     assert.equal(restored.seenUnlocks.includes("materials"), true);

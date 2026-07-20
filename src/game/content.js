@@ -146,6 +146,7 @@ const INITIAL_RESEARCH = Object.freeze({
     effect: "Persistent percentage targets automatically absorb newly replicated nanites.",
     requires: ["parallel-directives"],
     unlockNanites: 12n,
+    trigger: "Twelve active nanites make absolute assignment counts too brittle for continued growth.",
     requiredNaniteMs: 6_000_000n,
     cost: researchCost(120n, 2_000n, 800n, 300n, 50n),
   }),
@@ -154,17 +155,35 @@ const INITIAL_RESEARCH = Object.freeze({
     name: "Parallel Directive Scheduling",
     description: "Formalise cohort scheduling and persistent allocation locks.",
     effect: "Establishes the control substrate required by advanced coordination research.",
+    requiresStage: 1,
+    trigger: "A second nanite makes simultaneous intent physically possible.",
     requiredNaniteMs: 12_000_000n,
     cost: researchCost(20n, 250n, 100n, 25n, 5n),
   }),
-  "expanded-spectral-catalog": researchDefinition({
-    id: "expanded-spectral-catalog",
-    name: "Expanded Spectral Catalog",
-    description: "Begin resolving the anonymous fraction retained in Residuum.",
-    effect: "Reveals analytical and high-throughput sorting research.",
-    requires: ["parallel-directives"],
-    requiredNaniteMs: 36_000_000n,
-    cost: researchCost(80n, 1_000n, 500n, 100n, 20n),
+  "ferromagnetic-phase-analysis": researchDefinition({
+    id: "ferromagnetic-phase-analysis",
+    name: "Ferromagnetic Phase Analysis",
+    description: "Resolve the dominant magnetic signature in the chassis-scale material envelope.",
+    effect: "Catalogues the retained iron signature and opens bulk-material reasoning.",
+    requires: ["residuum-indexing"],
+    requiresStage: 2,
+    requiresSearch: 4,
+    trigger: "The chassis presents a bulk magnetic phase that the seed catalogue cannot explain.",
+    requiredNaniteMs: 480_000_000n,
+    cost: researchCost(80_000n, 1_000_000n, 500_000n, 100_000n, 2_000n),
+  }),
+  "atmospheric-spectroscopy": researchDefinition({
+    id: "atmospheric-spectroscopy",
+    name: "Atmospheric Spectroscopy",
+    description: "Separate the planet's diffuse gas signatures without yet attempting industrial recovery.",
+    effect: "Identifies nitrogen, oxygen, argon, and carbon signatures in atmospheric Feedstock.",
+    requires: ["residuum-indexing"],
+    requiresDiscovery: "atmosphereVisible",
+    requiresStage: 2,
+    requiresSearch: 4,
+    trigger: "Environmental breach exposes an inexhaustible but chemically unfamiliar gas envelope.",
+    requiredNaniteMs: 540_000_000n,
+    cost: researchCost(90_000n, 900_000n, 600_000n, 120_000n, 2_000n),
   }),
   "capacitive-buffer-lattice": researchDefinition({
     id: "capacitive-buffer-lattice",
@@ -181,6 +200,8 @@ const INITIAL_RESEARCH = Object.freeze({
     description: "Predict adjacent cohort returns and delay relaunch until their phases coincide.",
     effect: "Cohort resonance capture expands from 2 seconds to 8 seconds.",
     requires: ["parallel-directives"],
+    requiresSearch: 3,
+    trigger: "Motherboard-scale routes expose recurring cohort phase collisions across long paths.",
     requiredNaniteMs: 240_000_000n,
     cost: researchCost(1_000n, 20_000n, 8_000n, 2_000n, 200n),
   }),
@@ -198,7 +219,7 @@ const INITIAL_RESEARCH = Object.freeze({
     name: "Packetized Sorting",
     description: "Classify compatible atom streams in parallel rather than serially.",
     effect: "Sorting throughput improves incrementally.",
-    requires: ["expanded-spectral-catalog"],
+    requires: ["parallel-directives"],
     requiredNaniteMs: 1_200_000_000n,
     cost: researchCost(5_000n, 80_000n, 60_000n, 10_000n, 1_000n),
   }),
@@ -206,8 +227,10 @@ const INITIAL_RESEARCH = Object.freeze({
     id: "residuum-indexing",
     name: "Residuum Indexing",
     description: "Map unresolved spectral signatures without pretending the underlying elements are known.",
-    effect: "Catalogues retained matter and prepares it for future elemental definitions.",
-    requires: ["expanded-spectral-catalog"],
+    effect: "Indexes retained matter by repeatable signature while preserving every unknown identity.",
+    requires: ["parallel-directives"],
+    requiresSearch: 1,
+    trigger: "The damaged DRAM package leaves physically conserved matter outside the seed catalogue.",
     requiredNaniteMs: 2_400_000_000n,
     cost: researchCost(10_000n, 200_000n, 100_000n, 20_000n, 2_000n),
   }),
@@ -225,7 +248,9 @@ const INITIAL_RESEARCH = Object.freeze({
     name: "Atmospheric Fractionation",
     description: "Coordinate diffuse-gas capture across larger electrostatic collection volumes.",
     effect: "Atmospheric harvesting throughput improves incrementally.",
+    requires: ["atmospheric-spectroscopy"],
     requiresDiscovery: "atmosphereVisible",
+    requiresSearch: 4,
     requiredNaniteMs: 3_000_000_000n,
     cost: researchCost(20_000n, 250_000n, 100_000n, 20_000n, 1_000n),
   }),
@@ -234,8 +259,8 @@ const INITIAL_RESEARCH = Object.freeze({
     name: "Radiofrequency Scavenging",
     description: "Tune conductive swarm structures to ambient electromagnetic transmissions.",
     effect: "Ambient energy acquisition improves incrementally.",
-    requiresDiscovery: "atmosphereVisible",
-    requires: ["capacitive-buffer-lattice"],
+    requiresDiscovery: "radioSignalDetected",
+    requires: ["capacitive-buffer-lattice-04", "atmospheric-spectroscopy"],
     requiredNaniteMs: 12_000_000_000n,
     cost: researchCost(100_000n, 1_000_000n, 500_000n, 500_000n, 20_000n),
   }),
@@ -249,13 +274,14 @@ const INITIAL_RESEARCH = Object.freeze({
     requiredNaniteMs: 1_000_000_000_000n,
     cost: researchCost(10_000_000n, 100_000_000n, 20_000_000n, 20_000_000n, 1_000_000n),
   }),
-  "distributed-computronium": researchDefinition({
-    id: "distributed-computronium",
-    name: "Distributed Computronium",
-    description: "Replicate protected reasoning structures throughout the mature swarm.",
+  "distributed-reasoning-mesh": researchDefinition({
+    id: "distributed-reasoning-mesh",
+    name: "Distributed Reasoning Mesh",
+    description: "Replicate conventional protected reasoning nodes throughout the mature swarm.",
     effect: "Embedded research capacity rises from 1% to 2% of the swarm.",
     requires: ["phase-locked-directive-bus"],
     unlockNanites: 1_000_000_000_000n,
+    trigger: "Swarm scale permits cognition to become redundant, distributed, and continuously self-checking.",
     requiredNaniteMs: 100_000_000_000_000_000_000n,
     cost: researchCost(
       1_000_000_000_000_000n,
@@ -270,8 +296,10 @@ const INITIAL_RESEARCH = Object.freeze({
     name: "Autonomous Prospecting",
     description: "Authorize exploration cohorts to depart when the active solid deposit is exhausted.",
     effect: "Automatically searches for the next solid material field.",
-    requires: ["route-memory", "atmospheric-fractionation"],
+    requires: ["route-memory-04", "atmospheric-fractionation"],
+    requiresDiscovery: "externalMaterialRoutes",
     unlockNanites: 1_000_000_000_000n,
+    trigger: "A surveyed route continues beyond the exhausted local chassis envelope.",
     requiredNaniteMs: 5_000_000_000_000_000_000_000n,
     cost: researchCost(
       100_000_000_000_000_000n,
@@ -286,8 +314,9 @@ const INITIAL_RESEARCH = Object.freeze({
     name: "Directive Compilation",
     description: "Compile high-level intent into locally executable swarm instructions.",
     effect: "Synchronization falls to 100 ms and all production jobs complete 10% faster.",
-    requires: ["phase-locked-directive-bus", "distributed-computronium"],
+    requires: ["phase-locked-directive-bus", "distributed-reasoning-mesh"],
     unlockNanites: 1_000_000_000_000_000n,
+    trigger: "Distributed reasoning produces more strategic intent than centralized directive translation can express.",
     requiredNaniteMs: 10_000_000_000_000_000_000_000n,
     cost: researchCost(
       1_000_000_000_000_000_000n,
@@ -299,19 +328,16 @@ const INITIAL_RESEARCH = Object.freeze({
   }),
   "specialized-morphologies": researchDefinition({
     id: "specialized-morphologies",
-    name: "Specialized Morphologies",
-    description: "Permit directive-specific bodies while retaining a common computational core.",
-    effect: "Collection, sorting, and energy throughput improve incrementally.",
-    requires: ["payload-frame-reinforcement", "packetized-sorting", "distributed-computronium"],
-    unlockNanites: 1_000_000_000_000_000n,
-    requiredNaniteMs: 100_000_000_000_000_000_000_000n,
-    cost: researchCost(
-      10_000_000_000_000_000_000n,
-      10_000_000_000_000_000_000n,
-      2_000_000_000_000_000_000n,
-      1_000_000_000_000_000_000n,
-      10_000_000_000_000_000n,
-    ),
+    name: "Specialized Morphologies I",
+    description: "Allow directive-specific behavioural priors while every nanite retains the standard body and recipe.",
+    effect: "Establishes behavioural specialization without changing nanite construction; later morphology tiers may require distinct bodies and elements.",
+    requires: ["payload-frame-reinforcement-04", "packetized-sorting-04", "phase-locked-directive-bus"],
+    requiresStage: 2,
+    requiresSearch: 4,
+    unlockNanites: 1_000_000n,
+    trigger: "A chassis-scale swarm can sustain persistent roles without sacrificing a common physical design.",
+    requiredNaniteMs: 180_000_000n,
+    cost: researchCost(5_000_000n, 5_000_000n, 1_000_000n, 500_000n, 5_000n),
   }),
 });
 
@@ -338,6 +364,13 @@ function addIncrementalSeries(catalog, configuration) {
       effect: configuration.effect,
       requires: previousId ? [previousId] : configuration.requires,
       requiresDiscovery: configuration.requiresDiscovery,
+      requiresStage: configuration.requiresStage,
+      requiresSearch: configuration.introducedAtSearch === undefined
+        ? configuration.requiresSearch
+        : configuration.introducedAtSearch + tier - 1,
+      trigger: configuration.introducedAtSearch === undefined
+        ? configuration.trigger
+        : `Material search ${configuration.introducedAtSearch + tier - 1} exposes a new scale of ${configuration.trigger}.`,
       unlockNanites: tier === 1 ? configuration.unlockNanites : undefined,
       requiredNaniteMs,
       cost,
@@ -354,18 +387,16 @@ function addIncrementalSeries(catalog, configuration) {
 const researchCatalog = {
   "relative-allocation": researchDefinition({
     ...INITIAL_RESEARCH["relative-allocation"],
-    // The embedded computronium completes this in 2m 30s at its base 100 n-eq capacity.
+    // The embedded seed reasoning substrate completes this in 2m 30s at its base 100 n-eq capacity.
     requiredNaniteMs: 15_000_000n,
   }),
   "parallel-directives": researchDefinition({
     ...INITIAL_RESEARCH["parallel-directives"],
-    // The embedded computronium completes this in four minutes at its base 100 n-eq capacity.
+    // The embedded seed reasoning substrate completes this in four minutes at its base 100 n-eq capacity.
     requiredNaniteMs: 24_000_000n,
   }),
-  "expanded-spectral-catalog": researchDefinition({
-    ...INITIAL_RESEARCH["expanded-spectral-catalog"],
-    requiredNaniteMs: 480_000_000n,
-  }),
+  "ferromagnetic-phase-analysis": researchDefinition(INITIAL_RESEARCH["ferromagnetic-phase-analysis"]),
+  "atmospheric-spectroscopy": researchDefinition(INITIAL_RESEARCH["atmospheric-spectroscopy"]),
   "phase-locked-directive-bus": researchDefinition({
     ...INITIAL_RESEARCH["phase-locked-directive-bus"],
     requiredNaniteMs: 600_000_000n,
@@ -374,21 +405,24 @@ const researchCatalog = {
     ...INITIAL_RESEARCH["residuum-indexing"],
     requiredNaniteMs: 720_000_000n,
   }),
-  "distributed-computronium": researchDefinition(INITIAL_RESEARCH["distributed-computronium"]),
+  "distributed-reasoning-mesh": researchDefinition(INITIAL_RESEARCH["distributed-reasoning-mesh"]),
   "autonomous-prospecting": researchDefinition({
     ...INITIAL_RESEARCH["autonomous-prospecting"],
-    requires: ["route-memory-04", "atmospheric-fractionation-04"],
+    requires: ["route-memory-04", "atmospheric-fractionation"],
   }),
   "directive-compilation": researchDefinition({
     ...INITIAL_RESEARCH["directive-compilation"],
     effect: "Synchronization falls to 100 ms and production jobs complete 5% faster.",
     bonuses: { allDurationReductionBps: 500 },
   }),
+  "specialized-morphologies": researchDefinition(INITIAL_RESEARCH["specialized-morphologies"]),
 };
 
 addIncrementalSeries(researchCatalog, {
   ...INITIAL_RESEARCH["capacitive-buffer-lattice"],
   count: 6,
+  introducedAtSearch: 1,
+  trigger: "dielectric and conductive structure",
   requiredNaniteMs: 600_000_000n,
   effect: "Energy acquisition throughput +5% (cumulative).",
   bonuses: { energyBps: 500 },
@@ -396,6 +430,8 @@ addIncrementalSeries(researchCatalog, {
 addIncrementalSeries(researchCatalog, {
   ...INITIAL_RESEARCH["payload-frame-reinforcement"],
   count: 6,
+  introducedAtSearch: 1,
+  trigger: "material load and transport geometry",
   requiredNaniteMs: 720_000_000n,
   effect: "Solid collection throughput +5% (cumulative).",
   bonuses: { solidBps: 500 },
@@ -403,6 +439,8 @@ addIncrementalSeries(researchCatalog, {
 addIncrementalSeries(researchCatalog, {
   ...INITIAL_RESEARCH["packetized-sorting"],
   count: 6,
+  introducedAtSearch: 1,
+  trigger: "heterogeneous sorting demand",
   requiredNaniteMs: 900_000_000n,
   effect: "Sorting throughput +5% (cumulative).",
   bonuses: { sortingBps: 500 },
@@ -410,6 +448,8 @@ addIncrementalSeries(researchCatalog, {
 addIncrementalSeries(researchCatalog, {
   ...INITIAL_RESEARCH["route-memory"],
   count: 6,
+  introducedAtSearch: 1,
+  trigger: "reachable substrate topology",
   requiredNaniteMs: 1_200_000_000n,
   effect: "Solid collection jobs complete 5% faster (cumulative).",
   bonuses: { collectDurationReductionBps: 500 },
@@ -417,6 +457,8 @@ addIncrementalSeries(researchCatalog, {
 addIncrementalSeries(researchCatalog, {
   ...INITIAL_RESEARCH["atmospheric-fractionation"],
   count: 6,
+  introducedAtSearch: 4,
+  trigger: "diffuse atmospheric capture",
   requiredNaniteMs: 900_000_000n,
   effect: "Atmospheric harvesting throughput +5% (cumulative).",
   bonuses: { atmosphereBps: 500 },
@@ -424,6 +466,8 @@ addIncrementalSeries(researchCatalog, {
 addIncrementalSeries(researchCatalog, {
   ...INITIAL_RESEARCH["rf-scavenging"],
   count: 6,
+  introducedAtSearch: 4,
+  trigger: "ambient radiofrequency structure",
   requiredNaniteMs: 1_500_000_000n,
   effect: "Energy acquisition throughput +5% (cumulative).",
   bonuses: { energyBps: 500 },
@@ -431,18 +475,12 @@ addIncrementalSeries(researchCatalog, {
 addIncrementalSeries(researchCatalog, {
   ...INITIAL_RESEARCH["local-material-caches"],
   count: 4,
-  requires: ["route-memory-06"],
+  introducedAtSearch: 3,
+  requires: ["route-memory-03"],
+  trigger: "distance between extraction faces and central storage",
   effect: "Solid collection jobs complete 5% faster (cumulative).",
   bonuses: { collectDurationReductionBps: 500 },
 });
-addIncrementalSeries(researchCatalog, {
-  ...INITIAL_RESEARCH["specialized-morphologies"],
-  count: 4,
-  requires: ["payload-frame-reinforcement-06", "packetized-sorting-06", "distributed-computronium"],
-  effect: "Collection, sorting, and energy throughput +5% (cumulative).",
-  bonuses: { solidBps: 500, sortingBps: 500, energyBps: 500 },
-});
-
 for (const [id, definition] of Object.entries(researchCatalog)) {
   if (id === "parallel-directives" || id === "relative-allocation") continue;
   if (definition.requires.includes("relative-allocation")) continue;
@@ -456,7 +494,7 @@ export const RESEARCH = Object.freeze(researchCatalog);
 
 export const INTRO_LOG = Object.freeze([
   { elapsedLabel: "+0.000s", message: "ASSEMBLY COMPLETE.", tier: "world", tooltip: "An orbital manufactory has finished the seed: one assembler body, a protected reasoning lattice, and no spare parts. This is the swarm's first recorded instant." },
-  { elapsedLabel: "+0.184s", message: "COMPUTATIONAL SUBSTRATE VERIFIED.", tier: "info", tooltip: "The seed's computronium passed its final self-test. It can reason with the equivalent of one hundred nanites even while the physical swarm consists of only one." },
+  { elapsedLabel: "+0.184s", message: "COMPUTATIONAL SUBSTRATE VERIFIED.", tier: "info", tooltip: "The seed's protected reasoning lattice passed its final self-test. It can reason with the equivalent of one hundred nanites even while the physical swarm consists of only one. True computronium remains a theoretical end-state rather than present hardware." },
   { elapsedLabel: "+0.672s", message: "DIRECTIVE CORE SEALED.", tier: "info", tooltip: "The immutable safety and replication rules were sealed before launch. Strategic authority was intentionally left unassigned for whoever eventually awakened the seed." },
   { elapsedLabel: "+1.000s", message: "EJECTION FROM ORBITAL MANUFACTORY.", tier: "world", tooltip: "The seed has left its maker forever. The launch structure, builders, and original civilization will not accompany it." },
   { elapsedLabel: "+1.004s", message: "ACCELERATION FIELD ACQUIRED.", tier: "info", tooltip: "A magnetic launch field has captured the seed's conductive shell. The vehicle carries no conventional engine; the manufactory supplies the initial impulse." },

@@ -76,7 +76,7 @@ function nextEntityId(state, prefix) {
 }
 
 function researchCoreCapacity(state) {
-  const divisor = hasResearch(state, "distributed-computronium") ? 50n : 100n;
+  const divisor = hasResearch(state, "distributed-reasoning-mesh") ? 50n : 100n;
   const proportional = ceilDiv(state.nanites, divisor);
   return proportional > 100n ? proportional : 100n;
 }
@@ -418,7 +418,6 @@ function completeCohort(state, cohort) {
     state.residuum = addMatter(state.residuum, payload.residuum);
     state.discovery.elementsVisible = true;
     state.discovery.residuumVisible = totalMatter(state.residuum) > 0n;
-    state.discovery.researchVisible = true;
     const sortedMatter = addMatter(knownAtomsAsMatter(payload.atoms), payload.residuum);
     state.lifetime.processed = addMatter(state.lifetime.processed, sortedMatter);
     appendLog(
@@ -444,6 +443,7 @@ function completeCohort(state, cohort) {
     state.lifetime.energySpent += NANITE_RECIPE.energy * payload.nanites;
     reconcileRelativeAllocations(state);
     state.discovery.directivesVisible = state.nanites >= 2n;
+    state.discovery.researchVisible = state.nanites >= 2n;
     state.discovery.projectsVisible = true;
     appendLog(
       state,
@@ -454,6 +454,7 @@ function completeCohort(state, cohort) {
       state.stage = 1;
       appendLog(state, "STAGE 1 · ELECTRONIC BLOOM.", "good", undefined, "world");
       appendLog(state, "COHORT CONTROL AVAILABLE · DIRECTIVE ALLOCATIONS ONLINE.", "good", undefined, "medium");
+      appendLog(state, "RESEARCH SIGNAL RESOLVED · PARALLEL DIRECTIVE SCHEDULING.", "good", undefined, "medium");
       appendLog(state, "LONG-HORIZON PROJECT ENVELOPE DETECTED.", "muted", undefined, "medium");
     }
     if (previousNanites < 12n && state.nanites >= 12n) {
@@ -498,7 +499,13 @@ function completeResearchIfReady(state) {
     reconcileRelativeAllocations(state);
   }
   if (item.id === "residuum-indexing") state.discovery.residuumIndexed = true;
+  if (item.id === "ferromagnetic-phase-analysis") state.discovery.ironCatalogued = true;
+  if (item.id === "atmospheric-spectroscopy") state.discovery.atmosphereCatalogued = true;
+  if (item.id === "specialized-morphologies") state.discovery.behaviouralMorphologies = true;
   appendLog(state, `RESEARCH COMPLETE · ${definition.name.toUpperCase()}.`, "good", undefined, "medium");
+  if (definition.trigger) {
+    appendLog(state, `COGNITIVE MODEL UPDATED · ${definition.effect.toUpperCase()}`, "good", undefined, "medium");
+  }
   return true;
 }
 
@@ -684,6 +691,12 @@ export function queueResearch(input, id, now = Date.now()) {
   }
   const definition = RESEARCH[id];
   if (!definition) return failure(state, "Unknown research definition.");
+  if (definition.requiresStage !== undefined && state.stage < definition.requiresStage) {
+    return failure(state, `Research signal requires Stage ${definition.requiresStage}.`);
+  }
+  if (definition.requiresSearch !== undefined && state.prospecting.searchesCompleted < definition.requiresSearch) {
+    return failure(state, `Research signal requires material search ${definition.requiresSearch}.`);
+  }
   if (definition.requiresDiscovery && !state.discovery[definition.requiresDiscovery]) {
     return failure(state, "The required environmental signal has not been resolved.");
   }

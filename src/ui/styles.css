@@ -467,6 +467,7 @@ body::after {
 .research-card > div { display: grid; gap: 6px; }
 .research-card strong { font-size: 10px; text-transform: uppercase; }
 .research-card p { margin: 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.research-card .research-trigger { color: var(--amber); letter-spacing: 0.04em; }
 .research-card .research-effect { color: var(--green-dim); }
 .research-card small { color: var(--green-dim); font-size: 8px; }
 .compact-button { flex: 0 0 auto; padding: 8px 10px; font-size: 8px; }

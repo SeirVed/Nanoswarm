@@ -33,7 +33,7 @@ function decimalLog10(value) {
   return text.length - 1 + Math.log10(leading);
 }
 
-function computroniumCapacity(state) {
+function seedReasoningCapacity(state) {
   const onePercent = (state.nanites + 99n) / 100n;
   return onePercent > 100n ? onePercent : 100n;
 }
@@ -48,7 +48,7 @@ export function deriveActivity(state) {
   if (state.researchQueue.length > 0) {
     const available = state.nanites > cohortWorkers ? state.nanites - cohortWorkers : 0n;
     const activeResearchers = state.allocations.research < available ? state.allocations.research : available;
-    weights.research = computroniumCapacity(state) + activeResearchers;
+    weights.research = seedReasoningCapacity(state) + activeResearchers;
   }
 
   const total = Object.values(weights).reduce((sum, value) => sum + value, 0n);

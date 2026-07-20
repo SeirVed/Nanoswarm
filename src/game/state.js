@@ -44,7 +44,7 @@ export function createInitialState(now = Date.now()) {
     tier: entry.tier ?? "info",
   }));
   const state = {
-    version: 9,
+    version: 10,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,
@@ -89,6 +89,11 @@ export function createInitialState(now = Date.now()) {
       researchVisible: false,
       projectsVisible: false,
       atmosphereVisible: false,
+      ironCatalogued: false,
+      atmosphereCatalogued: false,
+      behaviouralMorphologies: false,
+      radioSignalDetected: false,
+      externalMaterialRoutes: false,
       exhaustionNotified: false,
       residuumIndexed: false,
     },

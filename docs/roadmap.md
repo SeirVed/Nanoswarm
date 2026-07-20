@@ -9,6 +9,10 @@
 - [x] Stage 0 recipe-perfect 0.1 g impact-fused contact.
 - [x] Stage 1 nested DRAM, circuit-board and motherboard shells with full hidden elemental compositions.
 - [x] Stage 2 chassis boundary and delayed atmospheric discovery.
-- [ ] Catalogue research that reveals and re-sorts retained elements without overloading the early research tree.
+- [x] Event-led catalogue research split into Residuum Indexing, chassis iron analysis and atmospheric spectroscopy without overloading the first material horizons.
+- [ ] Apply completed catalogue research to re-sort retained matter into usable elemental inventories.
+- [x] Couple general refinement tiers to material-search horizons, one tier per search.
+- [x] Establish behavioural-only Specialized Morphologies I without changing the shared nanite recipe.
+- [ ] Author physical specialist assembly, populations, recipes and role-specific construction times for later morphology tiers.
 - [ ] Phase-aware bulk collection, recovery, tailings and specialist morphology efficiencies.
 - [ ] Authored soil, water and flora fields following the chassis boundary.

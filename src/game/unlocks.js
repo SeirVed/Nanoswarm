@@ -3,6 +3,8 @@ import { RESEARCH } from "./content.js";
 export function researchIsUnlocked(state, definition) {
   if (state.completedResearch.includes(definition.id)) return true;
   if (definition.unlockNanites && state.nanites < definition.unlockNanites) return false;
+  if (definition.requiresStage !== undefined && state.stage < definition.requiresStage) return false;
+  if (definition.requiresSearch !== undefined && state.prospecting.searchesCompleted < definition.requiresSearch) return false;
   if (definition.requiresDiscovery && !state.discovery[definition.requiresDiscovery]) return false;
   return definition.requires.every((requirement) => state.completedResearch.includes(requirement));
 }

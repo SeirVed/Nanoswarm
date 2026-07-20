@@ -341,7 +341,9 @@ function resourcesHtml() {
                 atmosphericCollectionCapacity(state),
               )} atoms (≈${formatInventoryMass(matterFromAtomWeights(atmosphericCollectionCapacity(state), {
                 nitrogen: 156_168n, oxygen: 41_976n, argon: 934n, carbon: 42n,
-              }))}) per nanite per job · 1% base capture plus completed refinements</p></div>`
+              }))}) per nanite per job · 1% base capture plus completed refinements${
+                state.discovery.atmosphereCatalogued ? " · N/O/Ar/C signatures catalogued" : " · composition unresolved"
+              }</p></div>`
             : ""
         }
       </section>`
@@ -361,7 +363,7 @@ function resourcesHtml() {
               state.residuum,
             )} · retained · ${
               state.discovery.residuumIndexed ? "indexed" : "unresolved"
-            }</small></div>`
+            }${state.discovery.ironCatalogued ? ` · Fe signature ${formatCount(state.residuum.iron)} retained` : ""}</small></div>`
           : ""
       }
     </div>
@@ -486,7 +488,7 @@ function allocationsHtml() {
       relativeAllocation
         ? "Sliders express persistent workforce percentages. New nanites enter those shares automatically; locks protect ratios while other sliders change. Running cohorts still finish indivisibly."
         : "Running cohorts finish their current indivisible job before a reduced assignment takes effect."
-    }</p>
+    }${state.discovery.behaviouralMorphologies ? " Behavioural morphology priors are active; every nanite still uses the standard physical recipe." : ""}</p>
   </section>`;
 }
 
@@ -501,7 +503,7 @@ function researchHtml() {
   const contributingResearchers = activeResearchWorkers(state);
   const activeHtml = active
     ? `<div class="active-research"><div class="eyebrow">ACTIVE RESEARCH JOB</div><strong>${RESEARCH[active.id].name}</strong>
-        <div class="progress-wrap" data-research-progress data-tooltip-key="research-timer:${active.id}" data-tooltip="This estimate uses current computronium and genuinely available research workers. Reallocating nanites can change the remaining time, but accumulated work and reserved inputs remain exact.">
+        <div class="progress-wrap" data-research-progress data-tooltip-key="research-timer:${active.id}" data-tooltip="This estimate uses the seed reasoning substrate and genuinely available research workers. Reallocating nanites can change the remaining time, but accumulated work and reserved inputs remain exact.">
           <div class="progress-track"><div class="progress-fill" style="width:${
             Number((active.progressNaniteMs * 10_000n) / RESEARCH[active.id].requiredNaniteMs) / 100
           }%"></div></div>
@@ -532,10 +534,10 @@ function researchHtml() {
       </div>`
     : "";
 
-  return `<section class="panel research-panel${newUnlockClass("research")}" data-unlock-id="research" data-tooltip="Research uses embedded computronium plus any free nanites assigned to research.">
+  return `<section class="panel research-panel${newUnlockClass("research")}" data-unlock-id="research" data-tooltip="Research uses the embedded seed reasoning substrate plus any free nanites assigned to research.">
     <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${formatCount(capacity)} n-eq CAPACITY</span></header>
-    <div class="research-capacity" data-tooltip-key="research:capacity" data-tooltip="Research work is measured in nanite-milliseconds. Embedded computronium supplies a protected minimum capacity, while nanites assigned to research contribute only when they are not trapped inside indivisible production cohorts."><span>COMPUTRONIUM + ACTIVE RESEARCHERS</span><strong>max(100 nanites, ${
-      state.completedResearch.includes("distributed-computronium") ? "2%" : "1%"
+    <div class="research-capacity" data-tooltip-key="research:capacity" data-tooltip="Research work is measured in nanite-milliseconds. The protected seed lattice supplies a minimum capacity, while nanites assigned to research contribute only when they are not trapped inside indivisible production cohorts."><span>SEED LATTICE + ACTIVE RESEARCHERS</span><strong>max(100 nanites, ${
+      state.completedResearch.includes("distributed-reasoning-mesh") ? "2%" : "1%"
     } swarm) + ${formatCount(contributingResearchers)} / ${formatCount(state.allocations.research)} assigned</strong></div>
     ${activeHtml}
     ${queueHtml}
@@ -553,7 +555,9 @@ function researchHtml() {
           const queued = state.researchQueue.some((item) => item.id === definition.id);
           const complete = state.completedResearch.includes(definition.id);
           const eta = (definition.requiredNaniteMs + capacity - 1n) / capacity;
-          return `<article class="research-card${newUnlockClass(`research:${definition.id}`)}" data-unlock-id="research:${definition.id}" data-tooltip-key="research-card:${definition.id}" data-tooltip="${definition.description} Effect: ${definition.effect} Queueing reserves the complete listed cost before any work begins."><div><strong>${definition.name}</strong><p>${definition.description}</p><p class="research-effect">${definition.effect}</p>
+          return `<article class="research-card${newUnlockClass(`research:${definition.id}`)}" data-unlock-id="research:${definition.id}" data-tooltip-key="research-card:${definition.id}" data-tooltip="${definition.description} Effect: ${definition.effect} Queueing reserves the complete listed cost before any work begins."><div><strong>${definition.name}</strong><p>${definition.description}</p>${
+            definition.trigger ? `<p class="research-trigger">OBSERVATION · ${definition.trigger}</p>` : ""
+          }<p class="research-effect">${definition.effect}</p>
             <small>${
               complete
                 ? `RESOLVED · WORK ${formatCount(definition.requiredNaniteMs)} n·ms`

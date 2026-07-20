@@ -1,7 +1,8 @@
 import { RESEARCH } from "../game/content.js";
 
 const root = document.querySelector("#research-planner-root");
-const STORAGE_KEY = "nanoswarm.research-planner.v1";
+const STORAGE_KEY = "nanoswarm.research-planner.v2";
+const LEGACY_STORAGE_KEY = "nanoswarm.research-planner.v1";
 const NODE_WIDTH = 174;
 const NODE_HEIGHT = 62;
 const VIEW_WIDTH = 1_000;
@@ -17,7 +18,7 @@ const portable = (value) => JSON.parse(JSON.stringify(value, (_key, item) =>
 function inferCategory(definition) {
   const id = definition.id;
   if (id.includes("specialized-morphologies")) return "morphology";
-  if (id.includes("distributed-computronium")) return "compute";
+  if (id.includes("distributed-reasoning-mesh")) return "compute";
   if (id.includes("atmospheric")) return "atmosphere";
   if (id.includes("autonomous")) return "autonomy";
   if (id.includes("spectral") || id.includes("residuum")) return "analysis";
@@ -34,6 +35,9 @@ function sourceNodes() {
       ...item,
       unlockNanites: item.unlockNanites ?? "",
       requiresDiscovery: item.requiresDiscovery ?? "",
+      requiresStage: item.requiresStage ?? "",
+      requiresSearch: item.requiresSearch ?? "",
+      trigger: item.trigger ?? "",
       series: item.series ?? "",
       tier: item.tier ?? 0,
       category: inferCategory(item),
@@ -97,10 +101,13 @@ root.innerHTML = `
               <label class="planner-field full">NAME<input class="planner-input" name="name" autocomplete="off"></label>
               <label class="planner-field full">IDENTIFIER<input class="planner-input" name="id" readonly></label>
               <label class="planner-field full">DESCRIPTION<textarea class="planner-textarea" name="description" rows="3"></textarea></label>
+              <label class="planner-field full">REVEALING OBSERVATION<textarea class="planner-textarea" name="trigger" rows="2"></textarea></label>
               <label class="planner-field full">PLAYER-FACING EFFECT<textarea class="planner-textarea" name="effect" rows="2"></textarea></label>
               <label class="planner-field">WORK · NANITE-MS<input class="planner-input" name="requiredNaniteMs" inputmode="numeric"></label>
               <label class="planner-field">NANITES TO REVEAL<input class="planner-input" name="unlockNanites" inputmode="numeric" placeholder="none"></label>
-              <label class="planner-field">DISCOVERY GATE<select class="planner-select" name="requiresDiscovery"><option value="">None</option><option value="atmosphereVisible">Atmosphere visible</option><option value="residuumVisible">Residuum visible</option><option value="stage2">Stage 2</option></select></label>
+              <label class="planner-field">MINIMUM STAGE<input class="planner-input" name="requiresStage" inputmode="numeric" placeholder="none"></label>
+              <label class="planner-field">MATERIAL SEARCH<input class="planner-input" name="requiresSearch" inputmode="numeric" placeholder="none"></label>
+              <label class="planner-field">DISCOVERY GATE<select class="planner-select" name="requiresDiscovery"><option value="">None</option><option value="atmosphereVisible">Atmosphere visible</option><option value="residuumVisible">Residuum visible</option><option value="radioSignalDetected">Radio signal detected</option><option value="externalMaterialRoutes">External material routes</option></select></label>
               <label class="planner-field">CATEGORY<select class="planner-select" name="category"><option value="coordination">Coordination</option><option value="analysis">Analysis</option><option value="energy">Energy</option><option value="collection">Collection</option><option value="sorting">Sorting</option><option value="atmosphere">Atmosphere</option><option value="compute">Compute</option><option value="autonomy">Autonomy</option><option value="morphology">Morphology</option></select></label>
             </div>
             <section class="planner-section">
@@ -240,7 +247,11 @@ function restoreDraft() {
       nodes = saved;
       return false;
     }
-    if (!Array.isArray(saved?.nodes) || !saved.nodes.length) return false;
+    if (!Array.isArray(saved?.nodes) || !saved.nodes.length) {
+      const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || "null");
+      suggestions = typeof legacy?.suggestions === "string" ? legacy.suggestions : "";
+      return false;
+    }
     nodes = saved.nodes;
     suggestions = typeof saved.suggestions === "string" ? saved.suggestions : "";
     if (saved.camera && Number.isFinite(saved.camera.x) && Number.isFinite(saved.camera.y) && Number.isFinite(saved.camera.zoom)) {
@@ -457,7 +468,7 @@ function renderEditor() {
   root.querySelector("[data-selected-category]").textContent = item.series
     ? `${item.category.toUpperCase()} · TIER ${item.tier}`
     : item.category.toUpperCase();
-  for (const key of ["name", "id", "description", "effect", "requiredNaniteMs", "unlockNanites", "requiresDiscovery", "category"]) {
+  for (const key of ["name", "id", "description", "trigger", "effect", "requiredNaniteMs", "unlockNanites", "requiresStage", "requiresSearch", "requiresDiscovery", "category"]) {
     editor.elements[key].value = item[key] ?? "";
   }
   editor.elements.energy.value = item.cost.energy;
@@ -489,7 +500,7 @@ function renderEditor() {
     .filter((candidate) => candidate.id !== item.id && !item.requires.includes(candidate.id))
     .sort((left, right) => left.name.localeCompare(right.name))
     .forEach((candidate) => select.append(option(candidate.id, candidate.name)));
-  root.querySelector("[data-derived]").textContent = `${durationLabel(item)} · ${item.unlockNanites ? `REVEALS AT ${formatCount(item.unlockNanites)} NANITES` : "REVEALS BY DEPENDENCY"}${item.requiresDiscovery ? ` · GATE ${item.requiresDiscovery}` : ""}`;
+  root.querySelector("[data-derived]").textContent = `${durationLabel(item)} · ${item.unlockNanites ? `REVEALS AT ${formatCount(item.unlockNanites)} NANITES` : "REVEALS BY DEPENDENCY"}${item.requiresStage !== "" ? ` · STAGE ${item.requiresStage}` : ""}${item.requiresSearch !== "" ? ` · SEARCH ${item.requiresSearch}` : ""}${item.requiresDiscovery ? ` · GATE ${item.requiresDiscovery}` : ""}`;
 }
 
 function render() {
@@ -521,10 +532,13 @@ function addResearch() {
     name: "New Research",
     description: "Describe the capability being investigated.",
     effect: "Describe what changes for the player.",
+    trigger: "Describe the observation that makes this question thinkable.",
     requires: ["relative-allocation"],
     requiredNaniteMs: "60000000",
     unlockNanites: "",
     requiresDiscovery: "",
+    requiresStage: "",
+    requiresSearch: "",
     cost: { energy: "0", atoms: { carbon: "0", silicon: "0", copper: "0", gold: "0" } },
     bonuses: {},
     category: "analysis",
@@ -572,6 +586,9 @@ function importJson() {
     item.tier ??= 0;
     item.unlockNanites ??= "";
     item.requiresDiscovery ??= "";
+    item.requiresStage ??= "";
+    item.requiresSearch ??= "";
+    item.trigger ??= "";
     item.bonuses ??= {};
   }
   nodes = imported;
