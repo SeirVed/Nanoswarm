@@ -17,7 +17,8 @@ const types = {
 createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
-    const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+    const pathname = decodeURIComponent(url.pathname);
+    const requested = pathname === "/" ? "/index.html" : pathname.endsWith("/") ? `${pathname}index.html` : pathname;
     const file = normalize(join(root, requested));
     if (!file.startsWith(root)) throw new Error("Path outside project");
     const info = await stat(file);

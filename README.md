@@ -16,6 +16,8 @@ npm run build
 
 Open `http://127.0.0.1:4173` after starting the development server. The production-ready static files are emitted to `dist/`.
 
+The research workbench is available at `http://127.0.0.1:4173/research-planner/`. It loads the live catalogue, supports draggable layouts and editable dependencies, retains drafts in browser storage, and exports either a compact review diff or the full plan as JSON.
+
 ## Play online
 
 The `main` branch deploys automatically to GitHub Pages:
