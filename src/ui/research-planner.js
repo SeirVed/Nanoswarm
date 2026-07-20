@@ -4,6 +4,10 @@ const root = document.querySelector("#research-planner-root");
 const STORAGE_KEY = "nanoswarm.research-planner.v1";
 const NODE_WIDTH = 174;
 const NODE_HEIGHT = 62;
+const VIEW_WIDTH = 1_000;
+const VIEW_HEIGHT = 700;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 3;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const clone = (value) => structuredClone(value);
@@ -52,11 +56,15 @@ root.innerHTML = `
       <section class="planner-intro">
         <div>
           <h2>RESEARCH TREE PLANNER</h2>
-          <p>Drag nodes to arrange the view. Select a node to edit its work, costs, effects, gates, and dependencies. This is a private browser draft until its JSON is copied or downloaded.</p>
+          <p>Drag empty space to pan, use the wheel or controls to zoom, and drag nodes to arrange them. Select a node to edit its work, costs, effects, gates, and dependencies. This is a private browser draft until its JSON is copied or downloaded.</p>
         </div>
       </section>
       <div class="planner-toolbar" aria-label="Planner controls">
         <button class="planner-button" type="button" data-action="layout">AUTO-LAYOUT</button>
+        <button class="planner-button" type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
+        <button class="planner-button" type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
+        <button class="planner-button" type="button" data-action="fit">FIT TREE</button>
+        <span class="planner-badge" data-stat="zoom">100% ZOOM</span>
         <button class="planner-button" type="button" data-action="connect" aria-pressed="false">CONNECT DEPENDENCY</button>
         <button class="planner-button" type="button" data-action="add">ADD RESEARCH</button>
         <label class="planner-switch"><input type="checkbox" data-action="expand"> SHOW EVERY REFINEMENT</label>
@@ -64,6 +72,10 @@ root.innerHTML = `
         <button class="planner-button primary" type="button" data-action="copy-changes">COPY CHANGES FOR PETE</button>
         <button class="planner-button" type="button" data-action="download">DOWNLOAD FULL PLAN</button>
       </div>
+      <label class="planner-suggestions">
+        <span>SUGGESTIONS</span>
+        <textarea class="planner-textarea" data-suggestions rows="3" placeholder="SUGGESTIONS"></textarea>
+      </label>
       <div class="planner-status" aria-live="polite">
         <span class="planner-badge" data-stat="nodes"></span>
         <span class="planner-badge" data-stat="links"></span>
@@ -142,6 +154,9 @@ let expanded = false;
 let selectedId = "parallel-directives";
 let connectFrom = "";
 let dragging = null;
+let panning = null;
+let suggestions = "";
+let camera = { x: 0, y: 0, zoom: 1 };
 
 const byId = (id) => nodes.find((item) => item.id === id);
 const visibleNodes = () => expanded ? nodes : nodes.filter((item) => !item.series || item.tier === 1);
@@ -221,15 +236,25 @@ const baseline = clone(nodes);
 function restoreDraft() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    if (!Array.isArray(saved) || !saved.length) return;
-    nodes = saved;
+    if (Array.isArray(saved) && saved.length) {
+      nodes = saved;
+      return false;
+    }
+    if (!Array.isArray(saved?.nodes) || !saved.nodes.length) return false;
+    nodes = saved.nodes;
+    suggestions = typeof saved.suggestions === "string" ? saved.suggestions : "";
+    if (saved.camera && Number.isFinite(saved.camera.x) && Number.isFinite(saved.camera.y) && Number.isFinite(saved.camera.zoom)) {
+      camera = saved.camera;
+      return true;
+    }
   } catch {
     // Storage can be unavailable in privacy modes; the session remains usable.
   }
+  return false;
 }
 
 function saveDraft() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(nodes)); }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, suggestions, camera })); }
   catch { /* The in-memory draft remains usable. */ }
 }
 
@@ -279,6 +304,49 @@ function graphBounds(items) {
   };
 }
 
+function clampZoom(value) {
+  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+}
+
+function fitTree(renderAfter = true) {
+  const bounds = graphBounds(visibleNodes());
+  const zoom = clampZoom(Math.min(VIEW_WIDTH / bounds.width, VIEW_HEIGHT / bounds.height) * 0.94);
+  camera = {
+    zoom,
+    x: (VIEW_WIDTH - bounds.width * zoom) / 2,
+    y: (VIEW_HEIGHT - bounds.height * zoom) / 2,
+  };
+  saveDraft();
+  if (renderAfter) renderGraph();
+}
+
+function svgPoint(clientX, clientY) {
+  const point = svg.createSVGPoint();
+  point.x = clientX;
+  point.y = clientY;
+  return point.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+function worldPoint(clientX, clientY) {
+  const point = svgPoint(clientX, clientY);
+  return {
+    x: (point.x - camera.x) / camera.zoom,
+    y: (point.y - camera.y) / camera.zoom,
+  };
+}
+
+function zoomAt(factor, focus = { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2 }) {
+  const previous = camera.zoom;
+  const next = clampZoom(previous * factor);
+  const worldX = (focus.x - camera.x) / previous;
+  const worldY = (focus.y - camera.y) / previous;
+  camera.zoom = next;
+  camera.x = focus.x - worldX * next;
+  camera.y = focus.y - worldY * next;
+  saveDraft();
+  renderGraph();
+}
+
 function svgElement(tag, attributes = {}) {
   const element = document.createElementNS(SVG_NS, tag);
   for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -288,8 +356,8 @@ function svgElement(tag, attributes = {}) {
 function renderGraph() {
   const items = visibleNodes();
   const ids = new Set(items.map((item) => item.id));
-  const bounds = graphBounds(items);
-  svg.setAttribute("viewBox", `0 0 ${bounds.width} ${bounds.height}`);
+  svg.setAttribute("viewBox", `0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`);
+  svg.classList.toggle("is-panning", Boolean(panning));
   svg.replaceChildren();
   const title = svgElement("title", { id: "planner-graph-title" });
   title.textContent = "NanoSwarm research dependency graph";
@@ -301,6 +369,10 @@ function renderGraph() {
   definitions.append(marker);
   const edges = svgElement("g");
   const nodeLayer = svgElement("g");
+  const worldLayer = svgElement("g", {
+    class: "planner-world",
+    transform: `translate(${camera.x} ${camera.y}) scale(${camera.zoom})`,
+  });
   const edgeKeys = new Set();
   for (const target of items) {
     for (const rawRequirement of target.requires) {
@@ -340,7 +412,9 @@ function renderGraph() {
     group.append(heading, meta);
     nodeLayer.append(group);
   }
-  svg.append(title, description, definitions, edges, nodeLayer);
+  worldLayer.append(edges, nodeLayer);
+  svg.append(title, description, definitions, worldLayer);
+  root.querySelector("[data-stat='zoom']").textContent = `${Math.round(camera.zoom * 100)}% ZOOM`;
   renderStatus(edgeKeys.size);
 }
 
@@ -358,9 +432,10 @@ function showMessage(text, tone = "") {
 
 function renderStatus(linkCount) {
   const check = validation();
+  const draftItems = changes().length + (suggestions.trim() ? 1 : 0);
   root.querySelector("[data-stat='nodes']").textContent = `${nodes.length} RESEARCHES`;
   root.querySelector("[data-stat='links']").textContent = `${linkCount} VISIBLE LINKS`;
-  root.querySelector("[data-stat='changes']").textContent = `${changes().length} DRAFT CHANGES`;
+  root.querySelector("[data-stat='changes']").textContent = `${draftItems} DRAFT ITEMS`;
   if (check.cycle) showMessage("DEPENDENCY CYCLE DETECTED", "error");
   else if (check.dangling.length) showMessage(`${check.dangling.length} MISSING DEPENDENCY REFERENCES`, "error");
   else if (connectFrom) showMessage(`SELECT THE RESEARCH THAT SHOULD REQUIRE ${byId(connectFrom)?.name.toUpperCase()}`, "success");
@@ -424,7 +499,7 @@ function render() {
 }
 
 function refreshJson() {
-  jsonBox.value = JSON.stringify({ version: 1, researches: nodes.map(semantic) }, null, 2);
+  jsonBox.value = JSON.stringify({ version: 1, suggestions, researches: nodes.map(semantic) }, null, 2);
 }
 
 async function copyText(text) {
@@ -461,6 +536,7 @@ function addResearch() {
   nodes.push(created);
   selectedId = created.id;
   layout();
+  fitTree(false);
   render();
 }
 
@@ -499,8 +575,11 @@ function importJson() {
     item.bonuses ??= {};
   }
   nodes = imported;
+  suggestions = typeof parsed.suggestions === "string" ? parsed.suggestions : suggestions;
+  root.querySelector("[data-suggestions]").value = suggestions;
   selectedId = nodes[0].id;
   layout();
+  fitTree(false);
   render();
 }
 
@@ -517,6 +596,12 @@ editor.addEventListener("input", (event) => {
   root.querySelector("[data-selected-category]").textContent = item.series
     ? `${item.category.toUpperCase()} · TIER ${item.tier}`
     : item.category.toUpperCase();
+});
+
+root.querySelector("[data-suggestions]").addEventListener("input", (event) => {
+  suggestions = event.target.value;
+  saveDraft();
+  renderStatus(root.querySelectorAll(".planner-edge").length);
 });
 
 editor.elements.bonuses.addEventListener("change", (event) => {
@@ -544,8 +629,15 @@ root.addEventListener("click", async (event) => {
   if (!action || action === "expand") return;
   if (action === "layout") {
     layout();
+    fitTree(false);
     clearMessage();
     render();
+  } else if (action === "zoom-in") {
+    zoomAt(1.25);
+  } else if (action === "zoom-out") {
+    zoomAt(0.8);
+  } else if (action === "fit") {
+    fitTree();
   } else if (action === "connect") {
     connectFrom = connectFrom ? "" : selectedId;
     event.target.closest("button").setAttribute("aria-pressed", String(Boolean(connectFrom)));
@@ -554,9 +646,12 @@ root.addEventListener("click", async (event) => {
     addResearch();
   } else if (action === "reset") {
     nodes = clone(baseline);
+    suggestions = "";
+    root.querySelector("[data-suggestions]").value = "";
     selectedId = "parallel-directives";
     connectFrom = "";
     root.querySelector("[data-action='connect']").setAttribute("aria-pressed", "false");
+    fitTree(false);
     clearMessage();
     render();
   } else if (action === "add-dependency") {
@@ -587,19 +682,20 @@ root.addEventListener("click", async (event) => {
     }
   } else if (action === "copy-changes") {
     const planChanges = changes();
-    if (!planChanges.length) {
+    if (!planChanges.length && !suggestions.trim()) {
       showMessage("NO DRAFT CHANGES TO COPY", "error");
       return;
     }
     const payload = JSON.stringify({
       instruction: "Review these NanoSwarm research-tree changes with me. Do not implement until I explicitly approve them.",
+      suggestions,
       validation: validation(),
       changes: planChanges,
     }, null, 2);
     await copyText(payload);
     showMessage("CHANGES COPIED · PASTE THEM INTO OUR CHAT", "success");
   } else if (action === "download") {
-    const content = JSON.stringify({ version: 1, researches: nodes.map(semantic) }, null, 2);
+    const content = JSON.stringify({ version: 1, suggestions, researches: nodes.map(semantic) }, null, 2);
     const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
@@ -615,13 +711,26 @@ root.querySelector("[data-action='expand']").addEventListener("change", (event) 
   const selected = byId(selectedId);
   if (!expanded && selected?.series) selectedId = selected.series;
   layout();
+  fitTree(false);
   clearMessage();
   render();
 });
 
 svg.addEventListener("pointerdown", (event) => {
   const group = event.target.closest(".planner-node");
-  if (!group) return;
+  if (!group) {
+    const point = svgPoint(event.clientX, event.clientY);
+    panning = {
+      pointerId: event.pointerId,
+      startX: point.x,
+      startY: point.y,
+      cameraX: camera.x,
+      cameraY: camera.y,
+    };
+    svg.setPointerCapture(event.pointerId);
+    renderGraph();
+    return;
+  }
   const id = group.dataset.id;
   if (connectFrom && connectFrom !== id) {
     const target = byId(id);
@@ -635,38 +744,49 @@ svg.addEventListener("pointerdown", (event) => {
   }
   selectedId = id;
   const item = byId(id);
-  const point = svg.createSVGPoint();
-  point.x = event.clientX;
-  point.y = event.clientY;
-  const transformed = point.matrixTransform(svg.getScreenCTM().inverse());
-  dragging = { id, pointerId: event.pointerId, dx: transformed.x - item.x, dy: transformed.y - item.y };
+  const point = worldPoint(event.clientX, event.clientY);
+  dragging = { id, pointerId: event.pointerId, dx: point.x - item.x, dy: point.y - item.y };
   svg.setPointerCapture(event.pointerId);
   renderGraph();
   renderEditor();
 });
 
 svg.addEventListener("pointermove", (event) => {
+  if (panning && panning.pointerId === event.pointerId) {
+    const point = svgPoint(event.clientX, event.clientY);
+    camera.x = panning.cameraX + point.x - panning.startX;
+    camera.y = panning.cameraY + point.y - panning.startY;
+    renderGraph();
+    return;
+  }
   if (!dragging || dragging.pointerId !== event.pointerId) return;
   const item = byId(dragging.id);
-  const point = svg.createSVGPoint();
-  point.x = event.clientX;
-  point.y = event.clientY;
-  const transformed = point.matrixTransform(svg.getScreenCTM().inverse());
-  item.x = Math.max(0, transformed.x - dragging.dx);
-  item.y = Math.max(0, transformed.y - dragging.dy);
+  const point = worldPoint(event.clientX, event.clientY);
+  item.x = Math.max(0, point.x - dragging.dx);
+  item.y = Math.max(0, point.y - dragging.dy);
   renderGraph();
 });
 
-function stopDragging(event) {
-  if (!dragging || dragging.pointerId !== event.pointerId) return;
+function stopPointerInteraction(event) {
+  const active = dragging?.pointerId === event.pointerId || panning?.pointerId === event.pointerId;
+  if (!active) return;
   if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
   dragging = null;
+  panning = null;
   saveDraft();
+  renderGraph();
 }
 
-svg.addEventListener("pointerup", stopDragging);
-svg.addEventListener("pointercancel", stopDragging);
+svg.addEventListener("pointerup", stopPointerInteraction);
+svg.addEventListener("pointercancel", stopPointerInteraction);
+svg.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, svgPoint(event.clientX, event.clientY));
+}, { passive: false });
+svg.addEventListener("dblclick", () => fitTree());
 
-restoreDraft();
+const restoredCamera = restoreDraft();
 if (!visibleNodes().some((item) => item.x || item.y)) layout();
+if (!restoredCamera) fitTree(false);
+root.querySelector("[data-suggestions]").value = suggestions;
 render();

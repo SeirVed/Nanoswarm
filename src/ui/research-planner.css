@@ -147,6 +147,25 @@
   font-size: 9px;
 }
 
+.planner-suggestions {
+  padding: 11px 12px;
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.planner-suggestions > span {
+  padding-top: 9px;
+  color: var(--green);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+
+.planner-suggestions .planner-textarea { min-height: 68px; }
+
 .planner-badge {
   padding: 4px 7px;
   border: 1px solid var(--line);
@@ -182,7 +201,10 @@
   min-height: 660px;
   height: auto;
   touch-action: none;
+  cursor: grab;
 }
+
+.planner-graph.is-panning { cursor: grabbing; }
 
 .planner-edge {
   fill: none;
@@ -353,4 +375,6 @@
   .planner-form-grid, .planner-cost-grid { grid-template-columns: 1fr; }
   .planner-field.full { grid-column: auto; }
   .planner-graph { min-height: 480px; }
+  .planner-suggestions { grid-template-columns: 1fr; }
+  .planner-suggestions > span { padding-top: 0; }
 }
