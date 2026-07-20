@@ -14,6 +14,7 @@ import {
   adjustAllocation,
   advanceSimulation,
   assignmentTotal,
+  cancelTemporaryBurst,
   cancelResearch,
   effectiveResearchCapacity,
   atmosphericCollectionCapacity,
@@ -23,12 +24,16 @@ import {
   effectiveJobDuration,
   moveResearch,
   queueResearch,
-  replicationShortages,
+  replicationPipelineMetrics,
+  replicationReadiness,
+  REPLICATION_EFFICIENCY_THRESHOLD_BPS,
   researchIsRevealed,
   setDirectiveAllocationShare,
   solidCollectionCapacity,
   startManualJob,
   startProspecting,
+  startTemporaryBurst,
+  TEMPORARY_BURST_QUALIFICATION_MS,
   toggleAllocationLock,
 } from "../game/engine.js";
 import { addMatter, matterFromAtomWeights, totalMatter } from "../game/matter.js";
@@ -413,7 +418,8 @@ function allocationsHtml() {
   if (!state.discovery.directivesVisible) return "";
   const unassigned = state.nanites - assignmentTotal(state);
   const relativeAllocation = state.completedResearch.includes("relative-allocation");
-  const replicateHalt = replicationShortages(state);
+  const readiness = replicationReadiness(state);
+  const replicateHalt = readiness.shortages;
   const haltedResources = replicateHalt.map((shortage) => shortage.name.toUpperCase()).join(" · ");
   const haltDetail = replicateHalt.map((shortage) =>
     shortage.key === "energy"
@@ -426,22 +432,71 @@ function allocationsHtml() {
     NANITE_RECIPE.atoms.gold,
   )} · E ${formatEnergy(NANITE_RECIPE.energy)}`;
   const replicateStatusHtml = `<small class="directive-recipe">${recipeText}</small>${
-    replicateHalt.length > 0
-      ? `<strong class="directive-alert">PRODUCTION HALTED · INSUFFICIENT ${haltedResources}</strong>`
+    readiness.unableToStart > 0n
+      ? `<strong class="directive-alert ${readiness.mode}">${formatCount(readiness.unableToStart)} UNABLE TO START · ${
+          readiness.mode === "waiting" ? "AWAITING INPUT PIPELINE" : `INSUFFICIENT ${haltedResources || "COMPLETE RECIPES"}`
+        }</strong>`
       : ""
   }`;
-  const replicationAlertHtml = replicateHalt.length > 0
-    ? `<div class="production-halt-alert" role="status" data-tooltip-key="replication:halt" data-tooltip="Replication cannot start the requested cohort because reserved-free inventory is short. ${haltDetail}. Existing jobs remain safe; assigned replicators will resume automatically when every recipe input is available.">
-        <strong>REPLICATION PRODUCTION HALTED</strong>
-        <span>INSUFFICIENT ${haltedResources}</span>
-        <small>${haltDetail}</small>
+  const replicationAlertHtml = readiness.unableToStart > 0n
+    ? `<div class="production-halt-alert ${readiness.mode}" role="status" data-tooltip-key="replication:${readiness.mode}" data-tooltip="${formatCount(
+        readiness.unableToStart,
+      )} assigned replicators are idle and cannot reserve a complete recipe. ${
+        readiness.mode === "waiting"
+          ? "Every missing input has a matching upstream payload in flight, so this is a wait rather than a true halt."
+          : "At least one missing input has no matching upstream payload, so production is genuinely halted until the allocation or inventory changes."
+      } ${haltDetail}.">
+        <strong>REPLICATION ${readiness.mode === "waiting" ? "WAITING" : "PRODUCTION HALTED"}</strong>
+        <span>${formatCount(readiness.unableToStart)} UNABLE TO START</span>
+        <small>${haltDetail || "Reserved burst recipes are already being deployed."}</small>
       </div>`
     : "";
-  return `<section class="panel allocation-panel${replicateHalt.length > 0 ? " production-stalled" : ""}${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
+  const pipeline = relativeAllocation ? replicationPipelineMetrics(state) : null;
+  const burst = state.replicationTuning?.burst;
+  const qualifyingMs = state.replicationTuning?.qualifyingMs ?? 0;
+  const minimumBurstBuffer = state.nanites / 100n > 0n ? state.nanites / 100n : 1n;
+  const burstEligible = relativeAllocation && !burst &&
+    pipeline.efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS &&
+    qualifyingMs >= TEMPORARY_BURST_QUALIFICATION_MS &&
+    pipeline.bufferCapacity >= minimumBurstBuffer;
+  const efficiencyText = pipeline
+    ? `${pipeline.efficiencyBps / 100n}.${(pipeline.efficiencyBps % 100n).toString().padStart(2, "0")}%`
+    : "";
+  const bottleneckText = pipeline?.bottlenecks.map((directive) => DIRECTIVE_LABEL[directive].toUpperCase()).join(" · ");
+  const burstStatus = !pipeline
+    ? ""
+    : burst
+    ? `${formatCount(burst.remainingNanites)} OF ${formatCount(burst.reservedNanites)} RESERVED RECIPES AWAITING COHORTS`
+    : pipeline.efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS
+      ? "RAISE EFFICIENCY TO 99.00%"
+      : qualifyingMs < TEMPORARY_BURST_QUALIFICATION_MS
+        ? `STABILISING · <span data-burst-qualification>${(qualifyingMs / 1000).toFixed(1)} / 30.0s</span>`
+        : pipeline.bufferCapacity < minimumBurstBuffer
+          ? `BUFFER ${formatCount(pipeline.bufferCapacity)} / ${formatCount(minimumBurstBuffer)} MINIMUM`
+          : "EXACT BUFFER RESERVATION READY";
+  const pipelineHtml = relativeAllocation
+    ? `<div class="pipeline-readout" data-tooltip-key="replication:efficiency" data-tooltip="Efficiency compares the current Collect, Sort, Energy, and Replicate workforce ratio with the exact sustainable ratio implied by current job times, yields, and the universal nanite recipe. Heterogeneous substrate composition is deliberately excluded: this measures directive coherence, not whether the local material contains enough gold.">
+        <div><span>REPLICATION EFFICIENCY</span><strong>${efficiencyText}</strong><small>BOTTLENECK · ${bottleneckText}</small></div>
+        <div data-tooltip-key="replication:buffer" data-tooltip="Complete-recipe buffer counts nanites that could begin replication immediately from unreserved sorted atoms and energy. The lowest resource capacity is ${pipeline.limitingResource}; every input is reserved atom-for-atom when a burst is armed."><span>COMPLETE-RECIPE BUFFER</span><strong>${formatCount(
+          pipeline.bufferCapacity,
+        )} NANITES</strong><small>LIMITING INPUT · ${pipeline.limitingResource.toUpperCase()}</small></div>
+        <div class="burst-control"><small>${burstStatus}</small><button class="terminal-button compact-button" data-action="${
+          burst ? "burst-cancel" : "burst-start"
+        }" ${!burst && !burstEligible ? "disabled" : ""} data-tooltip="${
+          burst
+            ? "Cancel the undispatched portion of the burst, refund its still-reserved recipes exactly, and restore the prior percentage targets and locks. Replication cohorts already launched remain indivisible."
+            : "After efficiency remains at 99% or higher for 30 seconds and a buffer of at least 1% of the swarm exists, reserve every complete recipe, temporarily direct the workforce to replication, then restore the exact prior targets and locks when the buffer is deployed."
+        }">${burst ? "CANCEL BURST" : "TEMPORARY BURST"}</button></div>
+      </div>`
+    : "";
+  return `<section class="panel allocation-panel${readiness.mode === "halted" ? " production-stalled" : ""}${readiness.mode === "waiting" ? " production-waiting" : ""}${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
     <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatCount(unassigned)} UNASSIGNED${
+      ` · ${formatCount(readiness.unableToStart)} UNABLE TO START`
+    }${
       relativeAllocation ? " · RELATIVE AUTO" : ""
     }</span></header>
     ${replicationAlertHtml}
+    ${pipelineHtml}
     <div class="allocation-list">
       ${DIRECTIVES.filter((directive) => directiveIsVisible(state, directive)).map((directive) => {
         const locked = state.allocationLocks[directive];
@@ -452,7 +507,7 @@ function allocationsHtml() {
         const shareText = `${shareHundredths / 100n}.${(shareHundredths % 100n).toString().padStart(2, "0")}`;
         return `<div class="allocation-row ${relativeAllocation ? "relative" : ""}${newUnlockClass(`directive:${directive}`)}" data-unlock-id="directive:${directive}" data-tooltip="${
           directive === "replicate"
-            ? `${recipeText}${haltDetail ? `. Production halted: ${haltDetail}.` : "."}`
+            ? `${recipeText}${haltDetail ? `. ${readiness.mode === "waiting" ? "Waiting" : "Production halted"}: ${haltDetail}.` : "."}`
             : `Assign active nanites to ${DIRECTIVE_LABEL[directive].toLowerCase()}.`
         }">
           <div class="allocation-label"><span>${DIRECTIVE_LABEL[directive]}</span><small>${formatCount(
@@ -683,6 +738,9 @@ function structuralSignature() {
     activeLogTier,
     activeResearchTab,
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
+    state.replicationTuning?.qualifyingMs >= TEMPORARY_BURST_QUALIFICATION_MS,
+    state.replicationTuning?.burst?.remainingNanites ?? "",
+    state.replicationTuning?.burst?.reservedNanites ?? "",
     sonicMind.enabled,
     sonicMind.volumePercent,
     notice ?? "",
@@ -714,6 +772,10 @@ function updateDynamicProgress(now) {
         Number((definition.requiredNaniteMs - active.progressNaniteMs + capacity - 1n) / capacity),
       );
     }
+  }
+  const qualification = document.querySelector("[data-burst-qualification]");
+  if (qualification) {
+    qualification.textContent = `${((state.replicationTuning?.qualifyingMs ?? 0) / 1000).toFixed(1)} / 30.0s`;
   }
 }
 
@@ -872,6 +934,10 @@ function performButtonAction(button) {
     state = toggleAllocationLock(state, button.dataset.directive);
     renderGame();
     return true;
+  } else if (action === "burst-start") {
+    return acceptResult(startTemporaryBurst(state));
+  } else if (action === "burst-cancel") {
+    return acceptResult(cancelTemporaryBurst(state));
   } else if (action === "research") {
     return acceptResult(queueResearch(state, button.dataset.research));
   } else if (action === "research-cancel") {

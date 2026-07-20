@@ -38,7 +38,7 @@ describe("unlock acknowledgements", () => {
     delete state.seenUnlocks;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.deepEqual(restored.seenUnlocks, unlockedIdsForState(restored));
     assert.equal(restored.seenUnlocks.includes("substrate"), true);
     assert.equal(restored.seenUnlocks.includes("materials"), true);

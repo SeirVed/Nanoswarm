@@ -28,6 +28,17 @@
 - [ ] Keep flux-based nuclear transmutation post-human, infrastructure-heavy and extremely expensive.
 - [ ] Treat Morphologies II+ as interchangeable tools and temporary equipment on the canonical nanite body.
 
+## Growth pacing and directive coherence
+
+- [x] Report the exact number of assigned replicators unable to reserve a complete recipe.
+- [x] Distinguish a genuine missing-input halt from waiting on enough already-scheduled upstream payloads.
+- [x] Score Collect, Sort, Energy and Replicate allocations against the exact sustainable pipeline ratio.
+- [x] Expose the complete-recipe buffer and its limiting identified input.
+- [x] Require 30 continuous seconds at 99% replication efficiency before burst control is eligible.
+- [x] Implement Temporary Burst with exact whole-recipe reservation, refundable undispatched inputs, and restoration of prior targets and locks.
+- [ ] Test a later τ-coherence acceleration layer after the allocation loop has real play data.
+- [ ] Defer heat management until waste heat has consequences through entropy, visibility or human detection.
+
 ## Entropy and humanity
 
 - [ ] Add damaged, immobilized, captured, dispersed and destroyed nanite states with matter-conserving recovery.

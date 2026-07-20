@@ -15,7 +15,7 @@ import { addMatter, totalMatter } from "./matter.js";
 import { unlockedIdsForState } from "./unlocks.js";
 
 const SAVE_KEY = "nanoswarm.save.v1";
-const CURRENT_SAVE_VERSION = 10;
+const CURRENT_SAVE_VERSION = 11;
 const LEGACY_STARTER_DEPOSIT_MATTER = Object.freeze({
   carbon: 3_000_000n,
   silicon: 1_250_000n,
@@ -193,6 +193,13 @@ function migrateState(state) {
     state.discovery.radioSignalDetected ??= false;
     state.discovery.externalMaterialRoutes ??= false;
     state.version = 10;
+  }
+  if (state.version === 10) {
+    state.replicationTuning = {
+      qualifyingMs: 0,
+      burst: null,
+    };
+    state.version = 11;
   }
   return state;
 }

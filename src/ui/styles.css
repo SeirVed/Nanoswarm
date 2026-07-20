@@ -434,6 +434,18 @@ body::after {
 .production-halt-alert strong { color: var(--danger); font-size: 11px; letter-spacing: 0.12em; }
 .production-halt-alert span { color: #f0b2a8; font-size: 9px; letter-spacing: 0.1em; text-align: right; }
 .production-halt-alert small { grid-column: 1 / -1; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.production-halt-alert.waiting { border-color: rgba(226, 184, 111, 0.52); background: rgba(58, 43, 13, 0.34); box-shadow: inset 3px 0 var(--amber), 0 0 18px rgba(226, 184, 111, 0.07); }
+.production-halt-alert.waiting strong, .production-halt-alert.waiting span { color: var(--amber); }
+.production-waiting { border-color: rgba(226, 184, 111, 0.25); }
+.pipeline-readout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--line); background: rgba(105, 240, 138, 0.018); }
+.pipeline-readout > div { min-width: 0; padding: 12px 13px; display: grid; gap: 5px; border-right: 1px solid var(--line); }
+.pipeline-readout > div:nth-child(2) { border-right: 0; }
+.pipeline-readout span { color: var(--muted); font-size: 7px; letter-spacing: 0.12em; }
+.pipeline-readout strong { overflow: hidden; color: var(--green); font-size: 12px; text-overflow: ellipsis; }
+.pipeline-readout small { color: var(--green-dim); font-size: 7px; line-height: 1.45; }
+.pipeline-readout .burst-control { grid-column: 1 / -1; min-height: 50px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); border-right: 0; }
+.burst-control .terminal-button:disabled { opacity: 0.34; cursor: not-allowed; }
+.directive-alert.waiting { color: var(--amber); }
 .step-button, .lock-button { height: 30px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
 .step-button:hover:not(:disabled), .lock-button:hover { border-color: var(--line-bright); color: var(--green); }
 .step-button:disabled { opacity: 0.25; cursor: not-allowed; }
@@ -631,6 +643,10 @@ body::after {
   .lifetime-summary > div:last-child { border-bottom: 0; }
   .production-halt-alert { grid-template-columns: 1fr; }
   .production-halt-alert span, .production-halt-alert small { grid-column: 1; text-align: left; }
+  .pipeline-readout { grid-template-columns: 1fr; }
+  .pipeline-readout > div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .pipeline-readout > div:nth-child(2) { border-bottom: 0; }
+  .pipeline-readout .burst-control { grid-column: 1; align-items: stretch; flex-direction: column; }
   .research-queue-row { grid-template-columns: 20px minmax(0, 1fr); }
   .queue-controls { grid-column: 2; }
   .feedback-overlay { padding: 8px; }

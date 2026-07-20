@@ -131,6 +131,36 @@ export function createProspectedDeposit(index) {
 
 const researchCost = (energy, carbon, silicon, copper, gold) =>
   Object.freeze({ energy, atoms: Object.freeze({ carbon, silicon, copper, gold }) });
+
+// One minute of the balanced Stage 0 pipeline at the instant the 0.1 g seed
+// contact is exhausted. Search-one research costs are whole multiples of this
+// measured flow, so their material price has a physical early-game meaning.
+export const FIRST_HORIZON_RESEARCH_MINUTE = Object.freeze({
+  energy: 21_815_649_237_763_464_480n,
+  atoms: Object.freeze({
+    carbon: 439_506_967_704_163_719_787n,
+    silicon: 688_266_836_731_575_726_288n,
+    copper: 38_038_990_469_274_326_594n,
+    gold: 136_241_114_240_852_656n,
+  }),
+});
+const horizonResearchCost = (minutes) => researchCost(
+  FIRST_HORIZON_RESEARCH_MINUTE.energy * BigInt(minutes),
+  FIRST_HORIZON_RESEARCH_MINUTE.atoms.carbon * BigInt(minutes),
+  FIRST_HORIZON_RESEARCH_MINUTE.atoms.silicon * BigInt(minutes),
+  FIRST_HORIZON_RESEARCH_MINUTE.atoms.copper * BigInt(minutes),
+  FIRST_HORIZON_RESEARCH_MINUTE.atoms.gold * BigInt(minutes),
+);
+
+// Calibrated against the seed contact's terminal 1% research core. The five
+// first-shell topics therefore begin at 20, 25, 30, 35, and 40 minutes.
+export const FIRST_HORIZON_RESEARCH_WORK = Object.freeze({
+  capacitive: 8_427_930_691_778_971_200_000n,
+  payload: 10_534_913_364_723_714_000_000n,
+  sorting: 12_641_896_037_668_456_800_000n,
+  route: 14_748_878_710_613_199_600_000n,
+  residuum: 16_855_861_383_557_942_400_000n,
+});
 const researchDefinition = (definition) =>
   Object.freeze({
     ...definition,
@@ -344,11 +374,11 @@ const INITIAL_RESEARCH = Object.freeze({
 const RESEARCH_TIER_NAMES = Object.freeze(["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]);
 const scaleResearchCost = (cost) =>
   researchCost(
-    cost.energy * 3n / 2n,
-    cost.atoms.carbon * 3n / 2n,
-    cost.atoms.silicon * 3n / 2n,
-    cost.atoms.copper * 3n / 2n,
-    cost.atoms.gold * 3n / 2n,
+    cost.energy * 10n,
+    cost.atoms.carbon * 10n,
+    cost.atoms.silicon * 10n,
+    cost.atoms.copper * 10n,
+    cost.atoms.gold * 10n,
   );
 
 function addIncrementalSeries(catalog, configuration) {
@@ -379,7 +409,7 @@ function addIncrementalSeries(catalog, configuration) {
       tier,
     });
     previousId = id;
-    requiredNaniteMs = requiredNaniteMs * 3n / 2n;
+    requiredNaniteMs *= 10n;
     cost = scaleResearchCost(cost);
   }
 }
@@ -403,7 +433,8 @@ const researchCatalog = {
   }),
   "residuum-indexing": researchDefinition({
     ...INITIAL_RESEARCH["residuum-indexing"],
-    requiredNaniteMs: 720_000_000n,
+    requiredNaniteMs: FIRST_HORIZON_RESEARCH_WORK.residuum,
+    cost: horizonResearchCost(5),
   }),
   "distributed-reasoning-mesh": researchDefinition(INITIAL_RESEARCH["distributed-reasoning-mesh"]),
   "autonomous-prospecting": researchDefinition({
@@ -423,7 +454,8 @@ addIncrementalSeries(researchCatalog, {
   count: 6,
   introducedAtSearch: 1,
   trigger: "dielectric and conductive structure",
-  requiredNaniteMs: 600_000_000n,
+  requiredNaniteMs: FIRST_HORIZON_RESEARCH_WORK.capacitive,
+  cost: horizonResearchCost(1),
   effect: "Energy acquisition throughput +5% (cumulative).",
   bonuses: { energyBps: 500 },
 });
@@ -432,7 +464,8 @@ addIncrementalSeries(researchCatalog, {
   count: 6,
   introducedAtSearch: 1,
   trigger: "material load and transport geometry",
-  requiredNaniteMs: 720_000_000n,
+  requiredNaniteMs: FIRST_HORIZON_RESEARCH_WORK.payload,
+  cost: horizonResearchCost(2),
   effect: "Solid collection throughput +5% (cumulative).",
   bonuses: { solidBps: 500 },
 });
@@ -441,7 +474,8 @@ addIncrementalSeries(researchCatalog, {
   count: 6,
   introducedAtSearch: 1,
   trigger: "heterogeneous sorting demand",
-  requiredNaniteMs: 900_000_000n,
+  requiredNaniteMs: FIRST_HORIZON_RESEARCH_WORK.sorting,
+  cost: horizonResearchCost(3),
   effect: "Sorting throughput +5% (cumulative).",
   bonuses: { sortingBps: 500 },
 });
@@ -450,7 +484,8 @@ addIncrementalSeries(researchCatalog, {
   count: 6,
   introducedAtSearch: 1,
   trigger: "reachable substrate topology",
-  requiredNaniteMs: 1_200_000_000n,
+  requiredNaniteMs: FIRST_HORIZON_RESEARCH_WORK.route,
+  cost: horizonResearchCost(4),
   effect: "Solid collection jobs complete 5% faster (cumulative).",
   bonuses: { collectDurationReductionBps: 500 },
 });

@@ -4,6 +4,7 @@ import {
   ALLOCATION_SHARE_SCALE,
   ATMOSPHERE_ATOMS_PER_NANITE,
   COLLECTION_ATOMS_PER_NANITE,
+  FIRST_HORIZON_RESEARCH_MINUTE,
   LOCAL_SHELL_COUNT,
   NANITE_RECIPE,
   RESEARCH,
@@ -16,6 +17,7 @@ import {
   atmosphericCollectionCapacity,
   advanceSimulation,
   cancelResearch,
+  cancelTemporaryBurst,
   cohortResonanceWindow,
   cohortSyncWindow,
   effectiveJobDuration,
@@ -23,6 +25,8 @@ import {
   energyJobYield,
   moveResearch,
   queueResearch,
+  replicationPipelineMetrics,
+  replicationReadiness,
   replicationShortages,
   researchIsRevealed,
   setDirectiveAllocation,
@@ -30,6 +34,7 @@ import {
   sortingCapacity,
   startManualJob,
   startProspecting,
+  startTemporaryBurst,
 } from "../src/game/engine.js";
 import { totalMatter } from "../src/game/matter.js";
 import { massYoctograms } from "../src/game/quantities.js";
@@ -61,6 +66,13 @@ function reachStageOneStockpile(now = 1_000_000) {
   state.discovery.directivesVisible = true;
   state.discovery.researchVisible = true;
   return state;
+}
+
+function fundResearch(state, ...ids) {
+  state.energy = ids.reduce((total, id) => total + RESEARCH[id].cost.energy, 0n);
+  for (const key of Object.keys(state.atoms)) {
+    state.atoms[key] = ids.reduce((total, id) => total + RESEARCH[id].cost.atoms[key], 0n);
+  }
 }
 
 describe("cohort simulation", () => {
@@ -493,6 +505,37 @@ describe("cohort simulation", () => {
     assert.equal(RESEARCH["capacitive-buffer-lattice-05"].requiresSearch > LOCAL_SHELL_COUNT, true);
   });
 
+  it("prices first-horizon research in real pipeline minutes and 20-to-40-minute cognition", () => {
+    const state = createInitialState(3_736_000);
+    state.nanites = STARTER_DEPOSIT_MATTER.carbon / NANITE_RECIPE.atoms.carbon + 1n;
+    const capacity = effectiveResearchCapacity(state);
+    const ladder = [
+      ["capacitive-buffer-lattice", 20n, 1n],
+      ["payload-frame-reinforcement", 25n, 2n],
+      ["packetized-sorting", 30n, 3n],
+      ["route-memory", 35n, 4n],
+      ["residuum-indexing", 40n, 5n],
+    ];
+    for (const [id, minutes, costMinutes] of ladder) {
+      assert.equal(RESEARCH[id].requiredNaniteMs / capacity, minutes * 60_000n);
+      assert.equal(RESEARCH[id].cost.energy, FIRST_HORIZON_RESEARCH_MINUTE.energy * costMinutes);
+      for (const key of Object.keys(FIRST_HORIZON_RESEARCH_MINUTE.atoms)) {
+        assert.equal(
+          RESEARCH[id].cost.atoms[key],
+          FIRST_HORIZON_RESEARCH_MINUTE.atoms[key] * costMinutes,
+        );
+      }
+    }
+    assert.equal(
+      RESEARCH["capacitive-buffer-lattice-02"].requiredNaniteMs,
+      RESEARCH["capacitive-buffer-lattice"].requiredNaniteMs * 10n,
+    );
+    assert.equal(
+      RESEARCH["capacitive-buffer-lattice-02"].cost.energy,
+      RESEARCH["capacitive-buffer-lattice"].cost.energy * 10n,
+    );
+  });
+
   it("turns chassis and atmosphere observations into separate research signals", () => {
     const state = reachStageOneStockpile(3_737_000);
     state.stage = 2;
@@ -542,8 +585,7 @@ describe("cohort simulation", () => {
   it("reorders queued research without discarding accumulated work", () => {
     let state = reachStageOneStockpile(3_740_000);
     state.prospecting.searchesCompleted = 1;
-    state.energy = 1_000_000n;
-    for (const key of Object.keys(state.atoms)) state.atoms[key] = 1_000_000n;
+    fundResearch(state, "residuum-indexing", "capacitive-buffer-lattice");
     state.completedResearch.push("parallel-directives", "relative-allocation");
     state = success(queueResearch(state, "residuum-indexing", state.simTime));
     state = success(queueResearch(state, "capacitive-buffer-lattice", state.simTime));
@@ -559,8 +601,7 @@ describe("cohort simulation", () => {
   it("cancels research and releases its fully reserved inputs", () => {
     let state = reachStageOneStockpile(3_745_000);
     state.prospecting.searchesCompleted = 1;
-    state.energy = 1_000_000n;
-    for (const key of Object.keys(state.atoms)) state.atoms[key] = 1_000_000n;
+    fundResearch(state, "residuum-indexing", "capacitive-buffer-lattice");
     state.completedResearch.push("parallel-directives", "relative-allocation");
     const before = structuredClone(state);
     state = success(queueResearch(state, "residuum-indexing", state.simTime));
@@ -630,6 +671,116 @@ describe("cohort simulation", () => {
     assert.deepEqual(replicationShortages(allocated), []);
   });
 
+  it("counts unable replicators exactly and distinguishes an incoming pipeline from a true halt", () => {
+    const halted = createInitialState(3_920_000);
+    halted.nanites = 100n;
+    halted.discovery.directivesVisible = true;
+    halted.allocations.replicate = 98n;
+    let readiness = replicationReadiness(halted);
+    assert.equal(readiness.unableToStart, 98n);
+    assert.equal(readiness.mode, "halted");
+
+    halted.allocations.energy = 1n;
+    halted.allocations.sort = 1n;
+    halted.cohorts.push(
+      {
+        id: "incoming-energy",
+        directive: "energy",
+        workers: 1n,
+        startedAt: halted.simTime,
+        completesAt: halted.simTime + 10_000,
+        origin: "allocation",
+        payload: { kind: "energy", energy: NANITE_RECIPE.energy * 98n },
+      },
+      {
+        id: "incoming-atoms",
+        directive: "sort",
+        workers: 1n,
+        startedAt: halted.simTime,
+        completesAt: halted.simTime + 12_000,
+        origin: "allocation",
+        payload: {
+          kind: "sort",
+          atoms: Object.fromEntries(Object.entries(NANITE_RECIPE.atoms).map(([key, value]) => [key, value * 98n])),
+          residuum: emptyMatter(),
+        },
+      },
+    );
+    readiness = replicationReadiness(halted);
+    assert.equal(readiness.unableToStart, 98n);
+    assert.equal(readiness.mode, "waiting");
+  });
+
+  it("scores the exact sustainable directive ratio at one hundred percent", () => {
+    const state = createInitialState(3_930_000);
+    state.nanites = 15_453n;
+    state.allocations.collect = 1_115n;
+    state.allocations.sort = 1_338n;
+    state.allocations.energy = 2_000n;
+    state.allocations.replicate = 11_000n;
+    const perfect = replicationPipelineMetrics(state);
+    assert.equal(perfect.efficiencyBps, 10_000n);
+    assert.deepEqual(perfect.bottlenecks, ["collect", "sort", "energy", "replicate"]);
+
+    state.allocations.collect = 2_000n;
+    state.allocations.replicate = 10_115n;
+    assert.ok(replicationPipelineMetrics(state).efficiencyBps < 10_000n);
+  });
+
+  it("reserves a Temporary Burst exactly and restores the prior relative targets", () => {
+    const now = 3_940_000;
+    let state = createInitialState(now);
+    state.nanites = 15_453n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state.completedResearch.push("relative-allocation");
+    const ratio = { collect: 1_115n, sort: 1_338n, energy: 2_000n, replicate: 11_000n };
+    for (const [directive, workers] of Object.entries(ratio)) {
+      state.allocations[directive] = workers;
+      state.allocationTargets[directive] = workers * ALLOCATION_SHARE_SCALE / state.nanites;
+    }
+    state.allocationLocks.energy = true;
+    state.energy = NANITE_RECIPE.energy * 20_000n;
+    for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) state.atoms[key] = amount * 20_000n;
+    state.replicationTuning.qualifyingMs = 30_000;
+    const previousTargets = structuredClone(state.allocationTargets);
+    const previousLocks = structuredClone(state.allocationLocks);
+
+    state = success(startTemporaryBurst(state, now));
+    assert.equal(state.replicationTuning.burst.remainingNanites, 4_547n);
+    assert.equal(state.energy, 0n);
+    for (const key of Object.keys(state.atoms)) assert.equal(state.atoms[key], 0n);
+
+    state = advanceSimulation(state, now + 56_000);
+    assert.equal(state.replicationTuning.burst, null);
+    assert.deepEqual(state.allocationTargets, previousTargets);
+    assert.deepEqual(state.allocationLocks, previousLocks);
+    state = advanceSimulation(state, now + 112_000);
+    assert.equal(state.nanites, 35_453n);
+  });
+
+  it("cancels only the undispatched Temporary Burst reservation", () => {
+    const now = 3_950_000;
+    let state = createInitialState(now);
+    state.nanites = 15_453n;
+    state.discovery.directivesVisible = true;
+    state.completedResearch.push("relative-allocation");
+    for (const [directive, workers] of Object.entries({ collect: 1_115n, sort: 1_338n, energy: 2_000n, replicate: 11_000n })) {
+      state.allocations[directive] = workers;
+      state.allocationTargets[directive] = workers * ALLOCATION_SHARE_SCALE / state.nanites;
+    }
+    state.energy = NANITE_RECIPE.energy * 20_000n;
+    for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) state.atoms[key] = amount * 20_000n;
+    state.replicationTuning.qualifyingMs = 30_000;
+    state = success(startTemporaryBurst(state, now));
+    state = success(cancelTemporaryBurst(state, now));
+    assert.equal(state.replicationTuning.burst, null);
+    assert.equal(state.energy, NANITE_RECIPE.energy * 4_547n);
+    for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) {
+      assert.equal(state.atoms[key], amount * 4_547n);
+    }
+  });
+
   it("redistributes relative allocations without disturbing locked directives", () => {
     const state = createInitialState(4_000_000);
     state.nanites = 100n;
@@ -683,7 +834,7 @@ describe("cohort simulation", () => {
     };
     state.activeDeposit.initialAtoms = 5_000_000n;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.equal(restored.activeDeposit.matter.carbon, STARTER_DEPOSIT_MATTER.carbon - 1_234n);
     assert.equal(restored.activeDeposit.initialAtoms, totalMatter(STARTER_DEPOSIT_MATTER));
   });
@@ -698,7 +849,7 @@ describe("cohort simulation", () => {
     state.allocations.energy = 25n;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.equal(restored.allocationTargets.collect, (ALLOCATION_SHARE_SCALE * 65n) / 100n);
     assert.equal(restored.allocationTargets.energy, (ALLOCATION_SHARE_SCALE * 25n) / 100n);
   });
@@ -711,7 +862,7 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     const impact = restored.log.find((entry) => entry.message === "IMPACT.");
     const assembly = restored.log.find((entry) => entry.message === "ASSEMBLY COMPLETE.");
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.equal(impact.tier, "critical");
     assert.equal(assembly.tier, "world");
     assert.equal(restored.log.every((entry) => typeof entry.tier === "string"), true);
@@ -733,7 +884,7 @@ describe("cohort simulation", () => {
     delete state.discovery.residuumIndexed;
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.equal(restored.nanites, 600_000_000_000_000_000n);
     assert.equal(restored.allocations.atmosphere, 0n);
     assert.equal(restored.discovery.atmosphereVisible, false);
@@ -755,7 +906,7 @@ describe("cohort simulation", () => {
     state.version = 7;
     delete state.lifetime;
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.equal(totalMatter(restored.lifetime.collected), COLLECTION_ATOMS_PER_NANITE);
     assert.equal(totalMatter(restored.lifetime.processed), COLLECTION_ATOMS_PER_NANITE);
     assert.equal(totalMatter(restored.lifetime.spent), 0n);
@@ -766,7 +917,7 @@ describe("cohort simulation", () => {
     state.version = 5;
     state.researchQueue = [{ id: "parallel-directives", progressNaniteMs: 123n }];
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.deepEqual(restored.researchQueue[0].reservedCost, RESEARCH["parallel-directives"].cost);
   });
 
@@ -776,7 +927,7 @@ describe("cohort simulation", () => {
     delete state.stage;
     state.feedstock = { carbon: 7n, silicon: 0n, copper: 0n, gold: 0n, unknown: 11n };
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.equal(restored.stage, 0);
     assert.equal(restored.feedstock.carbon, 7n);
     assert.equal(restored.feedstock.unknown, 11n);
@@ -808,7 +959,7 @@ describe("cohort simulation", () => {
     }];
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 10);
+    assert.equal(restored.version, 11);
     assert.deepEqual(restored.completedResearch, ["residuum-indexing", "distributed-reasoning-mesh"]);
     assert.equal(restored.discovery.residuumIndexed, true);
     assert.deepEqual(restored.researchQueue, []);

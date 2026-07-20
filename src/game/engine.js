@@ -31,6 +31,26 @@ import { researchIsUnlocked } from "./unlocks.js";
 const minBigInt = (...values) => values.reduce((smallest, value) => (value < smallest ? value : smallest));
 const ceilDiv = (value, divisor) => (divisor <= 0n ? 0n : (value + divisor - 1n) / divisor);
 const hasResearch = (state, id) => state.completedResearch.includes(id);
+export const REPLICATION_EFFICIENCY_THRESHOLD_BPS = 9_900n;
+export const TEMPORARY_BURST_QUALIFICATION_MS = 30_000;
+
+const gcd = (left, right) => {
+  let a = left < 0n ? -left : left;
+  let b = right < 0n ? -right : right;
+  while (b !== 0n) [a, b] = [b, a % b];
+  return a;
+};
+const rational = (numerator, denominator = 1n) => {
+  if (numerator === 0n) return { numerator: 0n, denominator: 1n };
+  const divisor = gcd(numerator, denominator);
+  return { numerator: numerator / divisor, denominator: denominator / divisor };
+};
+const addRational = (left, right) => rational(
+  left.numerator * right.denominator + right.numerator * left.denominator,
+  left.denominator * right.denominator,
+);
+const compareRational = (left, right) =>
+  left.numerator * right.denominator - right.numerator * left.denominator;
 
 function researchBonusBps(state, key) {
   return state.completedResearch.reduce(
@@ -85,7 +105,7 @@ export function effectiveResearchCapacity(state) {
   return researchCoreCapacity(state) + activeResearchWorkers(state);
 }
 
-function atomRecipeCapacity(state) {
+export function replicationBufferCapacity(state) {
   return minBigInt(
     state.atoms.carbon / NANITE_RECIPE.atoms.carbon,
     state.atoms.silicon / NANITE_RECIPE.atoms.silicon,
@@ -95,12 +115,113 @@ function atomRecipeCapacity(state) {
   );
 }
 
-export function replicationShortages(state) {
+export function replicationPipelineMetrics(state) {
+  const recipeAtoms = ATOM_KEYS.reduce((total, key) => total + NANITE_RECIPE.atoms[key], 0n);
+  const paths = [
+    {
+      directive: "collect",
+      output: solidCollectionCapacity(state),
+      duration: BigInt(effectiveJobDuration(state, "collect")),
+      requirement: recipeAtoms,
+    },
+    {
+      directive: "sort",
+      output: sortingCapacity(state),
+      duration: BigInt(effectiveJobDuration(state, "sort")),
+      requirement: recipeAtoms,
+    },
+    {
+      directive: "energy",
+      output: energyJobYield(state),
+      duration: BigInt(effectiveJobDuration(state, "energy")),
+      requirement: NANITE_RECIPE.energy,
+    },
+    {
+      directive: "replicate",
+      output: 1n,
+      duration: BigInt(effectiveJobDuration(state, "replicate")),
+      requirement: 1n,
+    },
+  ];
+  const productionWorkers = paths.reduce(
+    (total, path) => total + state.allocations[path.directive],
+    0n,
+  );
+  const rates = paths.map((path) => ({
+    ...path,
+    rate: rational(
+      state.allocations[path.directive] * path.output,
+      path.duration * path.requirement,
+    ),
+  }));
+  let minimumRate = rates[0].rate;
+  for (const path of rates.slice(1)) {
+    if (compareRational(path.rate, minimumRate) < 0n) minimumRate = path.rate;
+  }
+  const bottlenecks = rates
+    .filter((path) => compareRational(path.rate, minimumRate) === 0n)
+    .map((path) => path.directive);
+  const workerTimePerRecipe = paths.reduce(
+    (total, path) => addRational(total, rational(path.requirement * path.duration, path.output)),
+    rational(0n),
+  );
+  const efficiencyBps = productionWorkers <= 0n
+    ? 0n
+    : minBigInt(
+      10_000n,
+      minimumRate.numerator * workerTimePerRecipe.numerator * 10_000n /
+        (minimumRate.denominator * workerTimePerRecipe.denominator * productionWorkers),
+    );
+  const bufferCapacity = replicationBufferCapacity(state);
+  const resourceCapacities = [
+    { key: "energy", capacity: state.energy / NANITE_RECIPE.energy },
+    ...ATOM_KEYS.map((key) => ({ key, capacity: state.atoms[key] / NANITE_RECIPE.atoms[key] })),
+  ];
+  const limitingCapacity = resourceCapacities.reduce(
+    (smallest, item) => item.capacity < smallest.capacity ? item : smallest,
+  );
+  return {
+    efficiencyBps,
+    bottlenecks,
+    productionWorkers,
+    bufferCapacity,
+    limitingResource: limitingCapacity.key,
+  };
+}
+
+function incomingResourceAmount(state, key) {
+  if (key === "energy") {
+    return state.cohorts.reduce(
+      (total, cohort) => cohort.payload.kind === "energy" ? total + cohort.payload.energy : total,
+      0n,
+    );
+  }
+  const sortedIncoming = state.cohorts.reduce(
+    (total, cohort) => cohort.payload.kind === "sort" ? total + cohort.payload.atoms[key] : total,
+    0n,
+  );
+  if (state.allocations.sort <= 0n) return sortedIncoming;
+  const unsortedReachable = state.cohorts.reduce(
+    (total, cohort) => cohort.payload.kind === "collect" ? total + cohort.payload.matter[key] : total,
+    state.feedstock[key],
+  );
+  return sortedIncoming + unsortedReachable;
+}
+
+export function replicationReadiness(state) {
   const inFlight = allocationWorkersInFlight(state, "replicate");
   const shortfall = state.allocations.replicate - inFlight;
   const availableWorkers = idleWorkers(state);
   const requestedWorkers = shortfall < availableWorkers ? shortfall : availableWorkers;
-  if (requestedWorkers <= 0n) return [];
+  if (requestedWorkers <= 0n) {
+    return { requestedWorkers: 0n, unableToStart: 0n, mode: "ready", shortages: [] };
+  }
+
+  const burstRemaining = state.replicationTuning?.burst?.remainingNanites;
+  const launchCapacity = burstRemaining === undefined
+    ? replicationBufferCapacity(state)
+    : burstRemaining;
+  const unableToStart = requestedWorkers > launchCapacity ? requestedWorkers - launchCapacity : 0n;
 
   const resources = [
     { key: "energy", name: "energy", available: state.energy, perNanite: NANITE_RECIPE.energy },
@@ -111,7 +232,7 @@ export function replicationShortages(state) {
       perNanite: NANITE_RECIPE.atoms[key],
     })),
   ];
-  return resources.flatMap((resource) => {
+  const shortages = burstRemaining !== undefined ? [] : resources.flatMap((resource) => {
     const required = resource.perNanite * requestedWorkers;
     if (resource.available >= required) return [];
     return [{
@@ -122,7 +243,17 @@ export function replicationShortages(state) {
       missing: required - resource.available,
     }];
   });
+  const waiting = unableToStart > 0n && shortages.length > 0 &&
+    shortages.every((shortage) => incomingResourceAmount(state, shortage.key) >= shortage.missing);
+  return {
+    requestedWorkers,
+    unableToStart,
+    mode: unableToStart <= 0n ? "ready" : waiting ? "waiting" : "halted",
+    shortages,
+  };
 }
+
+export const replicationShortages = (state) => replicationReadiness(state).shortages;
 
 function nextSyncBoundary(state, now) {
   const window = cohortSyncWindow(state);
@@ -153,7 +284,11 @@ function mergePayload(target, addition) {
     };
   }
   if (target.kind === "replicate") {
-    return { kind: "replicate", nanites: target.nanites + addition.nanites };
+    return {
+      kind: "replicate",
+      nanites: target.nanites + addition.nanites,
+      burst: Boolean(target.burst || addition.burst),
+    };
   }
   return target;
 }
@@ -165,12 +300,23 @@ function atmosphericMatter(amount) {
 
 const knownAtomsAsMatter = (atoms) => ({ ...emptyMatter(), ...atoms });
 
+function restoreBurstAllocations(state, message) {
+  const burst = state.replicationTuning?.burst;
+  if (!burst) return;
+  state.allocationTargets = { ...burst.previousTargets };
+  state.allocationLocks = { ...burst.previousLocks };
+  state.replicationTuning.burst = null;
+  reconcileRelativeAllocations(state);
+  appendLog(state, message, "good", undefined, "medium");
+}
+
 function reserveJob(state, directive, requestedWorkers, origin) {
   const available = idleWorkers(state);
   let workers = requestedWorkers < available ? requestedWorkers : available;
   if (workers <= 0n) return 0n;
 
   let payload;
+  let restoreAfterReservation = false;
   if (directive === "survey") {
     workers = 1n;
     payload = { kind: "survey" };
@@ -207,12 +353,21 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     state.feedstock = remaining;
     payload = { kind: "sort", ...splitSortedMatter(taken) };
   } else if (directive === "replicate") {
-    const capacity = atomRecipeCapacity(state);
-    workers = workers < capacity ? workers : capacity;
-    if (workers <= 0n) return 0n;
-    state.energy -= NANITE_RECIPE.energy * workers;
-    for (const key of ATOM_KEYS) state.atoms[key] -= NANITE_RECIPE.atoms[key] * workers;
-    payload = { kind: "replicate", nanites: workers };
+    const burst = state.replicationTuning?.burst;
+    if (burst) {
+      workers = workers < burst.remainingNanites ? workers : burst.remainingNanites;
+      if (workers <= 0n) return 0n;
+      burst.remainingNanites -= workers;
+      restoreAfterReservation = burst.remainingNanites === 0n;
+      payload = { kind: "replicate", nanites: workers, burst: true };
+    } else {
+      const capacity = replicationBufferCapacity(state);
+      workers = workers < capacity ? workers : capacity;
+      if (workers <= 0n) return 0n;
+      state.energy -= NANITE_RECIPE.energy * workers;
+      for (const key of ATOM_KEYS) state.atoms[key] -= NANITE_RECIPE.atoms[key] * workers;
+      payload = { kind: "replicate", nanites: workers, burst: false };
+    }
   } else {
     throw new Error(`Unknown job directive: ${directive}`);
   }
@@ -224,6 +379,9 @@ function reserveJob(state, directive, requestedWorkers, origin) {
   if (mergeTarget) {
     mergeTarget.workers += workers;
     mergeTarget.payload = mergePayload(mergeTarget.payload, payload);
+    if (restoreAfterReservation) {
+      restoreBurstAllocations(state, "TEMPORARY BURST BUFFER DEPLOYED · PRIOR DIRECTIVE RATIOS RESTORED.");
+    }
     return workers;
   }
 
@@ -236,6 +394,9 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     origin,
     payload,
   });
+  if (restoreAfterReservation) {
+    restoreBurstAllocations(state, "TEMPORARY BURST BUFFER DEPLOYED · PRIOR DIRECTIVE RATIOS RESTORED.");
+  }
   return workers;
 }
 
@@ -509,6 +670,23 @@ function completeResearchIfReady(state) {
   return true;
 }
 
+function advanceReplicationQualification(state, deltaMs) {
+  if (!state.replicationTuning || deltaMs <= 0) return;
+  const qualified = hasResearch(state, "relative-allocation") &&
+    !state.replicationTuning.burst &&
+    replicationPipelineMetrics(state).efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS;
+  state.replicationTuning.qualifyingMs = qualified
+    ? Math.min(TEMPORARY_BURST_QUALIFICATION_MS, state.replicationTuning.qualifyingMs + deltaMs)
+    : 0;
+}
+
+function resetReplicationQualificationIfNeeded(state) {
+  if (
+    state.replicationTuning &&
+    replicationPipelineMetrics(state).efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS
+  ) state.replicationTuning.qualifyingMs = 0;
+}
+
 export function advanceSimulation(input, targetTime) {
   const state = cloneState(input);
   if (targetTime <= state.simTime) return state;
@@ -525,7 +703,9 @@ export function advanceSimulation(input, targetTime) {
     if (researchTime !== null && researchTime < eventTime) eventTime = researchTime;
 
     const previousTime = state.simTime;
-    advanceResearch(state, Math.max(0, eventTime - state.simTime));
+    const deltaMs = Math.max(0, eventTime - state.simTime);
+    advanceResearch(state, deltaMs);
+    advanceReplicationQualification(state, deltaMs);
     state.simTime = eventTime;
 
     const completed = state.cohorts.filter((cohort) => cohort.completesAt <= state.simTime);
@@ -599,6 +779,7 @@ export function adjustAllocation(input, directive, delta, now = Date.now()) {
     return failure(state, "No unassigned nanites are available.");
   }
   state.allocations[directive] = nextValue;
+  resetReplicationQualificationIfNeeded(state);
   scheduleAllocations(state);
   return { ok: true, state };
 }
@@ -606,6 +787,9 @@ export function adjustAllocation(input, directive, delta, now = Date.now()) {
 function applyDirectiveAllocationShare(state, directive, targetShare) {
   if (!state.completedResearch.includes("relative-allocation")) {
     return failure(state, "Relative Directive Allocation research is incomplete.");
+  }
+  if (state.replicationTuning?.burst) {
+    return failure(state, "Temporary Burst currently owns the directive allocation bus.");
   }
   if (!DIRECTIVES.includes(directive)) return failure(state, "Unknown directive.");
   if (!directiveIsVisible(state, directive)) return failure(state, "Directive is not available to the active swarm.");
@@ -657,6 +841,7 @@ function applyDirectiveAllocationShare(state, directive, targetShare) {
 
   state.allocationTargets[directive] = targetShare;
   reconcileRelativeAllocations(state);
+  resetReplicationQualificationIfNeeded(state);
   scheduleAllocations(state);
   return { ok: true, state };
 }
@@ -678,9 +863,73 @@ export function setDirectiveAllocation(input, directive, target, now = Date.now(
 
 export function toggleAllocationLock(input, directive, now = Date.now()) {
   const state = advanceSimulation(input, now);
+  if (state.replicationTuning?.burst) return state;
   if (!DIRECTIVES.includes(directive) || !directiveIsVisible(state, directive)) return state;
   state.allocationLocks[directive] = !state.allocationLocks[directive];
   return state;
+}
+
+export function startTemporaryBurst(input, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  if (!hasResearch(state, "relative-allocation")) {
+    return failure(state, "Relative Directive Allocation research is incomplete.");
+  }
+  if (state.replicationTuning?.burst) return failure(state, "Temporary Burst is already active.");
+  const metrics = replicationPipelineMetrics(state);
+  if (metrics.efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS) {
+    return failure(state, "Replication efficiency must remain at or above 99%.");
+  }
+  if (state.replicationTuning.qualifyingMs < TEMPORARY_BURST_QUALIFICATION_MS) {
+    return failure(state, "Replication efficiency has not remained stable for 30 seconds.");
+  }
+  const minimumBuffer = state.nanites / 100n > 0n ? state.nanites / 100n : 1n;
+  const bufferNanites = replicationBufferCapacity(state);
+  if (bufferNanites < minimumBuffer) {
+    return failure(
+      state,
+      `A complete-recipe buffer for at least ${formatCount(minimumBuffer)} nanites is required.`,
+    );
+  }
+
+  state.energy -= NANITE_RECIPE.energy * bufferNanites;
+  for (const key of ATOM_KEYS) state.atoms[key] -= NANITE_RECIPE.atoms[key] * bufferNanites;
+  state.replicationTuning.burst = {
+    startedAt: state.simTime,
+    reservedNanites: bufferNanites,
+    remainingNanites: bufferNanites,
+    previousTargets: { ...state.allocationTargets },
+    previousLocks: { ...state.allocationLocks },
+  };
+  state.replicationTuning.qualifyingMs = 0;
+  for (const directive of DIRECTIVES) {
+    state.allocationTargets[directive] = directive === "replicate" ? ALLOCATION_SHARE_SCALE : 0n;
+    state.allocationLocks[directive] = false;
+  }
+  reconcileRelativeAllocations(state);
+  appendLog(
+    state,
+    `TEMPORARY BURST ARMED · ${formatCount(bufferNanites)} COMPLETE NANITE RECIPES RESERVED.`,
+    "good",
+    undefined,
+    "medium",
+  );
+  scheduleAllocations(state);
+  return { ok: true, state };
+}
+
+export function cancelTemporaryBurst(input, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  const burst = state.replicationTuning?.burst;
+  if (!burst) return failure(state, "No reserving Temporary Burst remains to cancel.");
+  const released = burst.remainingNanites;
+  state.energy += NANITE_RECIPE.energy * released;
+  for (const key of ATOM_KEYS) state.atoms[key] += NANITE_RECIPE.atoms[key] * released;
+  restoreBurstAllocations(
+    state,
+    `TEMPORARY BURST CANCELLED · ${formatCount(released)} UNUSED RECIPES RELEASED · PRIOR RATIOS RESTORED.`,
+  );
+  scheduleAllocations(state);
+  return { ok: true, state };
 }
 
 export function queueResearch(input, id, now = Date.now()) {
