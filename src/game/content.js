@@ -111,6 +111,16 @@ const LOCAL_SHELL_TEMPLATES = Object.freeze([
 
 export const LOCAL_SHELL_COUNT = LOCAL_SHELL_TEMPLATES.length;
 
+// Each outward search covers a larger physical envelope. Worker shares are
+// basis points of the current active swarm and always round up to a whole
+// nanite, preserving the one-worker search when the seed is still solitary.
+export const LOCAL_SEARCH_PROFILE = Object.freeze([
+  Object.freeze({ workerShareBps: 50n, durationMs: 30_000 }),
+  Object.freeze({ workerShareBps: 100n, durationMs: 45_000 }),
+  Object.freeze({ workerShareBps: 200n, durationMs: 60_000 }),
+  Object.freeze({ workerShareBps: 400n, durationMs: 90_000 }),
+]);
+
 export function createProspectedDeposit(index) {
   if (!Number.isInteger(index) || index < 1 || index > LOCAL_SHELL_COUNT) {
     throw new Error("Local shell index is outside the authored material envelope");

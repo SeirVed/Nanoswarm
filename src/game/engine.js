@@ -8,6 +8,7 @@ import {
   DIRECTIVES,
   ENERGY_PER_JOB,
   JOB_DURATION_MS,
+  LOCAL_SEARCH_PROFILE,
   LOCAL_SHELL_COUNT,
   NANITE_RECIPE,
   RESEARCH,
@@ -87,6 +88,17 @@ export function effectiveJobDuration(state, directive) {
 
 export function directiveIsVisible(state, directive) {
   return directive !== "atmosphere" || state.discovery.atmosphereVisible;
+}
+
+export function prospectingWorkerRequirement(state, depositIndex = state.prospecting.searchesCompleted + 1) {
+  const profile = LOCAL_SEARCH_PROFILE[depositIndex - 1];
+  if (!profile) return 0n;
+  const proportional = ceilDiv(state.nanites * profile.workerShareBps, 10_000n);
+  return proportional > 0n ? proportional : 1n;
+}
+
+export function prospectingDuration(_state, depositIndex) {
+  return LOCAL_SEARCH_PROFILE[depositIndex - 1]?.durationMs ?? JOB_DURATION_MS.prospect;
 }
 
 function nextEntityId(state, prefix) {
@@ -322,8 +334,11 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     payload = { kind: "survey" };
   } else if (directive === "prospect") {
     if (state.prospecting.searchesCompleted >= LOCAL_SHELL_COUNT) return 0n;
-    workers = 1n;
-    payload = { kind: "prospect", depositIndex: state.prospecting.searchesCompleted + 1 };
+    const depositIndex = state.prospecting.searchesCompleted + 1;
+    const requiredWorkers = prospectingWorkerRequirement(state, depositIndex);
+    if (available < requiredWorkers || requestedWorkers < requiredWorkers) return 0n;
+    workers = requiredWorkers;
+    payload = { kind: "prospect", depositIndex };
   } else if (directive === "energy") {
     payload = { kind: "energy", energy: energyJobYield(state) * workers };
   } else if (directive === "collect") {
@@ -390,7 +405,9 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     directive,
     workers,
     startedAt,
-    completesAt: startedAt + effectiveJobDuration(state, directive),
+    completesAt: startedAt + (
+      directive === "prospect" ? prospectingDuration(state, payload.depositIndex) : effectiveJobDuration(state, directive)
+    ),
     origin,
     payload,
   });
@@ -434,11 +451,15 @@ function noteDepositExhaustion(state) {
 }
 
 function beginProspecting(state, origin) {
-  const started = reserveJob(state, "prospect", 1n, origin);
+  const depositIndex = state.prospecting.searchesCompleted + 1;
+  const requiredWorkers = prospectingWorkerRequirement(state, depositIndex);
+  const started = reserveJob(state, "prospect", requiredWorkers, origin);
   if (started <= 0n) return false;
   appendLog(
     state,
-    `${origin === "autonomous" ? "AUTONOMOUS" : "LOCAL"} PROSPECTING COHORT DEPARTED · ${effectiveJobDuration(state, "prospect") / 1000}s.`,
+    `${origin === "autonomous" ? "AUTONOMOUS" : "LOCAL"} PROSPECTING COHORT DEPARTED · ${formatCount(
+      started,
+    )} NANITES · ${prospectingDuration(state, depositIndex) / 1000}s.`,
     "good",
     undefined,
     "medium",
@@ -467,7 +488,7 @@ function scheduleAllocations(state) {
     state.prospecting.searchesCompleted < LOCAL_SHELL_COUNT &&
     totalMatter(state.activeDeposit.matter) === 0n &&
     !state.cohorts.some((cohort) => cohort.directive === "prospect") &&
-    idleWorkers(state) > 0n
+    idleWorkers(state) >= prospectingWorkerRequirement(state)
   ) {
     beginProspecting(state, "autonomous");
   }
@@ -761,7 +782,13 @@ export function startProspecting(input, now = Date.now()) {
   if (state.cohorts.some((cohort) => cohort.directive === "prospect")) {
     return failure(state, "A prospecting cohort is already searching the local environment.");
   }
-  if (idleWorkers(state) < 1n) return failure(state, "One uncommitted nanite is required to begin prospecting.");
+  const requiredWorkers = prospectingWorkerRequirement(state);
+  if (idleWorkers(state) < requiredWorkers) {
+    return failure(
+      state,
+      `${formatCount(requiredWorkers)} uncommitted nanites are required for this material search.`,
+    );
+  }
   noteDepositExhaustion(state);
   if (!beginProspecting(state, "local")) return failure(state, "Unable to launch a prospecting cohort.");
   return { ok: true, state };

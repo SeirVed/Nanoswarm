@@ -37,7 +37,7 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Matter is stored as exact constituent-atom inventories. Collection does not identify it.
 - Sorting transfers the seed-catalogued C/Si/Cu/Au atoms to storage and physically retains every other element by its hidden identity inside Residuum.
 - The initial 0.1 g contact contains exactly 702,327,557,648,247,539 whole nanite recipes. Later authored shells add 0.9 g of damaged DRAM package, 9 g of circuit board, 90 g of motherboard and 900 g of PC chassis with fixed real-world-inspired compositions.
-- Exhausted shells expose a discrete local survey job. Success advances outward through the nested object without generating or repeating arbitrary deposits.
+- Exhausted shells expose a discrete local survey job. The four authored searches commit 0.5%, 1%, 2%, and 4% of the current swarm for 30, 45, 60, and 90 seconds respectively, while the solitary seed's first close survey remains one nanite. Success advances outward through the nested object without generating or repeating arbitrary deposits.
 - Reaching the chassis begins Stage 2 and identifies atmosphere as inexhaustible external feedstock at exactly 1% of effective solid collection throughput; Atmospheric Spectroscopy later resolves its nitrogen, oxygen, argon and carbon signatures without pretending industrial recovery is already solved.
 - Offline progress calls the same event-jumping simulation used while the page is open.
 - Long offline spans are bounded by actual event progress rather than an arbitrary completion count, so a busy returning swarm is not rejected merely for completing many valid jobs.

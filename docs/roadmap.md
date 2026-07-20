@@ -9,6 +9,7 @@
 - [x] Stage 0 recipe-perfect 0.1 g impact-fused contact.
 - [x] Stage 1 nested DRAM, circuit-board and motherboard shells with full hidden elemental compositions.
 - [x] Stage 2 chassis boundary and delayed atmospheric discovery.
+- [x] Scale outward material-search cohorts and durations with each local mass horizon.
 - [x] Event-led catalogue research split into Residuum Indexing, chassis iron analysis and atmospheric spectroscopy without overloading the first material horizons.
 - [ ] Apply completed catalogue research to re-sort retained matter into usable elemental inventories.
 - [ ] Preserve one authoritative Residuum lot per finite substrate and separate bulk lots for atmosphere, regolith and later open sources.

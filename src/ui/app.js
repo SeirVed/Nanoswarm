@@ -23,6 +23,8 @@ import {
   directiveIsVisible,
   effectiveJobDuration,
   moveResearch,
+  prospectingDuration,
+  prospectingWorkerRequirement,
   queueResearch,
   replicationPipelineMetrics,
   replicationReadiness,
@@ -316,6 +318,9 @@ function resourcesHtml() {
   const depositExhausted = depositTotal === 0n;
   const prospecting = state.cohorts.some((cohort) => cohort.directive === "prospect");
   const nextShellAvailable = state.prospecting.searchesCompleted < LOCAL_SHELL_COUNT;
+  const nextSearchIndex = state.prospecting.searchesCompleted + 1;
+  const searchWorkers = prospectingWorkerRequirement(state, nextSearchIndex);
+  const searchDuration = prospectingDuration(state, nextSearchIndex);
   const substrate = state.discovery.surveyComplete
     ? `<section class="panel substrate-panel${newUnlockClass("substrate")}" data-unlock-id="substrate" data-tooltip="The active material field is finite; inputs are reserved when collection starts.">
         <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${
@@ -330,13 +335,17 @@ function resourcesHtml() {
         )} per collector</small>
         ${
           depositExhausted
-            ? `<div class="exhaustion-state${newUnlockClass("directive:prospect")}" data-unlock-id="directive:prospect" data-tooltip-key="substrate:exhaustion" data-tooltip="Every accessible solid atom in this field has been collected or reserved. Production can continue from stored inventory, but new solid matter requires a prospecting search."><strong>${String(
+            ? `<div class="exhaustion-state${newUnlockClass("directive:prospect")}" data-unlock-id="directive:prospect" data-tooltip-key="substrate:exhaustion" data-tooltip="${
+                nextShellAvailable
+                  ? `Every accessible solid atom in this field has been collected or reserved. Production can continue from stored inventory, but new solid matter requires a prospecting search. Each outward horizon covers more physical space: search ${nextSearchIndex} commits ${formatCount(searchWorkers)} currently uncommitted nanites for ${formatDuration(searchDuration)}.`
+                  : "Every authored local solid shell is exhausted. Further growth requires the later external-material system rather than another generated deposit."
+              }"><strong>${String(
                 state.activeDeposit.limitingElement ?? "material",
               ).toUpperCase()} BOTTLENECK CONFIRMED</strong><p>The local solid inventory is committed. A new material field must be located.</p>
                 ${nextShellAvailable ? `<button class="terminal-button search-button" data-action="prospect" ${
-                  prospecting || idleWorkers(state) < 1n ? "disabled" : ""
+                  prospecting || idleWorkers(state) < searchWorkers ? "disabled" : ""
                 }>${prospecting ? "SURVEY IN PROGRESS" : "EXTEND LOCAL SURVEY"}<span>${
-                  prospecting ? "cohort deployed" : `${effectiveJobDuration(state, "prospect") / 1000}s · 1 nanite`
+                  prospecting ? "cohort deployed" : `${formatDuration(searchDuration)} · ${formatCount(searchWorkers)} nanites`
                 }</span></button>` : `<small>NO FURTHER AUTHORED LOCAL SOLID SHELL</small>`}</div>`
             : ""
         }

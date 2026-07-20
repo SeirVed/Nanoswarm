@@ -24,6 +24,8 @@ import {
   effectiveResearchCapacity,
   energyJobYield,
   moveResearch,
+  prospectingDuration,
+  prospectingWorkerRequirement,
   queueResearch,
   replicationPipelineMetrics,
   replicationReadiness,
@@ -186,7 +188,7 @@ describe("cohort simulation", () => {
       state.activeDeposit.matter = emptyMatter();
       state = success(startProspecting(state, state.simTime));
       assert.equal(state.discovery.atmosphereVisible, false);
-      state = advanceSimulation(state, state.simTime + 30_000);
+      state = advanceSimulation(state, state.simTime + prospectingDuration(state, shell));
       assert.equal(state.activeDeposit.id, createProspectedDeposit(shell).id);
       assert.equal(state.prospecting.searchesCompleted, shell);
     }
@@ -198,6 +200,54 @@ describe("cohort simulation", () => {
     const beyondChassis = startProspecting(state, state.simTime);
     assert.equal(beyondChassis.ok, false);
     assert.match(beyondChassis.reason, /No additional local material shell/);
+  });
+
+  it("scales outward material searches by both swarm share and physical horizon", () => {
+    const state = createInitialState(1_600_000);
+    state.nanites = 100_000_000_000_000_000n;
+    assert.deepEqual(
+      [1, 2, 3, 4].map((index) => prospectingWorkerRequirement(state, index)),
+      [
+        500_000_000_000_000n,
+        1_000_000_000_000_000n,
+        2_000_000_000_000_000n,
+        4_000_000_000_000_000n,
+      ],
+    );
+    assert.deepEqual(
+      [1, 2, 3, 4].map((index) => prospectingDuration(state, index)),
+      [30_000, 45_000, 60_000, 90_000],
+    );
+    state.nanites = 1n;
+    assert.equal(prospectingWorkerRequirement(state, 1), 1n);
+  });
+
+  it("requires the complete horizon-scaled cohort before prospecting can begin", () => {
+    const now = 1_650_000;
+    let state = createInitialState(now);
+    state.nanites = 1_000_000n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state.activeDeposit.matter = emptyMatter();
+    const required = prospectingWorkerRequirement(state, 1);
+    state.cohorts.push({
+      id: "occupied-swarm",
+      directive: "energy",
+      workers: state.nanites - required + 1n,
+      startedAt: now,
+      completesAt: now + 10_000,
+      origin: "allocation",
+      payload: { kind: "energy", energy: 0n },
+    });
+    const blocked = startProspecting(state, now);
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.reason, /uncommitted nanites/);
+
+    state.cohorts = [];
+    state = success(startProspecting(state, now));
+    const search = state.cohorts.find((cohort) => cohort.directive === "prospect");
+    assert.equal(search.workers, required);
+    assert.equal(search.completesAt - search.startedAt, prospectingDuration(state, 1));
   });
 
   it("collects atmosphere at exactly one percent of base solid payload", () => {
