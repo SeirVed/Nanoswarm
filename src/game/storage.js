@@ -214,6 +214,8 @@ function migrateState(state) {
     state.researchQueue = retainedQueue;
     state.replicationTuning = {
       qualifyingMs: 0,
+      batchUntil: null,
+      burstCharge: null,
       burst: null,
     };
     state.version = 11;

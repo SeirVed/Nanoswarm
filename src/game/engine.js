@@ -34,6 +34,7 @@ const ceilDiv = (value, divisor) => (divisor <= 0n ? 0n : (value + divisor - 1n)
 const hasResearch = (state, id) => state.completedResearch.includes(id);
 export const REPLICATION_EFFICIENCY_THRESHOLD_BPS = 9_900n;
 export const TEMPORARY_BURST_QUALIFICATION_MS = 30_000;
+export const REPLICATION_BATCH_WINDOW_MS = 5_000;
 
 const gcd = (left, right) => {
   let a = left < 0n ? -left : left;
@@ -243,6 +244,26 @@ export function replicationSubstrateProjection(state) {
   };
 }
 
+export function substrateExhaustionProjection(state) {
+  const remainingAtoms = totalMatter(state.activeDeposit.matter);
+  if (remainingAtoms <= 0n) return 0;
+  const collectors = state.allocations.collect;
+  if (collectors <= 0n) return null;
+  const collectionRate = Number(collectors * solidCollectionCapacity(state)) /
+    effectiveJobDuration(state, "collect");
+  if (!(collectionRate > 0)) return null;
+
+  const pipeline = replicationPipelineMetrics(state);
+  const recipeRate = Number(pipeline.currentRecipeRate.numerator) /
+    Number(pipeline.currentRecipeRate.denominator);
+  const growthRate = state.nanites > 0n ? recipeRate / Number(state.nanites) : 0;
+  const remaining = Number(remainingAtoms);
+  const milliseconds = growthRate > 0
+    ? Math.log1p(remaining * growthRate / collectionRate) / growthRate
+    : remaining / collectionRate;
+  return Number.isFinite(milliseconds) ? Math.max(0, Math.ceil(milliseconds)) : null;
+}
+
 function incomingResourceAmount(state, key) {
   if (key === "energy") {
     return state.cohorts.reduce(
@@ -354,6 +375,17 @@ function atmosphericMatter(amount) {
 
 const knownAtomsAsMatter = (atoms) => ({ ...emptyMatter(), ...atoms });
 
+function ensureReplicationTuning(state) {
+  state.replicationTuning ??= { qualifyingMs: 0, batchUntil: null, burstCharge: null, burst: null };
+  state.replicationTuning.qualifyingMs ??= 0;
+  state.replicationTuning.batchUntil ??= null;
+  state.replicationTuning.burstCharge ??= null;
+  state.replicationTuning.burst ??= null;
+  return state.replicationTuning;
+}
+
+const minimumBurstBuffer = (state) => state.nanites / 100n > 0n ? state.nanites / 100n : 1n;
+
 function restoreBurstAllocations(state, message) {
   const burst = state.replicationTuning?.burst;
   if (!burst) return;
@@ -362,6 +394,44 @@ function restoreBurstAllocations(state, message) {
   state.replicationTuning.burst = null;
   reconcileRelativeAllocations(state);
   appendLog(state, message, "good", undefined, "medium");
+}
+
+function armTemporaryBurst(state, charge) {
+  const bufferNanites = replicationBufferCapacity(state);
+  state.energy -= NANITE_RECIPE.energy * bufferNanites;
+  for (const key of ATOM_KEYS) state.atoms[key] -= NANITE_RECIPE.atoms[key] * bufferNanites;
+  const tuning = ensureReplicationTuning(state);
+  tuning.batchUntil = null;
+  tuning.burstCharge = null;
+  tuning.burst = {
+    startedAt: state.simTime,
+    reservedNanites: bufferNanites,
+    remainingNanites: bufferNanites,
+    previousTargets: { ...charge.previousTargets },
+    previousLocks: { ...charge.previousLocks },
+  };
+  tuning.qualifyingMs = 0;
+  for (const directive of DIRECTIVES) {
+    state.allocationTargets[directive] = directive === "replicate" ? ALLOCATION_SHARE_SCALE : 0n;
+    state.allocationLocks[directive] = false;
+  }
+  reconcileRelativeAllocations(state);
+  appendLog(
+    state,
+    `TEMPORARY BURST ARMED · ${formatCount(bufferNanites)} COMPLETE NANITE RECIPES RESERVED.`,
+    "good",
+    undefined,
+    "medium",
+  );
+}
+
+function armChargedBurstIfReady(state) {
+  const charge = ensureReplicationTuning(state).burstCharge;
+  if (!charge) return false;
+  charge.minimumBuffer = minimumBurstBuffer(state);
+  if (replicationBufferCapacity(state) < charge.minimumBuffer) return false;
+  armTemporaryBurst(state, charge);
+  return true;
 }
 
 function reserveJob(state, directive, requestedWorkers, origin) {
@@ -509,12 +579,37 @@ function beginProspecting(state, origin) {
   return true;
 }
 
+function shouldBatchReplication(state, shortfall) {
+  const tuning = ensureReplicationTuning(state);
+  if (!hasResearch(state, "cohort-ratio-prognostics") || tuning.burst || tuning.burstCharge) {
+    tuning.batchUntil = null;
+    return false;
+  }
+  const capacity = replicationBufferCapacity(state);
+  const upstreamInFlight = state.cohorts.some((cohort) =>
+    cohort.origin === "allocation" && ["collect", "sort", "energy"].includes(cohort.directive));
+  if (capacity <= 0n || capacity >= shortfall || !upstreamInFlight) {
+    tuning.batchUntil = null;
+    return false;
+  }
+  if (tuning.batchUntil === null) {
+    tuning.batchUntil = state.simTime + REPLICATION_BATCH_WINDOW_MS;
+    return true;
+  }
+  if (state.simTime < tuning.batchUntil) return true;
+  tuning.batchUntil = null;
+  return false;
+}
+
 function scheduleAllocations(state) {
   noteDepositExhaustion(state);
   if (!state.discovery.directivesVisible) return;
+  const tuning = ensureReplicationTuning(state);
+  armChargedBurstIfReady(state);
   for (const directive of WORK_DIRECTIVES) {
     if (!directiveIsVisible(state, directive)) continue;
     const shortfall = state.allocations[directive] - allocationWorkersInFlight(state, directive);
+    if (directive === "replicate" && shortfall <= 0n) tuning.batchUntil = null;
     const converging = state.cohorts.some(
       (cohort) =>
         cohort.origin === "allocation" &&
@@ -522,7 +617,11 @@ function scheduleAllocations(state) {
         cohort.completesAt > state.simTime &&
         cohort.completesAt - state.simTime <= cohortResonanceWindow(state),
     );
-    if (shortfall > 0n && !converging) reserveJob(state, directive, shortfall, "allocation");
+    if (shortfall > 0n && !converging) {
+      if (directive === "replicate" && tuning.burstCharge) continue;
+      if (directive === "replicate" && shouldBatchReplication(state, shortfall)) continue;
+      reserveJob(state, directive, shortfall, "allocation");
+    }
   }
   noteDepositExhaustion(state);
   if (
@@ -737,6 +836,7 @@ function advanceReplicationQualification(state, deltaMs) {
   if (!state.replicationTuning || deltaMs <= 0) return;
   const qualified = hasResearch(state, "cohort-ratio-prognostics") &&
     !state.replicationTuning.burst &&
+    !state.replicationTuning.burstCharge &&
     replicationPipelineMetrics(state).efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS;
   state.replicationTuning.qualifyingMs = qualified
     ? Math.min(TEMPORARY_BURST_QUALIFICATION_MS, state.replicationTuning.qualifyingMs + deltaMs)
@@ -761,9 +861,13 @@ export function advanceSimulation(input, targetTime) {
       null,
     );
     const researchTime = nextResearchCompletion(state);
+    const batchTime = state.replicationTuning?.batchUntil;
     let eventTime = targetTime;
     if (cohortTime !== null && cohortTime < eventTime) eventTime = cohortTime;
     if (researchTime !== null && researchTime < eventTime) eventTime = researchTime;
+    if (batchTime !== null && batchTime !== undefined && batchTime > state.simTime && batchTime < eventTime) {
+      eventTime = batchTime;
+    }
 
     const previousTime = state.simTime;
     const deltaMs = Math.max(0, eventTime - state.simTime);
@@ -857,7 +961,7 @@ function applyDirectiveAllocationShare(state, directive, targetShare) {
   if (!state.completedResearch.includes("relative-allocation")) {
     return failure(state, "Relative Directive Allocation research is incomplete.");
   }
-  if (state.replicationTuning?.burst) {
+  if (state.replicationTuning?.burst || state.replicationTuning?.burstCharge) {
     return failure(state, "Temporary Burst currently owns the directive allocation bus.");
   }
   if (!DIRECTIVES.includes(directive)) return failure(state, "Unknown directive.");
@@ -932,7 +1036,7 @@ export function setDirectiveAllocation(input, directive, target, now = Date.now(
 
 export function toggleAllocationLock(input, directive, now = Date.now()) {
   const state = advanceSimulation(input, now);
-  if (state.replicationTuning?.burst) return state;
+  if (state.replicationTuning?.burst || state.replicationTuning?.burstCharge) return state;
   if (!DIRECTIVES.includes(directive) || !directiveIsVisible(state, directive)) return state;
   state.allocationLocks[directive] = !state.allocationLocks[directive];
   return state;
@@ -940,54 +1044,55 @@ export function toggleAllocationLock(input, directive, now = Date.now()) {
 
 export function startTemporaryBurst(input, now = Date.now()) {
   const state = advanceSimulation(input, now);
+  const tuning = ensureReplicationTuning(state);
   if (!hasResearch(state, "cohort-ratio-prognostics")) {
     return failure(state, "Cohort Ratio Prognostics research is incomplete.");
   }
-  if (state.replicationTuning?.burst) return failure(state, "Temporary Burst is already active.");
+  if (tuning.burst || tuning.burstCharge) return failure(state, "Temporary Burst is already active.");
   const metrics = replicationPipelineMetrics(state);
   if (metrics.efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS) {
     return failure(state, "Replication efficiency must remain at or above 99%.");
   }
-  if (state.replicationTuning.qualifyingMs < TEMPORARY_BURST_QUALIFICATION_MS) {
+  if (tuning.qualifyingMs < TEMPORARY_BURST_QUALIFICATION_MS) {
     return failure(state, "Replication efficiency has not remained stable for 30 seconds.");
   }
-  const minimumBuffer = state.nanites / 100n > 0n ? state.nanites / 100n : 1n;
+  const requiredBuffer = minimumBurstBuffer(state);
   const bufferNanites = replicationBufferCapacity(state);
-  if (bufferNanites < minimumBuffer) {
-    return failure(
-      state,
-      `A complete-recipe buffer for at least ${formatCount(minimumBuffer)} nanites is required.`,
-    );
-  }
-
-  state.energy -= NANITE_RECIPE.energy * bufferNanites;
-  for (const key of ATOM_KEYS) state.atoms[key] -= NANITE_RECIPE.atoms[key] * bufferNanites;
-  state.replicationTuning.burst = {
+  const charge = {
     startedAt: state.simTime,
-    reservedNanites: bufferNanites,
-    remainingNanites: bufferNanites,
+    minimumBuffer: requiredBuffer,
     previousTargets: { ...state.allocationTargets },
     previousLocks: { ...state.allocationLocks },
   };
-  state.replicationTuning.qualifyingMs = 0;
-  for (const directive of DIRECTIVES) {
-    state.allocationTargets[directive] = directive === "replicate" ? ALLOCATION_SHARE_SCALE : 0n;
-    state.allocationLocks[directive] = false;
+  tuning.batchUntil = null;
+  if (bufferNanites < requiredBuffer) {
+    tuning.burstCharge = charge;
+    appendLog(
+      state,
+      `TEMPORARY BURST CHARGING · REPLICATION HELD · BUFFER ${formatCount(bufferNanites)} / ${formatCount(
+        requiredBuffer,
+      )} RECIPES.`,
+      "good",
+      undefined,
+      "medium",
+    );
+  } else {
+    armTemporaryBurst(state, charge);
   }
-  reconcileRelativeAllocations(state);
-  appendLog(
-    state,
-    `TEMPORARY BURST ARMED · ${formatCount(bufferNanites)} COMPLETE NANITE RECIPES RESERVED.`,
-    "good",
-    undefined,
-    "medium",
-  );
   scheduleAllocations(state);
   return { ok: true, state };
 }
 
 export function cancelTemporaryBurst(input, now = Date.now()) {
   const state = advanceSimulation(input, now);
+  const charge = state.replicationTuning?.burstCharge;
+  if (charge) {
+    state.replicationTuning.burstCharge = null;
+    state.replicationTuning.qualifyingMs = 0;
+    appendLog(state, "TEMPORARY BURST CHARGE CANCELLED · NORMAL REPLICATION RELEASED.", "muted", undefined, "medium");
+    scheduleAllocations(state);
+    return { ok: true, state };
+  }
   const burst = state.replicationTuning?.burst;
   if (!burst) return failure(state, "No reserving Temporary Burst remains to cancel.");
   const released = burst.remainingNanites;

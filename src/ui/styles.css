@@ -389,6 +389,8 @@ body::after {
 .action-row em { color: var(--green); font-size: 10px; font-style: normal; }
 
 .substrate-panel { padding-bottom: 16px; }
+.substrate-heading-status { display: grid; gap: 2px; }
+.substrate-heading-status small { color: var(--green-dim); font-size: 7px; font-weight: 500; letter-spacing: 0.08em; }
 .substrate-panel > strong { display: block; padding: 16px 16px 5px; color: var(--text); font-size: 12px; text-transform: uppercase; }
 .substrate-panel > p { margin: 0; padding: 0 16px; color: var(--muted); font-size: 9px; line-height: 1.6; }
 .substrate-panel > small { display: block; padding: 8px 16px 0; color: var(--green-dim); font-size: 8px; letter-spacing: 0.08em; }

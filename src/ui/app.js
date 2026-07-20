@@ -26,9 +26,12 @@ import {
   prospectingDuration,
   prospectingWorkerRequirement,
   queueResearch,
+  replicationBufferCapacity,
   replicationPipelineMetrics,
   replicationReadiness,
   replicationSubstrateProjection,
+  substrateExhaustionProjection,
+  REPLICATION_BATCH_WINDOW_MS,
   REPLICATION_EFFICIENCY_THRESHOLD_BPS,
   researchIsRevealed,
   setDirectiveAllocationShare,
@@ -323,11 +326,15 @@ function resourcesHtml(now) {
   const nextSearchIndex = state.prospecting.searchesCompleted + 1;
   const searchWorkers = prospectingWorkerRequirement(state, nextSearchIndex);
   const searchDuration = prospectingDuration(state, nextSearchIndex);
+  const substrateEta = state.completedResearch.includes("cohort-ratio-prognostics")
+    ? substrateExhaustionProjection(state)
+    : undefined;
+  const substrateEtaText = substrateEta === null ? "STALLED" : formatDuration(substrateEta ?? 0);
   const substrate = state.discovery.surveyComplete
     ? `<section class="panel substrate-panel${newUnlockClass("substrate")}" data-unlock-id="substrate" data-tooltip="The active material field is finite; inputs are reserved when collection starts.">
-        <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span>${
+        <header class="panel-heading"><span>LOCAL SUBSTRATE</span><span class="substrate-heading-status"><span>${
           depositExhausted ? "EXHAUSTED" : `${percentage(depositTotal, state.activeDeposit.initialAtoms)} REMAINS`
-        }</span></header>
+        }</span>${substrateEta === undefined || depositExhausted ? "" : `<small data-tooltip-key="substrate:exhaustion-eta" data-tooltip="This forecast follows the present collection share and replication growth curve. It updates when directive ratios, throughput research, or accessible substrate change; it is a projection rather than a scheduled event.">ETA TO EXHAUSTION · ${substrateEtaText}</small>`}</span></header>
         <strong data-tooltip-key="substrate:identity" data-tooltip="This is the swarm's current finite solid material field. Its classification describes likely composition, while exact accessible inventory below excludes matter already reserved by collection cohorts.">${state.activeDeposit.name}</strong>
         <p data-tooltip-key="substrate:composition" data-tooltip="Composition is inferred from the survey and guides the mixture returned by collection. It does not guarantee that every atom is currently identifiable by the sorting catalog.">${state.activeDeposit.description}</p>
         <small data-tooltip-key="substrate:inventory" data-tooltip="Accessible atoms are unreserved matter still present in this field. Collector capacity is the maximum discrete payload one nanite can reserve when a collection job starts.">${state.activeDeposit.cumulativeMass ?? "local shell"} cumulative context · ${formatCount(depositTotal)} constituent atoms · ≈${formatInventoryMass(
@@ -443,6 +450,11 @@ function allocationsHtml() {
   const relativeAllocation = state.completedResearch.includes("relative-allocation");
   const ratioPrognostics = state.completedResearch.includes("cohort-ratio-prognostics");
   const readiness = replicationReadiness(state);
+  const burst = state.replicationTuning?.burst;
+  const burstCharge = state.replicationTuning?.burstCharge;
+  const batchUntil = state.replicationTuning?.batchUntil;
+  const batching = batchUntil !== null && batchUntil !== undefined && batchUntil > state.simTime;
+  const replicationDisplayMode = burstCharge || batching ? "waiting" : readiness.mode;
   const replicateHalt = readiness.shortages;
   const haltedResources = replicateHalt.map((shortage) => shortage.name.toUpperCase()).join(" · ");
   const haltDetail = replicateHalt.map((shortage) =>
@@ -457,12 +469,30 @@ function allocationsHtml() {
   )} · E ${formatEnergy(NANITE_RECIPE.energy)}`;
   const replicateStatusHtml = `<small class="directive-recipe">${recipeText}</small>${
     readiness.unableToStart > 0n
-      ? `<strong class="directive-alert ${readiness.mode}">${formatCount(readiness.unableToStart)} UNABLE TO START · ${
-          readiness.mode === "waiting" ? "AWAITING INPUT PIPELINE" : `INSUFFICIENT ${haltedResources || "COMPLETE RECIPES"}`
+      ? `<strong class="directive-alert ${replicationDisplayMode}">${formatCount(readiness.unableToStart)} UNABLE TO START · ${
+          burstCharge
+            ? "BURST BUFFER CHARGING"
+            : batching
+              ? "BATCHING INPUTS"
+              : readiness.mode === "waiting"
+                ? "AWAITING INPUT PIPELINE"
+                : `INSUFFICIENT ${haltedResources || "COMPLETE RECIPES"}`
         }</strong>`
       : ""
   }`;
-  const replicationAlertHtml = readiness.unableToStart > 0n
+  const replicationAlertHtml = burstCharge
+    ? `<div class="production-halt-alert waiting" role="status" data-tooltip-key="replication:burst-charge" data-tooltip="Normal replication is deliberately paused while existing collection, sorting, and energy cohorts accumulate the minimum complete-recipe buffer. The burst arms automatically as soon as the stored buffer reaches its target.">
+        <strong>REPLICATION HELD · BURST CHARGING</strong>
+        <span>${formatCount(replicationBufferCapacity(state))} / ${formatCount(burstCharge.minimumBuffer)} RECIPES</span>
+        <small>UPSTREAM DIRECTIVES CONTINUE · AUTOMATIC ARM ON TARGET</small>
+      </div>`
+    : batching
+      ? `<div class="production-halt-alert waiting" role="status" data-tooltip-key="replication:batching" data-tooltip="A partial recipe payload arrived while more upstream material is already in flight. Replication waits up to ${REPLICATION_BATCH_WINDOW_MS / 1000} seconds so adjacent inputs launch as one larger cohort instead of many fragments.">
+          <strong>REPLICATION INPUT BATCHING</strong>
+          <span data-replication-batch-until="${batchUntil}">${formatDuration(batchUntil - state.simTime)}</span>
+          <small>${formatCount(replicationBufferCapacity(state))} COMPLETE RECIPES HELD · UPSTREAM PAYLOADS CONVERGING</small>
+        </div>`
+      : readiness.unableToStart > 0n
     ? `<div class="production-halt-alert ${readiness.mode}" role="status" data-tooltip-key="replication:${readiness.mode}" data-tooltip="${formatCount(
         readiness.unableToStart,
       )} assigned replicators are idle and cannot reserve a complete recipe. ${
@@ -475,16 +505,14 @@ function allocationsHtml() {
         <small>${haltDetail || "Reserved burst recipes are already being deployed."}</small>
       </div>`
     : "";
-  const burst = state.replicationTuning?.burst;
-  const pipelineVisible = ratioPrognostics || Boolean(burst);
+  const pipelineVisible = ratioPrognostics || Boolean(burst) || Boolean(burstCharge);
   const pipeline = pipelineVisible ? replicationPipelineMetrics(state) : null;
   const projection = pipelineVisible ? replicationSubstrateProjection(state) : null;
   const qualifyingMs = state.replicationTuning?.qualifyingMs ?? 0;
   const minimumBurstBuffer = state.nanites / 100n > 0n ? state.nanites / 100n : 1n;
-  const burstEligible = ratioPrognostics && !burst &&
+  const burstEligible = ratioPrognostics && !burst && !burstCharge &&
     pipeline.efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS &&
-    qualifyingMs >= TEMPORARY_BURST_QUALIFICATION_MS &&
-    pipeline.bufferCapacity >= minimumBurstBuffer;
+    qualifyingMs >= TEMPORARY_BURST_QUALIFICATION_MS;
   const efficiencyText = pipeline
     ? `${pipeline.efficiencyBps / 100n}.${(pipeline.efficiencyBps % 100n).toString().padStart(2, "0")}%`
     : "";
@@ -500,12 +528,14 @@ function allocationsHtml() {
     ? ""
     : burst
     ? `${formatCount(burst.remainingNanites)} OF ${formatCount(burst.reservedNanites)} RESERVED RECIPES AWAITING COHORTS`
+    : burstCharge
+      ? `CHARGING · ${formatCount(pipeline.bufferCapacity)} / ${formatCount(burstCharge.minimumBuffer)} RECIPES`
     : pipeline.efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS
       ? "RAISE EFFICIENCY TO 99.00%"
       : qualifyingMs < TEMPORARY_BURST_QUALIFICATION_MS
         ? `STABILISING · <span data-burst-qualification>${(qualifyingMs / 1000).toFixed(1)} / 30.0s</span>`
         : pipeline.bufferCapacity < minimumBurstBuffer
-          ? `BUFFER ${formatCount(pipeline.bufferCapacity)} / ${formatCount(minimumBurstBuffer)} MINIMUM`
+          ? `READY TO CHARGE · BUFFER ${formatCount(pipeline.bufferCapacity)} / ${formatCount(minimumBurstBuffer)}`
           : "EXACT BUFFER RESERVATION READY";
   const pipelineHtml = pipelineVisible
     ? `<div class="pipeline-readout" data-tooltip-key="replication:efficiency" data-tooltip="Efficiency compares the current Collect, Sort, Energy, and Replicate workforce ratio with the exact sustainable ratio implied by current job times, yields, and the universal nanite recipe. Heterogeneous substrate composition is deliberately excluded: this measures directive coherence, not whether the local material contains enough gold.">
@@ -514,15 +544,17 @@ function allocationsHtml() {
           pipeline.bufferCapacity,
         )} NANITES</strong><small>LIMITING INPUT · ${pipeline.limitingResource.toUpperCase()}</small></div>
         <div class="burst-control"><small>${burstStatus}</small><button class="terminal-button compact-button" data-action="${
-          burst ? "burst-cancel" : "burst-start"
-        }" ${!burst && !burstEligible ? "disabled" : ""} data-tooltip="${
+          burst || burstCharge ? "burst-cancel" : "burst-start"
+        }" ${!burst && !burstCharge && !burstEligible ? "disabled" : ""} data-tooltip="${
           burst
             ? "Cancel the undispatched portion of the burst, refund its still-reserved recipes exactly, and restore the prior percentage targets and locks. Replication cohorts already launched remain indivisible."
-            : "After efficiency remains at 99% or higher for 30 seconds and a buffer of at least 1% of the swarm exists, reserve every complete recipe, temporarily direct the workforce to replication, then restore the exact prior targets and locks when the buffer is deployed."
-        }">${burst ? "CANCEL BURST" : "TEMPORARY BURST"}</button></div>
+            : burstCharge
+              ? "Cancel buffer charging and release normal replication. No recipes have been reserved, and the original directive ratios remain in place."
+              : "After efficiency remains at 99% or higher for 30 seconds, pause normal replication until at least 1% of the swarm can be built from the buffer. The burst then arms automatically, deploys every complete stored recipe, and restores the prior targets and locks."
+        }">${burstCharge ? "CANCEL CHARGE" : burst ? "CANCEL BURST" : "TEMPORARY BURST"}</button></div>
       </div>`
     : "";
-  return `<section class="panel allocation-panel${readiness.mode === "halted" ? " production-stalled" : ""}${readiness.mode === "waiting" ? " production-waiting" : ""}${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
+  return `<section class="panel allocation-panel${replicationDisplayMode === "halted" ? " production-stalled" : ""}${replicationDisplayMode === "waiting" ? " production-waiting" : ""}${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
     <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatCount(unassigned)} UNASSIGNED${
       ` · ${formatCount(readiness.unableToStart)} UNABLE TO START`
     }${
@@ -784,6 +816,8 @@ function structuralSignature() {
     activeResearchTab,
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
     state.replicationTuning?.qualifyingMs >= TEMPORARY_BURST_QUALIFICATION_MS,
+    state.replicationTuning?.batchUntil ?? "",
+    state.replicationTuning?.burstCharge?.minimumBuffer ?? "",
     state.replicationTuning?.burst?.remainingNanites ?? "",
     state.replicationTuning?.burst?.reservedNanites ?? "",
     sonicMind.enabled,
@@ -803,6 +837,9 @@ function updateDynamicProgress(now) {
     const label = bar.querySelector(":scope > span");
     if (fill) fill.style.width = `${Math.max(0, Math.min(1, (now - start) / (end - start))) * 100}%`;
     if (label) label.textContent = cohortTimeLabel(start, end, now);
+  }
+  for (const label of document.querySelectorAll("[data-replication-batch-until]")) {
+    label.textContent = formatDuration(Number(label.dataset.replicationBatchUntil) - now);
   }
   const researchBar = document.querySelector("[data-research-progress]");
   const active = state.researchQueue[0];

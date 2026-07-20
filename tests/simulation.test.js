@@ -27,6 +27,7 @@ import {
   prospectingDuration,
   prospectingWorkerRequirement,
   queueResearch,
+  REPLICATION_BATCH_WINDOW_MS,
   replicationPipelineMetrics,
   replicationReadiness,
   replicationSubstrateProjection,
@@ -38,6 +39,7 @@ import {
   startManualJob,
   startProspecting,
   startTemporaryBurst,
+  substrateExhaustionProjection,
 } from "../src/game/engine.js";
 import { totalMatter } from "../src/game/matter.js";
 import { massYoctograms } from "../src/game/quantities.js";
@@ -803,6 +805,49 @@ describe("cohort simulation", () => {
     assert.ok(incoherent.speedup > 1.5);
   });
 
+  it("projects local substrate exhaustion from the current collection and growth curve", () => {
+    const state = createInitialState(3_937_000);
+    state.nanites = 1_000n;
+    state.allocations.collect = 100n;
+    const slower = substrateExhaustionProjection(state);
+    state.allocations.collect = 200n;
+    const faster = substrateExhaustionProjection(state);
+    assert.ok(slower > 0);
+    assert.ok(faster > 0);
+    assert.ok(faster < slower);
+    state.allocations.collect = 0n;
+    assert.equal(substrateExhaustionProjection(state), null);
+  });
+
+  it("batches partial replication inputs before launching another phase", () => {
+    const now = 3_938_000;
+    let state = createInitialState(now);
+    state.nanites = 110n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state.completedResearch.push("relative-allocation", "cohort-ratio-prognostics");
+    state.allocations.replicate = 100n;
+    state.energy = NANITE_RECIPE.energy * 10n;
+    for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) state.atoms[key] = amount * 10n;
+    state.cohorts.push({
+      id: "upstream-energy",
+      directive: "energy",
+      workers: 10n,
+      startedAt: now,
+      completesAt: now + 20_000,
+      origin: "allocation",
+      payload: { kind: "energy", energy: NANITE_RECIPE.energy * 100n },
+    });
+
+    state = advanceSimulation(state, now + 1);
+    assert.equal(state.cohorts.some((cohort) => cohort.directive === "replicate"), false);
+    assert.equal(state.replicationTuning.batchUntil, now + REPLICATION_BATCH_WINDOW_MS);
+    state = advanceSimulation(state, now + REPLICATION_BATCH_WINDOW_MS);
+    const replication = state.cohorts.find((cohort) => cohort.directive === "replicate");
+    assert.equal(replication.workers, 10n);
+    assert.equal(state.replicationTuning.batchUntil, null);
+  });
+
   it("reserves a Temporary Burst exactly and restores the prior relative targets", () => {
     const now = 3_940_000;
     let state = createInitialState(now);
@@ -859,6 +904,43 @@ describe("cohort simulation", () => {
     for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) {
       assert.equal(state.atoms[key], amount * 4_547n);
     }
+  });
+
+  it("charges a burst by holding replication and arms automatically at the minimum buffer", () => {
+    const now = 3_960_000;
+    let state = createInitialState(now);
+    state.nanites = 15_453n;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state.completedResearch.push("relative-allocation", "cohort-ratio-prognostics");
+    for (const [directive, workers] of Object.entries({ collect: 1_115n, sort: 1_338n, energy: 2_000n, replicate: 11_000n })) {
+      state.allocations[directive] = workers;
+      state.allocationTargets[directive] = workers * ALLOCATION_SHARE_SCALE / state.nanites;
+    }
+    state.energy = NANITE_RECIPE.energy * 200n;
+    for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) state.atoms[key] = amount * 100n;
+    state.replicationTuning.qualifyingMs = 30_000;
+    state.cohorts.push({
+      id: "finishing-sort",
+      directive: "sort",
+      workers: 100n,
+      startedAt: now,
+      completesAt: now + 1_000,
+      origin: "allocation",
+      payload: {
+        kind: "sort",
+        atoms: Object.fromEntries(Object.entries(NANITE_RECIPE.atoms).map(([key, amount]) => [key, amount * 100n])),
+        residuum: emptyMatter(),
+      },
+    });
+
+    state = success(startTemporaryBurst(state, now));
+    assert.equal(state.replicationTuning.burst, null);
+    assert.equal(state.replicationTuning.burstCharge.minimumBuffer, 154n);
+    assert.equal(state.cohorts.some((cohort) => cohort.directive === "replicate"), false);
+    state = advanceSimulation(state, now + 1_000);
+    assert.equal(state.replicationTuning.burstCharge, null);
+    assert.equal(state.cohorts.some((cohort) => cohort.payload.kind === "replicate" && cohort.payload.burst), true);
   });
 
   it("redistributes relative allocations without disturbing locked directives", () => {

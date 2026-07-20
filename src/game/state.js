@@ -79,6 +79,8 @@ export function createInitialState(now = Date.now()) {
     allocationLocks: emptyLocks(),
     replicationTuning: {
       qualifyingMs: 0,
+      batchUntil: null,
+      burstCharge: null,
       burst: null,
     },
     researchQueue: [],
