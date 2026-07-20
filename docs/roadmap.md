@@ -33,6 +33,8 @@
 
 ## Growth pacing and directive coherence
 
+- [x] Gate replication-efficiency diagnostics and Temporary Burst behind a 180-nanite Cohort Ratio Prognostics signal.
+- [x] Compare live and coherent geometric substrate-conversion ETAs so ratio changes communicate their real time multiplier.
 - [x] Report the exact number of assigned replicators unable to reserve a complete recipe.
 - [x] Distinguish a genuine missing-input halt from waiting on enough already-scheduled upstream payloads.
 - [x] Score Collect, Sort, Energy and Replicate allocations against the exact sustainable pipeline ratio.

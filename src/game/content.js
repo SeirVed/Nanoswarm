@@ -430,6 +430,18 @@ const researchCatalog = {
     // The embedded seed reasoning substrate completes this in 2m 30s at its base 100 n-eq capacity.
     requiredNaniteMs: 15_000_000n,
   }),
+  "cohort-ratio-prognostics": researchDefinition({
+    id: "cohort-ratio-prognostics",
+    name: "Cohort Ratio Prognostics",
+    description: "Model the swarm as one coupled production pipeline rather than a set of isolated directives.",
+    effect: "Exposes live replication efficiency, bottleneck diagnosis, substrate-conversion projections, and Temporary Burst control.",
+    requires: ["relative-allocation"],
+    unlockNanites: 180n,
+    trigger: "Projected substrate-conversion time now diverges sharply between intuitive and coherent directive ratios.",
+    // Four minutes on the protected 100 n-eq seed reasoning substrate.
+    requiredNaniteMs: 24_000_000n,
+    cost: researchCost(300n, 5_000n, 2_000n, 750n, 100n),
+  }),
   "parallel-directives": researchDefinition({
     ...INITIAL_RESEARCH["parallel-directives"],
     // The embedded seed reasoning substrate completes this in four minutes at its base 100 n-eq capacity.

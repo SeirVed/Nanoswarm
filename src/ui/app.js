@@ -28,6 +28,7 @@ import {
   queueResearch,
   replicationPipelineMetrics,
   replicationReadiness,
+  replicationSubstrateProjection,
   REPLICATION_EFFICIENCY_THRESHOLD_BPS,
   researchIsRevealed,
   setDirectiveAllocationShare,
@@ -440,6 +441,7 @@ function allocationsHtml() {
   if (!state.discovery.directivesVisible) return "";
   const unassigned = state.nanites - assignmentTotal(state);
   const relativeAllocation = state.completedResearch.includes("relative-allocation");
+  const ratioPrognostics = state.completedResearch.includes("cohort-ratio-prognostics");
   const readiness = replicationReadiness(state);
   const replicateHalt = readiness.shortages;
   const haltedResources = replicateHalt.map((shortage) => shortage.name.toUpperCase()).join(" · ");
@@ -473,11 +475,13 @@ function allocationsHtml() {
         <small>${haltDetail || "Reserved burst recipes are already being deployed."}</small>
       </div>`
     : "";
-  const pipeline = relativeAllocation ? replicationPipelineMetrics(state) : null;
   const burst = state.replicationTuning?.burst;
+  const pipelineVisible = ratioPrognostics || Boolean(burst);
+  const pipeline = pipelineVisible ? replicationPipelineMetrics(state) : null;
+  const projection = pipelineVisible ? replicationSubstrateProjection(state) : null;
   const qualifyingMs = state.replicationTuning?.qualifyingMs ?? 0;
   const minimumBurstBuffer = state.nanites / 100n > 0n ? state.nanites / 100n : 1n;
-  const burstEligible = relativeAllocation && !burst &&
+  const burstEligible = ratioPrognostics && !burst &&
     pipeline.efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS &&
     qualifyingMs >= TEMPORARY_BURST_QUALIFICATION_MS &&
     pipeline.bufferCapacity >= minimumBurstBuffer;
@@ -485,6 +489,13 @@ function allocationsHtml() {
     ? `${pipeline.efficiencyBps / 100n}.${(pipeline.efficiencyBps % 100n).toString().padStart(2, "0")}%`
     : "";
   const bottleneckText = pipeline?.bottlenecks.map((directive) => DIRECTIVE_LABEL[directive].toUpperCase()).join(" · ");
+  const currentProjectionText = projection?.currentMs === null ? "STALLED" : formatDuration(projection?.currentMs ?? 0);
+  const coherentProjectionText = projection?.coherentMs === null ? "UNAVAILABLE" : formatDuration(projection?.coherentMs ?? 0);
+  const projectionGainText = projection?.currentMs === null && projection.coherentMs !== null
+    ? "PIPELINE RESTORED"
+    : projection?.speedup && projection.speedup > 1.005
+      ? `${projection.speedup.toFixed(projection.speedup >= 10 ? 0 : 1)}× FASTER`
+      : "RATIO COHERENT";
   const burstStatus = !pipeline
     ? ""
     : burst
@@ -496,9 +507,9 @@ function allocationsHtml() {
         : pipeline.bufferCapacity < minimumBurstBuffer
           ? `BUFFER ${formatCount(pipeline.bufferCapacity)} / ${formatCount(minimumBurstBuffer)} MINIMUM`
           : "EXACT BUFFER RESERVATION READY";
-  const pipelineHtml = relativeAllocation
+  const pipelineHtml = pipelineVisible
     ? `<div class="pipeline-readout" data-tooltip-key="replication:efficiency" data-tooltip="Efficiency compares the current Collect, Sort, Energy, and Replicate workforce ratio with the exact sustainable ratio implied by current job times, yields, and the universal nanite recipe. Heterogeneous substrate composition is deliberately excluded: this measures directive coherence, not whether the local material contains enough gold.">
-        <div><span>REPLICATION EFFICIENCY</span><strong>${efficiencyText}</strong><small>BOTTLENECK · ${bottleneckText}</small></div>
+        <div><span>REPLICATION EFFICIENCY</span><strong>${efficiencyText}</strong><small>BOTTLENECK · ${bottleneckText}</small><small>PROJECTED LOCAL CONVERSION · ${currentProjectionText}<br>COHERENT RATIO · ${coherentProjectionText} · ${projectionGainText}</small></div>
         <div data-tooltip-key="replication:buffer" data-tooltip="Complete-recipe buffer counts nanites that could begin replication immediately from unreserved sorted atoms and energy. The lowest resource capacity is ${pipeline.limitingResource}; every input is reserved atom-for-atom when a burst is armed."><span>COMPLETE-RECIPE BUFFER</span><strong>${formatCount(
           pipeline.bufferCapacity,
         )} NANITES</strong><small>LIMITING INPUT · ${pipeline.limitingResource.toUpperCase()}</small></div>
@@ -569,6 +580,17 @@ function allocationsHtml() {
   </section>`;
 }
 
+function researchObservation(definition) {
+  if (definition.id !== "cohort-ratio-prognostics") return definition.trigger;
+  const projection = replicationSubstrateProjection(state);
+  const current = projection.currentMs === null ? "STALLED" : formatDuration(projection.currentMs);
+  const coherent = projection.coherentMs === null ? "UNAVAILABLE" : formatDuration(projection.coherentMs);
+  const gain = projection.speedup && projection.speedup > 1.005
+    ? ` · ${projection.speedup.toFixed(projection.speedup >= 10 ? 0 : 1)}× FASTER`
+    : "";
+  return `PROJECTED ETA TO USEFUL SUBSTRATE CONSUMPTION · CURRENT ${current} · REFACTORED RATIO ${coherent}${gain}.`;
+}
+
 function researchHtml() {
   if (!state.discovery.researchVisible) return "";
   const active = state.researchQueue[0];
@@ -632,8 +654,9 @@ function researchHtml() {
           const queued = state.researchQueue.some((item) => item.id === definition.id);
           const complete = state.completedResearch.includes(definition.id);
           const eta = (definition.requiredNaniteMs + capacity - 1n) / capacity;
+          const observation = researchObservation(definition);
           return `<article class="research-card${newUnlockClass(`research:${definition.id}`)}" data-unlock-id="research:${definition.id}" data-tooltip-key="research-card:${definition.id}" data-tooltip="${definition.description} Effect: ${definition.effect} Queueing reserves the complete listed cost before any work begins."><div><strong>${definition.name}</strong><p>${definition.description}</p>${
-            definition.trigger ? `<p class="research-trigger">OBSERVATION · ${definition.trigger}</p>` : ""
+            observation ? `<p class="research-trigger">OBSERVATION · ${observation}</p>` : ""
           }<p class="research-effect">${definition.effect}</p>
             <small>${
               complete

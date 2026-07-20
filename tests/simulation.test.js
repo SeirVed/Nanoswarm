@@ -29,6 +29,7 @@ import {
   queueResearch,
   replicationPipelineMetrics,
   replicationReadiness,
+  replicationSubstrateProjection,
   replicationShortages,
   researchIsRevealed,
   setDirectiveAllocation,
@@ -512,6 +513,12 @@ describe("cohort simulation", () => {
     assert.deepEqual(Object.values(RESEARCH)
       .filter((definition) => !state.completedResearch.includes(definition.id))
       .filter((definition) => researchIsRevealed(state, definition)), []);
+    state.nanites = 180n;
+    assert.deepEqual(Object.values(RESEARCH)
+      .filter((definition) => !state.completedResearch.includes(definition.id))
+      .filter((definition) => researchIsRevealed(state, definition))
+      .map((definition) => definition.id), ["cohort-ratio-prognostics"]);
+    state.completedResearch.push("cohort-ratio-prognostics");
     state.prospecting.searchesCompleted = 1;
     const firstHorizon = Object.values(RESEARCH)
       .filter((definition) => !state.completedResearch.includes(definition.id))
@@ -777,6 +784,25 @@ describe("cohort simulation", () => {
     assert.ok(replicationPipelineMetrics(state).efficiencyBps < 10_000n);
   });
 
+  it("projects the live compounding penalty of an incoherent production ratio", () => {
+    const state = createInitialState(3_935_000);
+    state.nanites = 15_453n;
+    state.allocations.collect = 1_115n;
+    state.allocations.sort = 1_338n;
+    state.allocations.energy = 2_000n;
+    state.allocations.replicate = 11_000n;
+    const coherent = replicationSubstrateProjection(state);
+    assert.ok(coherent.currentMs > 0);
+    assert.ok(coherent.coherentMs > 0);
+    assert.ok(Math.abs(coherent.speedup - 1) < 0.001);
+
+    state.allocations.collect = 6_000n;
+    state.allocations.replicate = 6_115n;
+    const incoherent = replicationSubstrateProjection(state);
+    assert.ok(incoherent.currentMs > incoherent.coherentMs);
+    assert.ok(incoherent.speedup > 1.5);
+  });
+
   it("reserves a Temporary Burst exactly and restores the prior relative targets", () => {
     const now = 3_940_000;
     let state = createInitialState(now);
@@ -796,6 +822,10 @@ describe("cohort simulation", () => {
     const previousTargets = structuredClone(state.allocationTargets);
     const previousLocks = structuredClone(state.allocationLocks);
 
+    const hidden = startTemporaryBurst(state, now);
+    assert.equal(hidden.ok, false);
+    assert.match(hidden.reason, /Cohort Ratio Prognostics/);
+    state.completedResearch.push("cohort-ratio-prognostics");
     state = success(startTemporaryBurst(state, now));
     assert.equal(state.replicationTuning.burst.remainingNanites, 4_547n);
     assert.equal(state.energy, 0n);
@@ -814,7 +844,7 @@ describe("cohort simulation", () => {
     let state = createInitialState(now);
     state.nanites = 15_453n;
     state.discovery.directivesVisible = true;
-    state.completedResearch.push("relative-allocation");
+    state.completedResearch.push("relative-allocation", "cohort-ratio-prognostics");
     for (const [directive, workers] of Object.entries({ collect: 1_115n, sort: 1_338n, energy: 2_000n, replicate: 11_000n })) {
       state.allocations[directive] = workers;
       state.allocationTargets[directive] = workers * ALLOCATION_SHARE_SCALE / state.nanites;

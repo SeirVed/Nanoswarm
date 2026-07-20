@@ -177,6 +177,12 @@ export function replicationPipelineMetrics(state) {
     (total, path) => addRational(total, rational(path.requirement * path.duration, path.output)),
     rational(0n),
   );
+  const coherentRate = productionWorkers <= 0n
+    ? rational(0n)
+    : rational(
+      productionWorkers * workerTimePerRecipe.denominator,
+      workerTimePerRecipe.numerator,
+    );
   const efficiencyBps = productionWorkers <= 0n
     ? 0n
     : minBigInt(
@@ -198,6 +204,42 @@ export function replicationPipelineMetrics(state) {
     productionWorkers,
     bufferCapacity,
     limitingResource: limitingCapacity.key,
+    currentRecipeRate: minimumRate,
+    coherentRecipeRate: coherentRate,
+  };
+}
+
+export function replicationSubstrateProjection(state) {
+  const metrics = replicationPipelineMetrics(state);
+  const reachableAtoms = Object.fromEntries(ATOM_KEYS.map((key) => {
+    let amount = state.atoms[key] + state.feedstock[key] + state.activeDeposit.matter[key];
+    for (const cohort of state.cohorts) {
+      if (cohort.payload.kind === "collect") amount += cohort.payload.matter[key];
+      if (cohort.payload.kind === "sort") amount += cohort.payload.atoms[key];
+    }
+    return [key, amount];
+  }));
+  const remainingRecipes = minBigInt(...ATOM_KEYS.map(
+    (key) => reachableAtoms[key] / NANITE_RECIPE.atoms[key],
+  ));
+  const projectedDuration = (rate) => {
+    if (remainingRecipes <= 0n || state.nanites <= 0n) return 0;
+    if (rate.numerator <= 0n) return null;
+    const population = Number(state.nanites);
+    const remaining = Number(remainingRecipes);
+    const recipesPerMs = Number(rate.numerator) / Number(rate.denominator);
+    const milliseconds = Math.log1p(remaining / population) * population / recipesPerMs;
+    return Number.isFinite(milliseconds) ? Math.max(0, Math.ceil(milliseconds)) : null;
+  };
+  const currentMs = projectedDuration(metrics.currentRecipeRate);
+  const coherentMs = projectedDuration(metrics.coherentRecipeRate);
+  return {
+    remainingRecipes,
+    currentMs,
+    coherentMs,
+    speedup: currentMs !== null && coherentMs !== null && coherentMs > 0
+      ? currentMs / coherentMs
+      : null,
   };
 }
 
@@ -693,7 +735,7 @@ function completeResearchIfReady(state) {
 
 function advanceReplicationQualification(state, deltaMs) {
   if (!state.replicationTuning || deltaMs <= 0) return;
-  const qualified = hasResearch(state, "relative-allocation") &&
+  const qualified = hasResearch(state, "cohort-ratio-prognostics") &&
     !state.replicationTuning.burst &&
     replicationPipelineMetrics(state).efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS;
   state.replicationTuning.qualifyingMs = qualified
@@ -898,8 +940,8 @@ export function toggleAllocationLock(input, directive, now = Date.now()) {
 
 export function startTemporaryBurst(input, now = Date.now()) {
   const state = advanceSimulation(input, now);
-  if (!hasResearch(state, "relative-allocation")) {
-    return failure(state, "Relative Directive Allocation research is incomplete.");
+  if (!hasResearch(state, "cohort-ratio-prognostics")) {
+    return failure(state, "Cohort Ratio Prognostics research is incomplete.");
   }
   if (state.replicationTuning?.burst) return failure(state, "Temporary Burst is already active.");
   const metrics = replicationPipelineMetrics(state);
