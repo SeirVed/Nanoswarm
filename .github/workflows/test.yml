@@ -16,5 +16,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm test
+      - name: Run tests
+        shell: bash
+        run: |
+          if ! npm test > /tmp/nanoswarm-test.log 2>&1; then
+            tail -n 200 /tmp/nanoswarm-test.log
+            exit 1
+          fi
       - run: npm run build
