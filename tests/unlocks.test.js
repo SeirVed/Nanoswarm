@@ -28,20 +28,30 @@ describe("unlock acknowledgements", () => {
       assert.equal(ids.includes(id), true, `${id} should be revealed`);
     }
     assert.equal(ids.includes("research:relative-allocation"), false);
+    assert.equal(ids.includes("directive:research"), false);
   });
 
-  it("migrates already-visible version-six features as acknowledged", () => {
+  it("round-trips version-twelve mnemonic state", () => {
     const state = createInitialState(7_100_000);
-    state.version = 6;
     state.discovery.surveyComplete = true;
     state.discovery.feedstockVisible = true;
-    delete state.seenUnlocks;
+    state.seenUnlocks = unlockedIdsForState(state);
+    state.mnemonicNanites = 16n;
+    state.mnemonicBanks.push({
+      id: "bank-test",
+      researchId: "cohort-ratio-prognostics",
+      nanites: 16n,
+      status: "installed",
+      startedAt: state.simTime,
+      installedAt: state.simTime,
+      legacy: false,
+    });
 
     const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 11);
+    assert.equal(restored.version, 12);
     assert.deepEqual(restored.seenUnlocks, unlockedIdsForState(restored));
-    assert.equal(restored.seenUnlocks.includes("substrate"), true);
-    assert.equal(restored.seenUnlocks.includes("materials"), true);
+    assert.equal(restored.mnemonicNanites, 16n);
+    assert.equal(restored.mnemonicBanks[0].researchId, "cohort-ratio-prognostics");
   });
 
   it("acknowledges clicked unlock identifiers once and persists unrelated notices", () => {
