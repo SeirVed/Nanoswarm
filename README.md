@@ -20,6 +20,8 @@ The research workbench is available at `http://127.0.0.1:4173/research-planner/`
 
 The mass-horizon workbench is available at `http://127.0.0.1:4173/horizon-planner/`. It authors the complete 0.1 g–1 Gt pathway, stage assignments, observations, discoveries, research opportunities, source-specific Residuum, losses, and strategy-dependent human response. It also exposes the current research-empty bridge after Relative Directive Allocation for review.
 
+The approved replacement research economy is documented in [`docs/research-mnemonic-substrate.md`](docs/research-mnemonic-substrate.md). It removes loose-atom research costs and converts post-bootstrap research into energy-driven construction of permanent mnemonic banks from active nanites. Implementation is pending.
+
 ## Play online
 
 The `main` branch deploys automatically to GitHub Pages:
