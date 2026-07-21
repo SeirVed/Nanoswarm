@@ -19,8 +19,12 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          if ! npm test > /tmp/nanoswarm-test.log 2>&1; then
-            tail -n 200 /tmp/nanoswarm-test.log
-            exit 1
-          fi
+          npm test > /tmp/nanoswarm-test.log 2>&1
+      - name: Upload test failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanoswarm-test-failure
+          path: /tmp/nanoswarm-test.log
+          retention-days: 1
       - run: npm run build
