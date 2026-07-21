@@ -145,12 +145,19 @@ describe("mnemonic research", () => {
 
   it("never converts the final active nanite", () => {
     let state = researchReadyState(5_000_000);
-    state.nanites = 16n;
-    state.completedResearch.push("parallel-directives", "relative-allocation");
-    const result = queueResearch(state, "cohort-ratio-prognostics", state.simTime);
+    const footprint = RESEARCH["residuum-indexing"].memoryNanites;
+    state.nanites = footprint;
+    state.prospecting.searchesCompleted = 1;
+    state.completedResearch.push(
+      "parallel-directives",
+      "relative-allocation",
+      "cohort-ratio-prognostics",
+    );
+
+    const result = queueResearch(state, "residuum-indexing", state.simTime);
     assert.equal(result.ok, true);
     assert.equal(result.state.researchQueue[0].status, "queued");
-    assert.equal(result.state.nanites, 16n);
+    assert.equal(result.state.nanites, footprint);
   });
 
   it("produces identical mnemonic progress when stepped or event-jumped", () => {
@@ -186,10 +193,9 @@ describe("mnemonic research", () => {
     delete state.legacyCoreEncoding;
     delete state.researchUpdatedAt;
 
-    const migrated = deserializeState(serializeState({ ...state, version: 12 }).replace(
-      '"version":12',
-      '"version":11',
-    ));
+    const raw = JSON.stringify(state, (_key, value) =>
+      typeof value === "bigint" ? { $bigint: value.toString() } : value);
+    const migrated = deserializeState(raw);
     assert.equal(migrated.version, 12);
     assert.equal(migrated.energy, 120n);
     assert.deepEqual(migrated.atoms, {
