@@ -17,23 +17,23 @@ advanceSimulation(targetTime) ── jumps to completion event
                                   exact outputs + permanent log
 ```
 
+The current entry modules wrap the original v11 implementation as `*-legacy.js` modules. Unchanged collection, sorting, replication, prospecting, burst, and allocation behaviour continues through that engine. Version 12 intercepts research state so the discarded resource-purchase model cannot run.
+
 ## Exact matter
 
 Feedstock and Residuum are inventories of constituent atoms. The simulation knows the underlying composition, while the interface may hide unidentified constituents. This conserves matter without floating-point percentages or a mutable generic-mass currency.
 
-The starter deposit is a 0.1 g impact-fused contact site containing exactly `702,327,557,648,247,539` whole multiples of the C/Si/Cu/Au nanite recipe. Full exhaustion therefore strands none of the four seed-catalogued elements. The contact is an intentional arrival anomaly; it is not presented as the natural composition of ordinary solder.
+The starter deposit is a 0.1 g impact-fused contact site containing exactly `702,327,557,648,247,539` whole multiples of the C/Si/Cu/Au nanite recipe. Full exhaustion therefore strands none of the four seed-catalogued elements.
 
-Every later shell uses a fixed integer mass-composition recipe containing all physically authored elements. `MATTER_KEYS` is the full internal element ledger, while `ATOM_KEYS` is the smaller catalogue currently understood by the seed. Sorting transfers catalogued atoms into available storage and retains every other element under its real hidden key in Residuum. The UI may sum that ledger, but it must not erase or prematurely identify it. Legacy `unknown` atoms remain a separate honest key because an older save contains insufficient information to reconstruct their identity.
+Every later shell uses a fixed integer mass-composition recipe containing all physically authored elements. Sorting transfers catalogued atoms into available storage and retains every other element under its real hidden key in Residuum.
 
-The planned Residuum extension preserves provenance as well as identity. Every finite local substrate creates its own retained lot; atmosphere, regolith and other open extraction modes create independent bulk lots. The early interface may aggregate these lots, but the simulation must not merge their underlying compositions. A newly catalogued element becomes extractable only after a re-sorting job processes an eligible lot. Spectral Binning may group lots by observed composition without homogenizing them or revealing still-unknown elements.
+Mnemonic substrate is nanite matter in another state. Research conversion changes the active-nanite count and records the corresponding constructing or installed memory bank; it never deletes the constituent matter conceptually.
 
 ## Prospecting and open environments
 
-When all accessible matter in an active shell has been reserved, the simulation records exhaustion once and exposes a scale-aware local survey cohort. Searches one through four commit 0.5%, 1%, 2%, and 4% of the current active swarm, rounded upward to a whole nanite, for 30, 45, 60, and 90 seconds. The original close survey remains a ten-second, one-worker job because the solitary seed has no larger cohort to send. Completion archives the depleted shell and advances through the authored nested object: +0.9 g remaining DRAM package, +9 g circuit-board fragment, +90 g motherboard region and +900 g broken chassis. There is no repeating or randomly scaled solid deposit after the chassis.
+When all accessible matter in an active shell has been reserved, the simulation records exhaustion once and exposes a scale-aware local survey cohort. Completion advances through the authored nested object: damaged DRAM package, circuit-board fragment, motherboard region, then broken chassis.
 
-These nested-object searches are substrate-expansion actions, so their controls, committed workforce and live timer remain in the substrate panel rather than occupying a recurring operational slot. Later free-ranging biomass searches or hunting parties may become full directives when the swarm reaches a genuinely local-area scale.
-
-Acquiring the chassis begins Stage 2 and identifies atmospheric matter. Atmosphere is an open environmental source rather than a finite deposit, so its harvested atoms enter the tracked system at job completion. Base atmospheric throughput is exactly 1% of the current effective solid-collection payload. Its canonical dry-air constituent-atom ratio contains nitrogen, oxygen, argon and carbon; only carbon is part of the seed catalogue, and all other atoms are retained by hidden identity pending later research.
+Acquiring the chassis begins Stage 2 and identifies atmospheric matter. Atmosphere is an open environmental source rather than a finite deposit.
 
 ## Cohorts
 
@@ -41,64 +41,86 @@ A cohort is a group of identical nanites that began the same job at the same tim
 
 Inputs are removed from available inventory when a cohort starts. Its payload is stored on the cohort and applied at completion. This prevents two cohorts from spending the same atoms and makes save/load deterministic.
 
-Allocation cohorts enter on 500 ms synchronization boundaries. When one phase returns within two seconds of another phase on the same directive, its workers wait for that nearby completion and the following cycle launches as one resonant cohort. This convergence rule changes scheduling only; the interface may group all phases of one directive into a single operational summary without merging their authoritative payloads early.
+Allocation cohorts enter on synchronization boundaries and may converge into resonant phases without merging authoritative payloads early.
 
 ## Time and offline progress
 
-`advanceSimulation` moves between the next cohort completion, the next research completion, and the requested target time. It does not replay display frames. Leaving the game open and loading it later must produce identical state.
+`advanceSimulation` moves between meaningful events and the requested target time. It does not replay display frames. Leaving the game open and loading it later must produce identical state.
 
-The loop detects a genuine zero-time stall rather than imposing a fixed event-count ceiling. A long absence may contain hundreds of thousands of legitimate cohort completions and must not make an otherwise valid save unloadable.
+Mnemonic research uses the same rule. Progress is integrated from its last authoritative update, and completion is recorded at the exact computed completion time. Waiting research does not accumulate work and never starts automatically during offline catch-up.
 
 ## Permanent log
 
-Log significance and visual tone are separate fields. `world` records history-scale state changes, `critical` marks conditions requiring attention, `medium` records discoveries and unlocks, and `info` carries routine operations such as job starts and completions. World, critical, and medium history is permanent; only the oldest info entries are removed once 200 routine events are retained. Filters are a presentation concern and never alter retention. Version 3 saves infer the missing significance field during migration.
+Log significance and visual tone are separate fields. World, critical, and medium history is permanent; only the oldest routine info entries roll off.
+
+Research emits separate records for queue intent, bootstrap encoding, mnemonic construction, bank installation, and cognitive-model completion.
 
 ## Research
 
-Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. Prerequisites, stage, completed material searches, and environmental signals are validated by the simulation, not merely hidden by the interface. Parallel Directive Scheduling is the sole initial root, requires `24,000,000` nanite-milliseconds, and therefore takes four minutes on the base 100 n-eq seed reasoning substrate. Relative Directive Allocation requires that root, and every remaining topic explicitly requires Relative Directive Allocation before it can be revealed or queued. The interface withholds the catalog-wide completed/total fraction. Completed research modifies capacity functions used when new cohorts reserve their payloads; already-running cohorts preserve the recipe and output with which they began.
+Research is a physical transformation rather than a resource shop.
 
-Queued topics retain their accumulated work when reordered. Cancelling a topic discards that work and releases its reserved input cost. Reassigning nanites from an indivisible production cohort into research changes the target immediately, but those workers do not contribute research capacity until their existing cohort returns.
+The seed contains an extreme computronium processor and a small rewritable Bootstrap Archive. Parallel Directive Scheduling and Relative Directive Allocation fit within that archive and therefore consume energy and compute work but no active nanites.
 
-The embedded seed reasoning substrate initially supplies the greater of 100 nanite-equivalents or 1% of the total swarm; Distributed Reasoning Mesh raises the proportional contribution to 2%. Explicitly allocated research nanites add to that capacity. The term computronium is reserved for the later stellar-forge compound rather than this conventional protected hardware.
+All later topics define:
 
-Most throughput branches are authored as additive five-percent refinement series. Their work and resource costs rise by one order of magnitude per tier, matching the one-order material searches at 0.9 g, 9 g, 90 g, and 900 g. Tier V and later remain unavailable until their environments are authored. Search-one work is calibrated against the 1% reasoning core at exhaustion of the exact 0.1 g contact: Capacitive Buffer Lattice I, Payload Frame Reinforcement I, Packetized Sorting I, Route Memory I, and Residuum Indexing initially read as 20, 25, 30, 35, and 40 minutes. Their inputs equal one through five minutes of the balanced first-shell resource pipeline. Because the work is fixed while reasoning capacity continues growing with the swarm, those ETAs collapse after replication rather than being artificial wall-clock delays.
+```text
+memoryNanites
+energyCost
+requiredCompute
+```
 
-Each research definition may carry a revealing observation. These are player-facing traces of the swarm's growing model rather than flavour detached from mechanics. Residuum Indexing follows the first imperfect material catalogue; the chassis then independently permits Ferromagnetic Phase Analysis and Atmospheric Spectroscopy. Specialized Morphologies I records behavioural role persistence only: it has no capacity bonus and does not alter `NANITE_RECIPE`.
+Starting a mnemonic topic:
 
-Later morphology research equips the canonical nanite with interchangeable tools, coatings, reservoirs or assembled temporary structures. It must not silently replace the base recipe. Compound recognition and compound decomposition remain separate research layers on the path to universal molecular disassembly and assembly. Elemental transmutation is outside the chemical assembler model and belongs to a much later flux-based nuclear system.
+1. validates observations, prerequisites, stage, and search horizon;
+2. requires its fixed active-nanite footprint to be idle;
+3. consumes its energy cost;
+4. removes those nanites from the active swarm;
+5. creates a constructing mnemonic bank.
 
-Relative allocation targets are stored as fixed-point shares of `10^12`. Replication reapportions the enlarged integer swarm with the largest-remainder method, so targets persist without fractional nanites or cumulative rounding loss. Target shares may sum to less than 100%; that remainder deliberately stays unassigned.
+Completion installs the bank permanently and enables the research effect. No loose carbon, silicon, copper, gold, or later chemical inventory is charged.
 
-Replication efficiency remains hidden until Cohort Ratio Prognostics is completed after its 180-nanite observation threshold. It is an exact fixed-point basis-point score derived from the current job durations, job yields, universal recipe, and assigned Collect, Sort, Energy, and Replicate workers. It measures directive coherence; it deliberately does not pretend a heterogeneous substrate contains the recipe ratio. The reported bottleneck is the path with the lowest sustainable recipe rate.
+Initial effective research capacity is:
 
-The accompanying substrate-conversion projection counts recipe-complete catalogued material that remains accessible in the active deposit, Feedstock, sorted inventory, or collection/sorting cohorts. It compares the live pipeline with an exact coherent redistribution of the same production workforce and models continued proportional allocation as geometric growth. It is an operational forecast rather than an authoritative future event: unavailable elements, player intervention, research work, and changing job bonuses can invalidate it.
+```text
+100 bootstrap units
++ active constructing-bank nanites
++ installed mnemonic nanites / 16
+```
 
-The local substrate panel separately projects physical exhaustion of the active deposit from its accessible atom count, current collection throughput and current replication growth curve. Matter already reserved by collectors is already absent from the displayed deposit. This ETA appears with Cohort Ratio Prognostics and is likewise a live forecast rather than a scheduled completion.
+Distributed Reasoning Mesh improves the installed-bank contribution to one-eighth. The former `max(100, 1% of swarm)` rule and temporary Research allocation directive are removed.
 
-Once Cohort Ratio Prognostics is complete, a partial replication payload waits for a five-second batching window when other production inputs are already in flight. Inputs that arrive inside the window form a larger replication cohort, limiting phase proliferation; an isolated complete payload with no upstream work is not delayed.
+Queueing reserves nothing. The first affordable topic begins only because the player explicitly queued it. Additional topics wait after the active bank. When the bank completes, the next topic remains waiting until the player explicitly starts it. Active mnemonic construction is irreversible in the initial implementation.
 
-Temporary Burst requires completed Cohort Ratio Prognostics and at least 30 continuous seconds at 99% efficiency. If fewer than 1% of the swarm can be built from the current complete-recipe buffer, starting a burst enters a cancellable charging state: normal replication is held while the existing upstream ratios continue collecting, sorting and acquiring energy. The burst arms automatically on reaching that minimum. Arming removes every whole buffered recipe from available inventory into an authoritative reservation, snapshots all relative targets and locks, and temporarily targets replication. Each burst cohort consumes only that reservation. Once the reservation has been dispatched, the exact snapshot is restored; cancellation during charging releases normal replication, while cancellation after arming refunds only undispatched recipes. Already-launched cohorts remain indivisible.
+Fixed memory footprints are calibrated against the gold-limited swarm expected at each material horizon, not against current population percentages. Growing first makes a research commitment relatively cheaper without changing its physical requirement.
+
+## Allocation
+
+Relative allocation targets are stored as fixed-point shares. Replication and mnemonic conversion both reconcile whole active-nanite counts without creating fractional workers. Mnemonic construction may use only idle nanites, so workers inside indivisible cohorts are never stolen.
+
+Research is not a workforce directive. The active swarm is allocated only to physical jobs such as collection, sorting, energy acquisition, atmospheric harvesting, and replication.
+
+## Save migration
+
+Version 12 adds mnemonic banks, installed-memory totals, research update time, and queue status.
+
+When a version 11 save is loaded:
+
+- all legacy queued research energy and atoms are refunded;
+- queued topics are retained as unstarted intent with zero progress;
+- completed research remains enabled as zero-footprint legacy core encoding;
+- no active nanites are retroactively removed;
+- all future completed research uses physical mnemonic banks.
 
 ## Presentation units
 
-All authoritative inventories remain integer atoms, picojoules, nanites, or nanite-milliseconds. Display formatting is pure and never feeds values back into the simulation. Whole counts switch to `10^x` notation above 100 million; energy uses six-significant-digit SI scaling. Physical matter estimates derive from the exact per-element inventory and atomic weights, then scale from yoctograms upward. Unknown matter uses a documented silicon/nitrogen-scale average solely for its approximate display mass.
+All authoritative inventories remain integer atoms, picojoules, nanites, mnemonic nanites, or nanite-milliseconds. Display formatting is pure and never feeds values back into the simulation.
 
-Per-second values in the operations panel are observational averages computed from each in-flight cohort's already-reserved payload and exact job duration. Outputs still appear only at the discrete completion event.
-
-Fixed operation slots are a presentation rule. A slot appears only after its directive is discovered, then retains its authored position whether active or idle. The simulation exposes replication shortages from exact available energy and identified-atom inventories. It also reports the exact idle assigned population unable to begin. A shortage is labelled waiting only when scheduled sort, collection, and energy payloads contain enough of every missing input; otherwise it is a genuine halt. The interface displays those diagnostics without mutating scheduling or resources.
-
-Progressive interface targets have stable unlock identifiers. Version 7 saves retain the identifiers the player has acknowledged; any currently visible target absent from that set receives the new-unlock pulse until a click bubbles through it. Migration seeds acknowledgements from the old save's existing discoveries so established interfaces do not relight. Tooltip delegation covers controls, timers, individually keyed resource cards, intro lore, status regions, and individual log events after a 1.5-second hover. Semantic tooltip keys rebind an active inspection to replacement DOM after a structural render, while focus snapshots restore the matching control and any uncommitted percentage text.
-
-Feedback selection is presentation-only. A capture-phase click intercepts the chosen interface target before its normal action, derives a stable semantic key and descriptive context, and opens a form whose draft survives structural renders. The static client never holds a GitHub credential: it constructs a public new-issue URL containing the player's report and optional coarse diagnostics, then GitHub performs authentication and requires the player to confirm submission.
+Per-second operation values remain observational averages. Outputs still appear only at discrete completion events.
 
 ## Procedural sound
 
-The synthetic-mind sound engine is a read-only observer of authoritative game state. Active job ratios choose a harmonic field, cohort boundaries provide gestures, and digits of π and e deterministically gate rhythm, voicing, spacing, and slow filter motion. New voices emerge with swarm magnitude and discoveries rather than with raw loudness.
-
-Audio is deliberately absent from saves and simulation commands. Muting, browser suspension, or unavailable audio hardware can therefore never change progression. The player's `BEGIN` gesture creates the Web Audio context in compliance with browser autoplay policy; returning players may awaken it from the header control.
+The synthetic-mind sound engine is a read-only observer of authoritative game state. Audio is absent from saves and simulation commands and can never change progression.
 
 ## Scale path
 
-Resource and worker counts use `bigint`. Wall-clock timestamps are integer milliseconds. Replication efficiency uses fixed-point basis points and never enters authoritative state as floating point. Cohorts may later include recipe revisions, targets, and failure modes without changing the event model.
-
-Future loss states should distinguish active, damaged, immobilized, captured, dispersed and destroyed nanites. Destruction does not automatically delete their constituent matter: recoverable bodies become scrap or Residuum, while genuinely dispersed or inaccessible material remains tracked by its physical destination. Human detection is a strategy-sensitive system driven by observable emissions and consequences rather than a fixed nanite-count timer.
+Stage 1 allows the alien assemblers to reproduce more alien assemblers. At the chassis, gold exhaustion may end that mode of growth without ending progression. The finite alien swarm can still become memory and use the computronium to bootstrap larger, slower chemical and mechanical systems from iron, atmosphere, polymers, and bulk energy.
