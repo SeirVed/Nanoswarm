@@ -1,6 +1,10 @@
 # Lovable prototype audit
 
-The supplied `nano-empire-builders-main.zip` was used as a visual and terminology reference only.
+## Status
+
+Historical provenance record.
+
+The supplied `nano-empire-builders-main.zip` was used as a visual and terminology reference only. This document records the starting comparison; it is not the current gameplay or research specification.
 
 ## Retained ideas
 
@@ -14,9 +18,12 @@ The supplied `nano-empire-builders-main.zip` was used as a visual and terminolog
 
 - fractional slider assignments were replaced by whole-nanite counts;
 - continuous per-frame production was replaced by completion-time cohorts;
-- instant upgrades were replaced by resource-funded research queue jobs;
+- instant upgrades were initially replaced by resource-funded research queue jobs;
+- Research v2 later superseded that interim economy with energy-driven compute and permanent mnemonic banks constructed from active nanites;
 - floating-point resources were replaced by exact integer inventories;
 - separate online/offline rate calculations were replaced by one deterministic event simulation;
 - the full dashboard-at-start presentation was replaced by staged discovery.
 
 No Lovable project metadata, generated UI component library, old save data, or old simulation code was imported into NanoSwarm.
+
+See [`research-mnemonic-substrate.md`](research-mnemonic-substrate.md) for the working Research v2 design and [`README.md`](README.md) for documentation status and authority.
