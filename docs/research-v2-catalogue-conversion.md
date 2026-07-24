@@ -1,208 +1,264 @@
-# Research v2 catalogue conversion matrix
+# Research v2 catalogue audit and calibration
 
 ## Status
 
-Approved conversion map for every currently generated research definition.
+Working inventory and balance method.
 
-The architecture and zero-atom rule are fixed. Values marked **provisional** may be tuned before their material horizons become playable.
+This document does not contain approved research costs. The former conversion matrix assigned regular memory tiers and repeated baseline durations without deriving them from the simulation. Those values have been withdrawn.
 
-## Definition formula
+The purpose of this document is now to:
 
-For the first implementation, each topic has:
+- ensure no live research topic is forgotten during redesign;
+- describe the gameplay job of each branch;
+- identify questionable catalogue structure;
+- define the evidence needed before any cost is accepted.
+
+## Source-of-truth rule
+
+The live catalogue in `src/game/content.js` is authoritative for current IDs. Enumerate it from code when implementation begins. Do not trust a count copied into prose, and do not preserve generated tiers merely because they already exist.
+
+Stable IDs matter for save migration. Stable balance and branch structure do not.
+
+## Cost fields under consideration
+
+A post-bootstrap topic may eventually define:
 
 ```js
-memoryNanites
-baselineDurationMs
-requiredCompute = (100n + memoryNanites) * BigInt(baselineDurationMs)
-energyCost
+{
+  memoryNanites,
+  energyCost,
+  requiredCompute,
+}
 ```
 
-This makes the active bank's own writable memory sufficient to produce approximately the authored baseline duration before acceleration from previously installed banks.
+These names describe the current concept, not final schema. Values remain unset until calibrated.
 
-Installed mnemonic substrate then shortens the actual duration through the Research v2 capacity formula.
+Each accepted value should also have design metadata outside the runtime definition:
 
-`requiredCompute` remains fixed after authoring. It never depends on the player's current active swarm.
+```text
+evidence fixture
+intended player decision
+expected unlock window
+expected immediate commitment
+expected recovery or replacement time
+energy burden at sustainable production
+capacity assumptions
+confidence
+last validation date
+```
 
-## Memory scales
+## Catalogue families
 
-| Symbol | Footprint | Meaning |
-|---|---:|---|
-| B | `0` | Bootstrap Archive; no active nanite conversion |
-| P | `16` | First physical prognostics bank |
-| M1 | `1,000,000,000,000,000` | First electronic shell |
-| M2 | `2,000,000,000,000,000` | Circuit-board scale |
-| M3 | `4,000,000,000,000,000` | Motherboard scale |
-| M4 | `8,000,000,000,000,000` | Chassis/environment boundary |
-| M5 | `20,000,000,000,000,000` | Next local environment; provisional |
-| M6 | `50,000,000,000,000,000` | Later environmental scale; provisional |
+### Coordination and interface
 
-## Energy calibration
+Candidate topics:
 
-Research consumes energy only.
+- Parallel Directive Scheduling
+- Relative Directive Allocation
+- Cohort Ratio Prognostics
+- Phase-Locked Directive Bus
+- Directive Compilation
 
-Exact energy values are authored balance constants. They should be calibrated as a number of minutes of expected energy production at the horizon where the signal appears.
+Questions:
 
-The existing first-horizon energy-minute measurement may remain as a calibration constant, but its C/Si/Cu/Au components are deleted.
+- Which capabilities are necessary quality-of-life unlocks versus strategic upgrades?
+- Which can plausibly use the seed’s internal archive?
+- Does the ordering match the point where the corresponding interface becomes painful or useful?
+- Are later coordination topics new capabilities, capacity improvements or merely numeric throughput?
 
-Initial fixed bootstrap targets:
+These should not share a cost curve merely because they concern coordination.
 
-| Topic | Energy |
-|---|---:|
-| Parallel Directive Scheduling | `40` |
-| Relative Directive Allocation | `400` |
-| Cohort Ratio Prognostics | approximately `2,000` |
+### Material interpretation
 
-For later topics, the implementation should store explicit `energyCost` values generated from an authored horizon-energy table. Do not derive energy from current swarm population at runtime.
+Candidate topics:
 
-## Coordination and material analysis
+- Residuum Indexing
+- Ferromagnetic Phase Analysis
+- Atmospheric Spectroscopy
+- Atmospheric Fractionation
 
-| ID | Player name | Memory | Baseline compute | Status |
-|---|---|---:|---:|---|
-| `parallel-directives` | Parallel Directive Scheduling | B | 4m | fixed |
-| `relative-allocation` | Relative Directive Allocation | B | 2m 30s | fixed |
-| `cohort-ratio-prognostics` | Cohort Ratio Prognostics | P | 4m | fixed |
-| `residuum-indexing` | Residuum Indexing | M1 | 40m | fixed |
-| `phase-locked-directive-bus` | Phase-Locked Directive Bus | M3 | 15m | fixed |
-| `ferromagnetic-phase-analysis` | Ferromagnetic Phase Analysis | M4 | 10m | fixed |
-| `atmospheric-spectroscopy` | Atmospheric Spectroscopy | M4 | 12m | fixed |
-| `specialized-morphologies` | Specialized Morphologies I | `2 × M4` | 20m initial | footprint fixed; duration tunable |
-| `distributed-reasoning-mesh` | Distributed Reasoning Mesh | `8 × M5` | 60m initial | provisional balance |
-| `autonomous-prospecting` | Autonomous Prospecting | `8 × M5` | 90m initial | provisional balance |
-| `directive-compilation` | Directive Compilation | `16 × M5` | 120m initial | provisional balance |
+Questions:
 
-## Electronic refinement series
+- What observation generates each topic?
+- Does it identify a signal, make an element sortable, explain a compound, or unlock an industrial process?
+- Which steps are being incorrectly compressed into one research?
+- Can the research proceed when the material bottleneck that motivated it has stopped replication?
 
-These four branches use the same memory scale by tier.
+Material identification and usable industrial recovery must remain distinct.
 
-| Tier | Material search | Memory |
-|---:|---:|---:|
-| I | 1 | M1 |
-| II | 2 | M2 |
-| III | 3 | M3 |
-| IV | 4 | M4 |
-| V | 5 | M5, provisional |
-| VI | 6 | M6, provisional |
+### Operational refinements
 
-### Capacitive Buffer Lattice
+Current generated branches include:
 
-Baseline compute: 20 minutes per tier before installed-bank acceleration.
+- Capacitive Buffer Lattice
+- Payload Frame Reinforcement
+- Packetized Sorting
+- Route Memory
 
-| ID | Tier | Memory |
-|---|---:|---:|
-| `capacitive-buffer-lattice` | I | M1 |
-| `capacitive-buffer-lattice-02` | II | M2 |
-| `capacitive-buffer-lattice-03` | III | M3 |
-| `capacitive-buffer-lattice-04` | IV | M4 |
-| `capacitive-buffer-lattice-05` | V | M5, provisional |
-| `capacitive-buffer-lattice-06` | VI | M6, provisional |
+These are the most suspiciously regular part of the catalogue. Before retaining their tier ladders, determine:
 
-### Payload Frame Reinforcement
+- whether each tier creates a perceptible new decision;
+- whether repeated additive throughput research is more interesting than infrastructure;
+- whether the branch should plateau, branch or require a new physical system;
+- whether a later material horizon really implies a larger mnemonic footprint;
+- whether multiple generated tiers should be collapsed into fewer authored discoveries.
 
-Baseline compute: 25 minutes per tier before installed-bank acceleration.
+The former practice of assigning each branch one tier per material shell is a hypothesis, not a rule.
 
-| ID | Tier | Memory |
-|---|---:|---:|
-| `payload-frame-reinforcement` | I | M1 |
-| `payload-frame-reinforcement-02` | II | M2 |
-| `payload-frame-reinforcement-03` | III | M3 |
-| `payload-frame-reinforcement-04` | IV | M4 |
-| `payload-frame-reinforcement-05` | V | M5, provisional |
-| `payload-frame-reinforcement-06` | VI | M6, provisional |
+### Environmental and strategic systems
 
-### Packetized Sorting
+Candidate topics include:
 
-Baseline compute: 30 minutes per tier before installed-bank acceleration.
+- Radiofrequency Scavenging
+- Local Material Caches
+- Distributed Reasoning Mesh
+- Autonomous Prospecting
+- Specialized Morphologies
 
-| ID | Tier | Memory |
-|---|---:|---:|
-| `packetized-sorting` | I | M1 |
-| `packetized-sorting-02` | II | M2 |
-| `packetized-sorting-03` | III | M3 |
-| `packetized-sorting-04` | IV | M4 |
-| `packetized-sorting-05` | V | M5, provisional |
-| `packetized-sorting-06` | VI | M6, provisional |
+These topics change operating strategy or introduce infrastructure. They should be priced and paced individually.
 
-### Route Memory
+Questions:
 
-Baseline compute: 35 minutes per tier before installed-bank acceleration.
+- Does the topic unlock an action, automate an existing action, expand parallelism or increase efficiency?
+- What competing use exists for the nanites being committed?
+- Is the capability useful immediately at reveal?
+- Does it depend on a machine or environmental discovery not yet modelled?
+- Is it too broad and better decomposed into observation, knowledge and construction?
 
-| ID | Tier | Memory |
-|---|---:|---:|
-| `route-memory` | I | M1 |
-| `route-memory-02` | II | M2 |
-| `route-memory-03` | III | M3 |
-| `route-memory-04` | IV | M4 |
-| `route-memory-05` | V | M5, provisional |
-| `route-memory-06` | VI | M6, provisional |
+## Per-topic audit template
 
-## Atmospheric Fractionation series
+Use this before assigning costs:
 
-Baseline compute: 20 minutes per tier before installed-bank acceleration.
+| Field | Question |
+|---|---|
+| Identity | Is the ID needed for save compatibility? |
+| Player-facing purpose | What new choice or understanding does this create? |
+| Trigger | What did the swarm observe that formulated the topic? |
+| Prerequisites | Which dependencies are logical, and which are inherited clutter? |
+| Capability type | Bootstrap, interpretation, refinement, automation, infrastructure or strategy? |
+| Physical result | What changes in the world or swarm when it completes? |
+| Immediate utility | Can the player use it at once? |
+| Competing demand | What else needs nanites and energy at this moment? |
+| Failure mode | Can postponing or starting it deadlock progression? |
+| Candidate memory burden | Unset until measured. |
+| Candidate energy burden | Unset until measured. |
+| Candidate compute burden | Unset until the capacity model exists. |
+| Evidence | Which reproducible save or simulation run supports the proposal? |
+| Confidence | Speculative, modelled, playtested or stable. |
 
-The first three tiers have approved horizon-scale mappings. The remaining generated IDs are retained so current save and prerequisite references remain stable, but their footprints and reveal horizons are provisional until those environments are authored.
+## Calibration procedure
 
-| ID | Tier | Memory | Status |
-|---|---:|---:|---|
-| `atmospheric-fractionation` | I | M4 | fixed |
-| `atmospheric-fractionation-02` | II | M5 | provisional balance |
-| `atmospheric-fractionation-03` | III | M6 | provisional balance |
-| `atmospheric-fractionation-04` | IV | M6 | provisional; hidden until authored |
-| `atmospheric-fractionation-05` | V | M6 | provisional; hidden until authored |
-| `atmospheric-fractionation-06` | VI | M6 | provisional; hidden until authored |
+### 1. Capture unlock-state fixtures
 
-## Radiofrequency Scavenging series
+For each important research reveal, record representative states from:
 
-The current catalogue generates six RF refinements. Research v2 treats RF infrastructure as a later environmental system rather than a normal M4 electronic refinement.
+- a new or inexperienced player path;
+- a growth-optimised path;
+- a research-heavy path;
+- a long-offline return;
+- a material-starved path;
+- the zero-gold Stage 2 transition.
 
-Baseline compute: 30 minutes per tier initially.
+Record population, idle population, cohort commitments, stored elements, remaining substrate, sustainable energy, current research capacity and nearby competing unlocks.
 
-| ID | Tier | Memory | Status |
-|---|---:|---:|---|
-| `rf-scavenging` | I | `2 × M5` | approved strategic footprint; reveal gate retained |
-| `rf-scavenging-02` | II | `2 × M6` | provisional |
-| `rf-scavenging-03` | III | `2 × M6` | provisional |
-| `rf-scavenging-04` | IV | `2 × M6` | provisional; hidden until authored |
-| `rf-scavenging-05` | V | `2 × M6` | provisional; hidden until authored |
-| `rf-scavenging-06` | VI | `2 × M6` | provisional; hidden until authored |
+### 2. Define the intended decision
 
-## Local Material Caches series
+Examples:
 
-The current catalogue generates four cache refinements.
+- sacrifice near-term replication throughput for a permanent reasoning asset;
+- delay an automation convenience to preserve a small swarm;
+- spend stored energy now or hold it for ablation or infrastructure;
+- choose between two research branches with different strategic benefits.
 
-Baseline compute: 30 minutes per tier initially.
+If a cost does not create or support a decision, it is probably only a timer.
 
-| ID | Tier | Memory | Status |
-|---|---:|---:|---|
-| `local-material-caches` | I | `2 × M5` | approved strategic footprint |
-| `local-material-caches-02` | II | `2 × M6` | provisional |
-| `local-material-caches-03` | III | `2 × M6` | provisional; hidden until authored |
-| `local-material-caches-04` | IV | `2 × M6` | provisional; hidden until authored |
+### 3. Select opportunity-cost bands
 
-## Total current definition coverage
+Memory burden should be discussed in terms of the actual state:
 
-This matrix covers all currently generated IDs in the live catalogue:
+- negligible;
+- noticeable but quickly replaceable;
+- strategically significant;
+- temporarily growth-halting;
+- impossible until another breakthrough.
 
-- 11 coordination, analysis, morphology and strategic definitions;
-- 24 electronic-refinement definitions;
-- 6 Atmospheric Fractionation definitions;
-- 6 Radiofrequency Scavenging definitions;
-- 4 Local Material Caches definitions;
-- **51 total current research definitions**.
+Translate a chosen band into nanites only after measuring the reachable population and replacement constraints. Do not derive it from shell mass or a fixed percentage alone.
 
-The implementation should assert the exact catalogue count during conversion so a future source change cannot silently leave an old atom-cost definition behind.
+### 4. Derive energy from the energy economy
 
-If `main` contains a different count when implementation begins, the developer must diff the live `RESEARCH` keys against this matrix, document the additional or retired IDs, and ensure every live topic has explicit Research v2 fields.
+Measure:
 
-## Conversion invariants
+- sustained generation under realistic allocation;
+- storage available at reveal;
+- energy already committed to replication or other projects;
+- whether energy acquisition itself consumes scarce workers;
+- how offline accumulation changes the result.
 
-For every converted ID:
+Choose a burden that creates the intended trade-off. Avoid a universal “minutes of production” rule when different projects should compete differently.
 
-- prerequisites and reveal gates remain unless separately approved;
-- `cost.atoms` is removed or exactly zero for compatibility;
-- `memoryNanites` is fixed;
-- `requiredCompute` is fixed;
-- `energyCost` is explicit and fixed at project start;
-- the cost snapshot is stored on an active queue item;
-- waiting queue intent reserves nothing;
-- legacy completion remains valid after save migration;
-- hidden future tiers cannot become visible merely because their definitions exist.
+### 5. Design compute and acceleration together
+
+Required work cannot be balanced before research capacity is understood. Sweep candidate capacity models and inspect:
+
+- time at immediate unlock;
+- time after modest growth;
+- time after several installed banks;
+- whether older topics become reasonably cheap to catch up;
+- whether later topics retain weight;
+- whether parallel slots create runaway compounding.
+
+The displayed initial estimate should be dramatic but honest. Growth may shorten it, but not through an unexplained or unlimited population percentage.
+
+### 6. Test the whole sequence
+
+Research costs interact. Validate branches as paths, not isolated cards:
+
+- cumulative nanites removed from operations;
+- cumulative energy demand;
+- recovery time between commitments;
+- opportunity to build industry;
+- risk of one dominant ordering;
+- catch-up experience after choosing poorly;
+- behaviour when replication is materially capped.
+
+## Why the curve should be irregular
+
+Research difficulty should reflect its role:
+
+- a bootstrap coordination trick may be cognitively modest and physically free;
+- a new material model may require substantial memory but unlock an escape from a bottleneck;
+- a small refinement may be cheap but subject to diminishing returns;
+- a new industrial discipline may require knowledge, specialised infrastructure and experiments;
+- a strategic automation system may be memory-heavy because it models many concurrent environments;
+- a later discovery can occasionally be cheap when prior models make it obvious.
+
+An irregular, explainable curve will feel more credible than a tidy exponential ladder.
+
+## Migration inventory
+
+During implementation:
+
+- enumerate every current research ID;
+- classify it using this document;
+- decide whether it is retained, renamed, merged, hidden or retired;
+- preserve completed effects where required;
+- map queued entries without inventing new costs;
+- record unresolved future tiers as unavailable rather than fabricating values.
+
+Any automated completeness check should compare the implementation against the live catalogue or an explicit migration map, not against a number written here.
+
+## Readiness gate
+
+A topic is ready to receive production values only when:
+
+- its gameplay role is clear;
+- its reveal is grounded in an observation;
+- its prerequisites have been audited;
+- a representative unlock-state fixture exists;
+- memory, energy and compute proposals state their intended opportunity cost;
+- the capacity model used by the estimate is named;
+- at least a small parameter sweep has been reviewed;
+- the value has a confidence label.
+
+Until then, the honest value is `TBD`.
+

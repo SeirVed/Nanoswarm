@@ -26,4 +26,4 @@ The supplied `nano-empire-builders-main.zip` was used as a visual and terminolog
 
 No Lovable project metadata, generated UI component library, old save data, or old simulation code was imported into NanoSwarm.
 
-See [`research-mnemonic-substrate.md`](research-mnemonic-substrate.md) for the approved Research v2 design and [`README.md`](README.md) for documentation status and authority.
+See [`research-mnemonic-substrate.md`](research-mnemonic-substrate.md) for the working Research v2 design and [`README.md`](README.md) for documentation status and authority.

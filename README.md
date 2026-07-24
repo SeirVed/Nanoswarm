@@ -20,7 +20,7 @@ The research workbench is available at `http://127.0.0.1:4173/research-planner/`
 
 The mass-horizon workbench is available at `http://127.0.0.1:4173/horizon-planner/`. It authors the complete 0.1 g–1 Gt pathway, stage assignments, observations, discoveries, research opportunities, source-specific Residuum, losses, and strategy-dependent human response.
 
-The approved replacement research economy is documented in [`docs/research-mnemonic-substrate.md`](docs/research-mnemonic-substrate.md). The direct implementation handoff is [`docs/research-v2-implementation-handoff.md`](docs/research-v2-implementation-handoff.md), and [`docs/README.md`](docs/README.md) identifies the status and authority of every design document. Research v2 removes loose-atom research costs and converts post-bootstrap research into energy-driven construction of permanent mnemonic banks from active nanites. Implementation is pending.
+The working Research v2 direction is documented in [`docs/research-mnemonic-substrate.md`](docs/research-mnemonic-substrate.md). The implementation design brief is [`docs/research-v2-implementation-handoff.md`](docs/research-v2-implementation-handoff.md), and [`docs/README.md`](docs/README.md) identifies the status of every design document. The promising direction replaces general loose-atom research costs with computation, energy and potentially physical mnemonic substrate, but its costs, capacity model and several lifecycle rules remain unvalidated. Implementation is pending.
 
 ## Play online
 
@@ -32,7 +32,7 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 
 ## Current playable simulation rules · save version 11
 
-The following rules describe the current `main` implementation. The Research v2 documents above are approved replacements but are not playable until the implementation and save-version migration land.
+The following rules describe the current `main` implementation. Research v2 is planning material, not a replacement specification, until its decisions are validated, implemented and migrated.
 
 - Nanites are whole `bigint` counts; production never uses fractional workers.
 - Work is represented by cohorts with exact start and completion times.
@@ -71,4 +71,4 @@ See [`docs/README.md`](docs/README.md) for the documentation source-of-truth ind
 
 See `docs/architecture.md` for the current model boundary and extension rules.
 
-See `docs/design-goals.md`, `docs/horizon-roadmap.md`, `docs/roadmap.md` and `docs/stage-2-industrial-transition.md` for the approved long-horizon direction and implementation roadmap.
+See `docs/design-goals.md`, `docs/horizon-roadmap.md`, `docs/roadmap.md` and `docs/stage-2-industrial-transition.md` for the working long-horizon direction and implementation roadmap.

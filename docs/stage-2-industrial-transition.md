@@ -2,9 +2,9 @@
 
 ## Status
 
-Approved design direction.
+Working design direction.
 
-This document formalises the intended phase change at the chassis boundary. It complements Research v2; it does not define final numerical recipes for every future machine.
+This document gathers the strongest ideas for a phase change at the chassis boundary. It complements Research v2; it does not establish final sequencing, thresholds, recipes or costs. All quantities from earlier drafts are withdrawn until checked against the live material and swarm economy.
 
 ## Core transition
 
@@ -33,7 +33,7 @@ The transition should accomplish five things:
 2. preserve nanites as scarce alien capital rather than ordinary disposable workers;
 3. introduce persistent machines, chemical systems and production chains;
 4. make abundant Fe, O, N, C, Al, Si and other bulk materials useful without pretending they can directly replace Au in the universal recipe;
-5. create a new pacing structure between approximately `10^10` and `10^20` swarm scale.
+5. create a new pacing structure across the long interval between electronic-scale growth and mature bulk industry.
 
 ## The computronium's role
 
@@ -114,7 +114,7 @@ The exact internal element ledger remains conserved even when the swarm cannot y
 
 ## First industrial families
 
-The following are approved system families, not necessarily the exact first build order.
+The following are candidate system families, not an approved build order.
 
 ### 1. Bulk separation
 
@@ -289,7 +289,7 @@ Early Stage 2 may begin with abstracted installation counts before spatial layou
 
 ## Directed Bond Ablation
 
-Directed Bond Ablation is an approved bridge mechanic between nanite-scale handling and bulk industry.
+Directed Bond Ablation is a promising bridge mechanic between nanite-scale handling and bulk industry. It still needs an energy, matter-flow and pacing model before approval.
 
 ### Fiction
 
@@ -334,14 +334,11 @@ Ablation:
 - it cannot create access to an element absent from the target;
 - it does not bypass compound-recognition or decomposition research.
 
-### Initial progression targets
+### Candidate progression shape
 
-The earlier approved direction used two demonstrations:
+Earlier discussion suggested a small calibration discharge followed later by a larger focused discharge. The proposed swarm thresholds were unsupported and are withdrawn.
 
-- a smaller calibration discharge around the `10^12` swarm scale;
-- a larger focused discharge around the `10^13` scale.
-
-The exact joules, coupling and substrate percentages remain balance values. The intended player experience is:
+The intended player experience to test is:
 
 1. charge for a noticeable but not excessive period;
 2. fire one discrete discharge;
@@ -404,11 +401,11 @@ Research consumes alien population. Construction consumes ordinary matter and en
 
 These are three distinct economic layers.
 
-## Pacing between `10^10` and `10^20`
+## Pacing through the industrial transition
 
 The long growth interval should be broken by changing activities rather than only shorter timers.
 
-Approved or compatible pacing mechanisms include:
+Candidate pacing mechanisms include:
 
 - Cohort Ratio Prognostics and allocation optimisation;
 - substrate-exhaustion forecasting;
@@ -469,7 +466,7 @@ The following are deliberately not finalised:
 - when source-separated Residuum lots become player-manageable;
 - when spatial layout becomes necessary rather than abstract installation counts.
 
-These are tuning and sequencing questions. They do not change the approved phase-transition architecture.
+These include both tuning and structural questions. Resolve them through modelling and a narrow playable prototype before treating the phase-transition architecture as settled.
 
 ## Definition of success
 

@@ -1,472 +1,256 @@
-# Research v2: Computronium Core and Mnemonic Substrate
+# Research v2 planning brief
 
 ## Status
 
-Approved design direction. This document replaces the current atom-cost research economy conceptually; implementation remains pending.
+Working design, not an approved specification.
 
-Implementation must follow:
+This document records the strongest ideas from the Research v2 discussion while separating them from untested balance values and implementation guesses. Nothing here makes a number authoritative. Any quantity previously proposed for nanites, energy, compute, duration, capacity, reveal thresholds or concurrent slots is discarded until it is derived from the live economy and tested.
 
-- [`research-v2-catalogue-conversion.md`](research-v2-catalogue-conversion.md) for the complete current research-ID conversion matrix;
-- [`research-v2-implementation-handoff.md`](research-v2-implementation-handoff.md) for code architecture, event ordering, migration and UI requirements;
-- [`research-v2-regression-plan.md`](research-v2-regression-plan.md) for release-blocking tests;
-- [`repository-audit-and-cleanup.md`](repository-audit-and-cleanup.md) for stale material and rejected PR #3 implementation patterns;
-- [`stage-2-industrial-transition.md`](stage-2-industrial-transition.md) for the broader gold-famine and conventional-industry phase change.
+The related documents have distinct purposes:
 
-## Core decision
+- [`research-v2-catalogue-conversion.md`](research-v2-catalogue-conversion.md) inventories the research catalogue and defines how costs should eventually be calibrated.
+- [`research-v2-implementation-handoff.md`](research-v2-implementation-handoff.md) describes implementation boundaries without prescribing premature data structures.
+- [`research-v2-regression-plan.md`](research-v2-regression-plan.md) defines risk-based verification rather than a test-by-test script.
+- [`stage-2-industrial-transition.md`](stage-2-industrial-transition.md) explores the industrial phase change that motivates this redesign.
 
-Research no longer consumes loose carbon, silicon, copper, gold, or other elemental inventory.
+## Why the current model needs reconsideration
 
-Research consumes:
+The current implementation treats research as another production directive funded partly by loose elements. That produces several design problems:
 
-- compute work,
-- energy,
-- and, after the bootstrap period, active nanites permanently converted into mnemonic substrate.
+- knowledge competes with fabrication through arbitrary elemental shopping lists;
+- consuming a recipe element can halt both replication and the research intended to escape that bottleneck;
+- assigning ordinary nanites to an abstract Research directive does not express what they physically do;
+- rapid swarm growth can collapse long estimates without creating a corresponding physical research system;
+- queued resource reservations make experimentation expensive before the player has actually committed to a project.
 
-The nanites are not destroyed. They cease to be mobile assemblers and become stationary, error-corrected memory structures attached to the computronium core. Matter remains conserved.
+The reported zero-gold chassis state is the clearest example. Gold scarcity is an interesting constraint on universal-nanite replication. It is not interesting when it also prevents the swarm from learning how to use iron, atmosphere and conventional machinery.
 
-```text
-Active nanites
-      +
-Electrical energy
-      +
-Computronium processing
-      ↓
-Constructing mnemonic bank
-      ↓
-Installed mnemonic substrate
-      +
-Completed research
-```
+## Design direction worth preserving
 
-This gives research a distinct physical economy:
+The promising core idea is that research changes the swarm physically.
 
-- replication converts loose matter into active nanites;
-- research converts active nanites into knowledge infrastructure;
-- energy drives both computation and reconfiguration.
+The computronium core performs reasoning, but durable post-bootstrap knowledge needs attached mnemonic substrate. Active nanites can be reorganised into permanent memory and interface structures. Research therefore has three conceptually separate demands:
 
-## Computronium model
+- computation over time;
+- energy;
+- a permanent or long-lived commitment of existing nanite bodies to knowledge storage.
 
-The seed contains:
+This gives research an opportunity cost without pretending knowledge consumes arbitrary atoms. It also makes accumulated research visible in the fiction: the seed gradually grows a physical memory architecture around itself.
 
-- an extraordinarily powerful computronium processing core,
-- immutable mission directives,
-- working registers and cache,
-- a tiny rewritable Bootstrap Archive,
-- and no substantial expandable memory.
+This remains a design direction. We have not yet established the correct conversion scale, processing curve or energy burden.
 
-The core can calculate rapidly but cannot retain large new models of an unfamiliar environment. The first compact coordination routines fit inside the Bootstrap Archive. Everything larger requires mnemonic banks built from nanites.
+## Current confidence levels
 
-The early fiction is therefore:
+### Strong principles
 
-> The seed can think. It cannot remember very much.
+These fit the game’s existing architecture and should be treated as constraints unless playtesting disproves them:
 
-## Research classes
+- Research must not create matter or hidden bailout resources.
+- Loose elemental inventories should not be the general currency for knowledge.
+- Research must use the same authoritative simulation clock as cohort work.
+- Online, offline and stepped progression must agree.
+- The interface issues research commands but never awards progress or resources.
+- Completed knowledge, committed nanites and population totals must survive save round trips without duplication.
+- Gold exhaustion may stop universal-nanite replication but must leave a legible route into bulk industry.
+- Discovery and observation should reveal research; catalogue presence alone should not.
 
-### Bootstrap research
+### Promising but unsettled mechanics
 
-Bootstrap research costs time and energy, but zero nanites.
+These need prototypes or explicit decisions:
 
-Only research revealed while the swarm is still below roughly twenty active nanites belongs to this class. Losing even one assembler at that scale is punitive rather than strategic.
+- a small internal bootstrap archive for the earliest coordination topics;
+- post-bootstrap mnemonic banks built from active nanites;
+- queueing as free intent, with commitment occurring only when work starts;
+- explicit start rather than silent automatic continuation;
+- committed memory remaining physically attached after completion;
+- installed memory contributing to later research capability;
+- pausing preserving work and committed substrate;
+- one or more simultaneous bank-construction slots.
 
-The current bootstrap topics are:
+### Unvalidated balance territory
 
-| Research | Mnemonic cost | Baseline time |
-|---|---:|---:|
-| Parallel Directive Scheduling | 0 | 4 minutes |
-| Relative Directive Allocation | 0 | 2 minutes 30 seconds |
+No value from the previous planning pass should be copied into production without recalculation:
 
-Suggested early energy costs:
+- first-bank nanite cost;
+- every later memory footprint;
+- energy costs;
+- compute requirements and displayed durations;
+- core capacity;
+- contribution from installed or constructing banks;
+- reveal thresholds;
+- number of concurrent projects;
+- growth multipliers;
+- Stage 2 swarm-scale targets.
 
-| Research | Energy |
-|---|---:|
-| Parallel Directive Scheduling | 40 |
-| Relative Directive Allocation | 400 |
+## Research lifecycle sketch
 
-The current dynamic research-capacity rule of `max(100, 1% of active swarm)` is removed. The fixed bootstrap contribution becomes a physical property of the core and Bootstrap Archive.
+This is the clearest current interaction model, but its details remain editable.
 
-### Mnemonic research
+### Discovery
 
-Every other research topic requires a permanent mnemonic bank.
+A research signal appears because the swarm observed a limitation, material, pattern or opportunity. Prerequisites express intellectual dependency; observation gates express why the idea exists now.
 
-Each definition should contain:
+### Queue
 
-```js
-{
-  memoryNanites: bigint,
-  requiredCompute: bigint,
-  energyCost: bigint
-}
-```
+Queueing records player intent. It should not itself reserve matter, energy or workers. The player may reorder or remove work that has not started.
 
-`memoryNanites` is a fixed physical requirement. It is never calculated as a percentage of the current swarm. The interface may display the current percentage commitment and post-start active population, but waiting and growing must never make identical knowledge more expensive.
+### Start
 
-## First mnemonic bank
+Starting validates the current state and commits the real inputs chosen for the final model. If mnemonic conversion is retained, only idle nanites may be committed; workers already inside indivisible cohorts are not seized.
 
-Cohort Ratio Prognostics becomes the first topic that exceeds the Bootstrap Archive.
-
-Initial target:
-
-| Property | Value |
-|---|---:|
-| Unlock | 180 active nanites |
-| Memory footprint | 16 nanites |
-| Baseline compute | approximately 4 minutes |
-| Energy | approximately 2,000 |
-
-Suggested event sequence:
-
-```text
-BOOTSTRAP ARCHIVE CAPACITY EXCEEDED.
-EXTERNAL MNEMONIC SUBSTRATE REQUIRED.
-
-16 ACTIVE ASSEMBLERS SELECTED FOR
-PERMANENT COGNITIVE RECONFIGURATION.
-```
-
-On completion:
-
-```text
-MNEMONIC BANK 001 INSTALLED.
-COHORT RATIO PROGNOSTICS ENCODED.
-ACTIVE ASSEMBLERS: -16
-INSTALLED MEMORY: +16 n-eq
-```
-
-## Research lifecycle
-
-### Queueing
-
-Adding a topic to the queue consumes nothing. A queue entry represents intent only.
-
-### Starting
-
-Only the first queued topic may begin. Starting requires:
-
-- enough stored energy,
-- enough idle active nanites,
-- all observations and prerequisites,
-- explicit player authorisation.
-
-Nanites already inside indivisible production cohorts are not seized. The project waits until enough assemblers return and become idle.
-
-At start:
-
-```js
-state.nanites -= definition.memoryNanites;
-state.mnemonicBanks.push({
-  researchId: definition.id,
-  nanites: definition.memoryNanites,
-  status: "constructing",
-  progressCompute: 0n,
-});
-state.energy -= definition.energyCost;
-```
-
-Directive allocations are reconciled against the reduced active population.
+The game must never accidentally consume the final operational nanite. Whether a more conservative survival reserve is required is an open design question.
 
 ### Progress
 
-The committed nanites remain unavailable throughout construction. They are physically reconfigured while the computronium writes, verifies, and cross-checks the model.
+Research progress belongs inside the deterministic event simulation. The eventual rate model may depend on the core, the bank under construction, installed memory or other infrastructure, but it must be:
 
-### Completion
+- integer-authoritative;
+- explainable to the player;
+- stable across save/load;
+- independent of render frequency;
+- testable by comparing large time jumps with smaller steps.
 
-At completion, the bank becomes installed and the research effect activates. Its nanites remain permanently associated with that knowledge.
+### Pause, abandonment and completion
 
-```js
-bank.status = "installed";
-state.mnemonicNanites += bank.nanites;
-state.completedResearch.push(bank.researchId);
-```
+Pausing should not duplicate or refund physical commitments. Whether an incomplete mnemonic bank can be dismantled, salvaged or permanently abandoned is not settled.
 
-### Pause and cancellation
+Completion installs knowledge and applies its effects at a precise simulation timestamp. Jobs already underway retain the rules and reservations with which they began; later jobs may use the new capability.
 
-- An unstarted queued topic may be removed freely.
-- An active project may be paused and resumed.
-- Nanites committed to an active bank are not automatically returned.
-- The first implementation should not offer an ordinary active-project refund.
-- Later systems may permit dismantling incomplete or installed banks, with losses and loss of knowledge.
+Automatic continuation should be opt-in, if it exists at all. A newly completed topic can materially alter population, capacity, allocations or priorities, so a default pause gives the player a chance to reassess.
 
-### Automatic continuation
+## Bootstrap question
 
-The next queued project does not start automatically by default. This prevents an overnight queue from silently converting a large fraction of the swarm into memory.
+The first coordination researches may plausibly live inside a rewritable archive already present in the arriving computronium. This explains why the seed can improve scheduling before sacrificing part of a tiny swarm.
 
-A later control may allow automatic continuation with a player-defined maximum population commitment.
+The candidate bootstrap set currently includes:
 
-## Research processing rate
+- Parallel Directive Scheduling;
+- Relative Directive Allocation.
 
-Research speed is limited by memory architecture rather than an arbitrary share of active assemblers.
+That list is not yet sacred. It should be judged by the opening experience:
 
-Initial model:
+- Does the player reach useful allocation controls before manual assignment becomes irritating?
+- Does the fiction explain the improvement without inventing new matter?
+- Does the sequence teach research before asking for an irreversible population commitment?
+- Does it avoid making every early topic free by precedent?
+
+Cohort Ratio Prognostics is a good candidate for the first visible mnemonic-bank project because its effect is explicitly about modelling the swarm. Its footprint, reveal point and duration are all unvalidated.
+
+## Population accounting
+
+If mnemonic conversion survives prototyping, the game needs one auditable physical identity:
 
 ```text
-effective research capacity
-=
-100 bootstrap units
-+ current constructing-bank nanites
-+ installed mnemonic nanites / 16
+all replicated nanite bodies
+= active workers
++ nanites committed to incomplete memory
++ nanites installed as memory
++ any future damaged, lost or otherwise modelled states
 ```
 
-Interpretation:
+The exact state representation should follow the existing engine’s conventions. The planning documents should not prescribe parallel ledgers or cached totals unless profiling demonstrates a need.
 
-- `100` is the fixed Bootstrap Archive contribution;
-- the constructing bank provides its own writable working set;
-- installed banks contribute a fraction of their size as reusable cache, bus width, cross-reference capacity, and spare storage.
+## Capacity must be designed, not guessed
 
-This preserves the intended long-horizon behaviour:
+The previous proposal supplied a tidy formula for core, constructing and installed memory. It had narrative appeal but no economic derivation.
 
-- early projects can appear formidable;
-- completed banks gradually accelerate later work;
-- replication makes larger sacrifices affordable;
-- research speed no longer scales directly from active swarm population.
+Before selecting a formula, compare at least these models:
 
-The exact divisor is a balance parameter.
+- **Core-limited:** installed banks store knowledge but barely accelerate new work.
+- **Additive memory:** each bank provides a diminishing contribution to reasoning throughput.
+- **Specialised acceleration:** banks accelerate related branches more than unrelated research.
+- **Infrastructure-gated:** memory helps only after buses, cooling or coordination upgrades.
+- **Slot-focused:** installed memory expands parallelism more than raw speed.
 
-## Memory-bank scale
+The chosen model should create interesting choices rather than automatic compounding. It must not let early bank accumulation trivialise every later timer, nor make permanent nanite conversion feel like a tax with no systemic benefit.
 
-Bank sizes must be calibrated against the gold-limited population reachable at each material horizon, not merely multiplied by ten with shell mass. The chassis contains no gold and therefore does not expand the alien-nanite population simply because it is physically larger.
+## How balance values will be earned
 
-Initial scale units:
-
-| Unit | Horizon | Fixed memory footprint |
-|---|---|---:|
-| M1 | first electronic shell | `1 × 10^15` nanites |
-| M2 | circuit-board scale | `2 × 10^15` nanites |
-| M3 | motherboard scale | `4 × 10^15` nanites |
-| M4 | chassis/environment scale | `8 × 10^15` nanites |
-| M5 | next local environment | `2 × 10^16` nanites, provisional |
-| M6 | later environmental scale | `5 × 10^16` nanites, provisional |
-
-These are design targets, not final balance constants.
-
-## Conversion of the current catalogue
-
-### Bootstrap coordination
-
-| Research | Memory | Baseline compute |
-|---|---:|---:|
-| Parallel Directive Scheduling | 0 | 4m |
-| Relative Directive Allocation | 0 | 2m 30s |
-| Cohort Ratio Prognostics | 16 | 4m |
-
-### Incremental refinement series
-
-The following series use the bank associated with the material horizon where each tier is revealed:
-
-- Capacitive Buffer Lattice I-VI
-- Payload Frame Reinforcement I-VI
-- Packetized Sorting I-VI
-- Route Memory I-VI
-
-| Tier | Memory bank |
-|---|---:|
-| I | M1 |
-| II | M2 |
-| III | M3 |
-| IV | M4 |
-| V | M5, provisional |
-| VI | M6, provisional |
-
-Suggested baseline compute per tier:
-
-| Series | Baseline |
-|---|---:|
-| Capacitive Buffer Lattice | 20m |
-| Payload Frame Reinforcement | 25m |
-| Packetized Sorting | 30m |
-| Route Memory | 35m |
-
-Installed mnemonic substrate shortens these times naturally.
-
-### Material interpretation
-
-| Research | Memory | Baseline compute |
-|---|---:|---:|
-| Residuum Indexing | M1 | 40m |
-| Phase-Locked Directive Bus | M3 | 15m |
-| Ferromagnetic Phase Analysis | M4 | 10m |
-| Atmospheric Spectroscopy | M4 | 12m |
-
-Ferromagnetic Phase Analysis and Atmospheric Spectroscopy must remain possible with zero loose gold. Their gold is physically contained inside the nanites converted into their memory banks.
-
-### Atmospheric development
-
-| Research | Memory | Baseline compute |
-|---|---:|---:|
-| Atmospheric Fractionation I | M4 | 20m |
-| Atmospheric Fractionation II | M5 | 20m |
-| Atmospheric Fractionation III | M6 | 20m |
-| Later tiers | recalibrate with authored horizons | pending |
-
-The catalogue may retain later hidden tiers, but they remain provisional until their environments and production chains are authored.
-
-### Structural and strategic research
-
-| Research | Suggested memory |
-|---|---:|
-| Specialized Morphologies I | `2 × M4` |
-| Radiofrequency Scavenging | `2 × M5` |
-| Local Material Caches | `2 × M5` |
-| Distributed Reasoning Mesh | `8 × M5` |
-| Autonomous Prospecting | `8 × M5` |
-| Directive Compilation | `16 × M5` |
-
-These later values are provisional.
-
-### Distributed Reasoning Mesh
-
-The existing abstract effect of raising research capacity from 1% to 2% of the swarm is removed.
-
-New effect:
-
-- installed mnemonic banks contribute `1/8` of their nanites to reusable research bandwidth instead of `1/16`;
-- a second research bank may be active concurrently.
-
-This becomes a genuine architectural transition from one central memory bus to a distributed cognitive system.
-
-## Energy costs
-
-Energy becomes the only expendable resource consumed by research.
-
-Energy should be authored as minutes of expected production at the horizon where a topic appears:
-
-| Research class | Suggested burden |
-|---|---:|
-| Bootstrap control | several discrete early energy jobs |
-| Coordination | 30-120 seconds of horizon production |
-| Refinement tier | 1-5 minutes |
-| Elemental identification | 5-10 minutes |
-| Major architecture | 15-60 minutes |
-| Strategic systems | hours or longer at first reveal |
-
-The existing first-horizon measured pipeline constant may retain its energy component. Its carbon, silicon, copper, and gold components are deleted.
-
-## Research directive removal
-
-Research is no longer a workforce allocation alongside Collect, Sort, Energy, Replicate, and Atmospheric Harvesting.
-
-The computronium performs the computation. The project's committed nanites provide memory. Keeping a separate research allocation would count the population cost twice.
-
-Research is controlled through:
-
-- queue order,
-- start and pause controls,
-- mnemonic commitment,
-- energy preparation,
-- later parallel-bank architecture.
-
-## Interface requirements
-
-### Computronium Core
-
-Display:
-
-- bootstrap bandwidth,
-- reusable mnemonic width,
-- maximum active research banks,
-- current processor or memory bottleneck.
-
-### Mnemonic Substrate
-
-Display:
-
-- installed memory in nanite-equivalents,
-- memory under construction,
-- number of installed banks,
-- total knowledge mass.
-
-### Research cards
-
-Before start, display:
-
-- mnemonic footprint,
-- energy requirement,
-- compute estimate,
-- current population commitment,
-- active population after commitment.
-
-Example:
+Every proposed cost should carry a small evidence record:
 
 ```text
-ATMOSPHERIC SPECTROSCOPY
-
-Mnemonic footprint        8.00 × 10^15 nanites
-Energy requirement        6.24 TJ
-Compute estimate          10m 42s
-
-Active swarm after start  3.18 × 10^18
-Population commitment     0.251%
+unlock state:
+available active nanites:
+idle nanites:
+replication rate and limiting element:
+stored and sustainable energy:
+competing projects:
+intended decision:
+target wait if pursued immediately:
+target recovery time:
+tested save or simulation fixture:
+confidence:
 ```
 
-Completed topics move into a physical bank ledger.
+Memory cost should be selected as an opportunity cost, not as a fraction copied from a tier table. Energy cost should be derived from attainable generation and competing demand. Compute should be chosen for pacing and acceleration behaviour after the capacity model exists.
 
-## Save migration
+Useful questions include:
 
-The save format should advance from version 11 to version 12.
+- What percentage of the actually reachable swarm is being committed?
+- How long does replication take to replace that lost operating capacity, if it can?
+- Is the player choosing between growth, knowledge and infrastructure, or merely waiting?
+- Does waiting to grow make the decision easier in a healthy way?
+- What happens when the recipe bottleneck prevents replacement?
+- Does the research arrive before, during or after the problem it explains?
+- How does the cost behave for a player returning from a long offline interval?
 
-Migration rules:
+No smooth mathematical sequence is automatically desirable. Different research families should have different economic shapes when their fiction and gameplay roles differ.
 
-1. Refund all elemental and energy costs reserved by queued legacy research.
-2. Preserve queue order as unstarted intent.
-3. Preserve completed research.
-4. Record pre-v12 completed topics as `legacyCoreEncoding`.
-5. Legacy encodings consume zero modeled nanites and contribute zero mnemonic bandwidth.
-6. All research completed after migration creates physical banks under the new rules.
+## Catalogue conversion principles
 
-This avoids retroactively deleting large parts of an existing player's active swarm while allowing the physical model to remain strict going forward.
+When the catalogue is converted:
 
-## Required simulation invariants
+- retain stable IDs where save compatibility requires them;
+- re-evaluate every reveal gate and prerequisite against the actual observation sequence;
+- remove elemental research prices unless a specific experiment physically consumes material;
+- give every topic an authored role, not just a tier number;
+- distinguish throughput refinements from new capabilities and strategic systems;
+- hide unauthored future tiers rather than filling them with extrapolated values;
+- record the evidence and confidence behind every final cost.
 
-- No research consumes loose atoms.
-- Bootstrap research consumes zero nanites.
-- Mnemonic research cannot start without enough idle active nanites.
-- Committed memory nanites never return automatically to the active swarm.
-- Research cannot consume the final active nanite.
-- Queueing alone never consumes energy or population.
-- Offline progress cannot start the next queued project unless automatic continuation was explicitly enabled.
-- Total replicated matter remains conserved between the active swarm, mnemonic substrate, and future loss states.
-
-A specific regression test must reproduce the playtester case:
-
-```text
-Given:
-- chassis reached;
-- loose gold = 0;
-- active swarm remains.
-
-Then:
-- Ferromagnetic Phase Analysis can begin;
-- Atmospheric Spectroscopy can begin;
-- no elemental research cost is requested;
-- progression is not softlocked.
-```
+The live catalogue must be enumerated from source when implementation begins. A count written in planning prose is not a substitute for checking the code.
 
 ## Stage 2 consequence
 
-The absence of gold remains important.
+The research redesign is valuable because it lets the gold famine remain real.
 
-It halts further alien nanite replication, but it no longer halts development.
-
-The computronium can use its remaining super-technology to understand iron, oxygen, nitrogen, polymers, and bulk chemistry. It then begins constructing larger, slower, less precise machinery from abundant local matter.
+The finite alien swarm can redirect some of itself into understanding bulk materials and then use ordinary matter and energy to construct larger, slower systems. Research, construction and operation become separate economic layers:
 
 ```text
-Stage 1:
-Alien assemblers reproduce alien assemblers.
-
-Stage 2:
-A finite alien swarm bootstraps conventional industry.
+observation
+→ mnemonic commitment and reasoning
+→ process knowledge
+→ physical machine construction
+→ recurring industrial transformation
 ```
 
-The swarm stops solving every problem by making more nanites and begins building:
+This does not decide which machine comes first or what any machine costs. Those choices belong to the Stage 2 design and must be grounded in the actual chassis composition and player state.
 
-- chemical reactors;
-- magnetic separators;
-- electrolysis systems;
-- structural frames;
-- pressure vessels;
-- conductive networks;
-- mechanical collection systems;
-- crude bulk processors.
+## Decisions required before implementation
 
-The computronium remains impossibly advanced.
+The following questions should be answered—or deliberately delegated to a small prototype—before the runtime rewrite:
 
-Its new machines do not have to be.
+1. Which topics, if any, use only bootstrap memory?
+2. Are converted nanites permanently unavailable, recoverable at a loss, or reconfigurable later?
+3. What does an incomplete bank contribute, if anything?
+4. Does installed memory primarily increase speed, parallelism, specialisation or some combination?
+5. Can research begin automatically when requirements become available?
+6. What survival reserve prevents self-disabling commitments?
+7. How are old completed topics represented after migration?
+8. How should old queued reservations and partial work migrate?
+9. Which current research branches remain worthwhile, and which are placeholder ladders that should be redesigned?
+10. What measured game states will anchor initial balance?
+
+## Definition of a usable design
+
+Research v2 is ready for implementation only when:
+
+- the physical fiction and player interaction are coherent;
+- structural invariants are separated from tunable content;
+- representative saves establish real unlock-state economics;
+- every initial cost has evidence, intent and a confidence label;
+- at least one spreadsheet or simulation sweep shows how the system behaves across plausible player strategies;
+- migration policy is explicit;
+- the zero-gold transition remains playable without creating free matter;
+- open questions are visible rather than concealed behind precise-looking constants.
+
