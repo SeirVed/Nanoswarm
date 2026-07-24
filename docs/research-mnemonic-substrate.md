@@ -4,6 +4,14 @@
 
 Approved design direction. This document replaces the current atom-cost research economy conceptually; implementation remains pending.
 
+Implementation must follow:
+
+- [`research-v2-catalogue-conversion.md`](research-v2-catalogue-conversion.md) for the complete current research-ID conversion matrix;
+- [`research-v2-implementation-handoff.md`](research-v2-implementation-handoff.md) for code architecture, event ordering, migration and UI requirements;
+- [`research-v2-regression-plan.md`](research-v2-regression-plan.md) for release-blocking tests;
+- [`repository-audit-and-cleanup.md`](repository-audit-and-cleanup.md) for stale material and rejected PR #3 implementation patterns;
+- [`stage-2-industrial-transition.md`](stage-2-industrial-transition.md) for the broader gold-famine and conventional-industry phase change.
+
 ## Core decision
 
 Research no longer consumes loose carbon, silicon, copper, gold, or other elemental inventory.
@@ -336,7 +344,7 @@ The existing first-horizon measured pipeline constant may retain its energy comp
 
 Research is no longer a workforce allocation alongside Collect, Sort, Energy, Replicate, and Atmospheric Harvesting.
 
-The computronium performs the computation. The project’s committed nanites provide memory. Keeping a separate research allocation would count the population cost twice.
+The computronium performs the computation. The project's committed nanites provide memory. Keeping a separate research allocation would count the population cost twice.
 
 Research is controlled through:
 
@@ -402,43 +410,43 @@ Migration rules:
 3. Preserve completed research.
 4. Record pre-v12 completed topics as `legacyCoreEncoding`.
 5. Legacy encodings consume zero modeled nanites and contribute zero mnemonic bandwidth.
-6. Every research completion after migration creates a physical mnemonic bank.
+6. All research completed after migration creates physical banks under the new rules.
 
-The legacy exception exists only for save compatibility and never occurs in a new game.
+This avoids retroactively deleting large parts of an existing player's active swarm while allowing the physical model to remain strict going forward.
 
-## Required invariants
+## Required simulation invariants
 
-The simulation must enforce:
+- No research consumes loose atoms.
+- Bootstrap research consumes zero nanites.
+- Mnemonic research cannot start without enough idle active nanites.
+- Committed memory nanites never return automatically to the active swarm.
+- Research cannot consume the final active nanite.
+- Queueing alone never consumes energy or population.
+- Offline progress cannot start the next queued project unless automatic continuation was explicitly enabled.
+- Total replicated matter remains conserved between the active swarm, mnemonic substrate, and future loss states.
 
-- no research consumes loose atoms;
-- bootstrap research consumes zero nanites;
-- mnemonic research cannot start without enough idle active nanites;
-- committed memory nanites never return automatically to the active swarm;
-- research cannot consume the final active nanite;
-- queueing alone never consumes energy or population;
-- offline progress cannot start another queued project unless automatic continuation was explicitly enabled;
-- matter is conserved across active swarm, mnemonic substrate, and future loss states.
-
-Regression coverage must include the original playtester failure:
+A specific regression test must reproduce the playtester case:
 
 ```text
 Given:
-- the chassis has been reached,
-- loose gold is zero,
-- active nanites remain,
+- chassis reached;
+- loose gold = 0;
+- active swarm remains.
 
 Then:
-- Ferromagnetic Phase Analysis can begin,
-- Atmospheric Spectroscopy can begin,
-- no elemental research cost is requested,
+- Ferromagnetic Phase Analysis can begin;
+- Atmospheric Spectroscopy can begin;
+- no elemental research cost is requested;
 - progression is not softlocked.
 ```
 
 ## Stage 2 consequence
 
-The absence of gold remains meaningful. It halts further reproduction of alien nanites, but it does not halt development.
+The absence of gold remains important.
 
-The computronium uses the finite alien swarm to understand iron, oxygen, nitrogen, polymers, and bulk chemistry. It then builds larger, slower, less precise machinery from abundant local matter.
+It halts further alien nanite replication, but it no longer halts development.
+
+The computronium can use its remaining super-technology to understand iron, oxygen, nitrogen, polymers, and bulk chemistry. It then begins constructing larger, slower, less precise machinery from abundant local matter.
 
 ```text
 Stage 1:
@@ -448,15 +456,17 @@ Stage 2:
 A finite alien swarm bootstraps conventional industry.
 ```
 
-This opens the intended chemical and industrial transition:
+The swarm stops solving every problem by making more nanites and begins building:
 
-- chemical reactors,
-- magnetic separators,
-- electrolysis systems,
-- structural frames,
-- pressure vessels,
-- conductive networks,
-- mechanical collection systems,
+- chemical reactors;
+- magnetic separators;
+- electrolysis systems;
+- structural frames;
+- pressure vessels;
+- conductive networks;
+- mechanical collection systems;
 - crude bulk processors.
 
-The computronium remains impossibly advanced. Its new machines do not have to be.
+The computronium remains impossibly advanced.
+
+Its new machines do not have to be.
