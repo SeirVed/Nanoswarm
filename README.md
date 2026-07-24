@@ -18,9 +18,9 @@ Open `http://127.0.0.1:4173` after starting the development server. The producti
 
 The research workbench is available at `http://127.0.0.1:4173/research-planner/`. It loads the live catalogue, supports zooming, panning, draggable layouts, editable dependencies, observation/stage/search gates and freeform suggestions, retains drafts in browser storage, and exports either a compact review diff or the full plan as JSON.
 
-The mass-horizon workbench is available at `http://127.0.0.1:4173/horizon-planner/`. It authors the complete 0.1 g–1 Gt pathway, stage assignments, observations, discoveries, research opportunities, source-specific Residuum, losses, and strategy-dependent human response. It also exposes the current research-empty bridge after Relative Directive Allocation for review.
+The mass-horizon workbench is available at `http://127.0.0.1:4173/horizon-planner/`. It authors the complete 0.1 g–1 Gt pathway, stage assignments, observations, discoveries, research opportunities, source-specific Residuum, losses, and strategy-dependent human response.
 
-The approved replacement research economy is documented in [`docs/research-mnemonic-substrate.md`](docs/research-mnemonic-substrate.md). It removes loose-atom research costs and converts post-bootstrap research into energy-driven construction of permanent mnemonic banks from active nanites. Implementation is pending.
+The approved replacement research economy is documented in [`docs/research-mnemonic-substrate.md`](docs/research-mnemonic-substrate.md). The direct implementation handoff is [`docs/research-v2-implementation-handoff.md`](docs/research-v2-implementation-handoff.md), and [`docs/README.md`](docs/README.md) identifies the status and authority of every design document. Research v2 removes loose-atom research costs and converts post-bootstrap research into energy-driven construction of permanent mnemonic banks from active nanites. Implementation is pending.
 
 ## Play online
 
@@ -30,7 +30,9 @@ The `main` branch deploys automatically to GitHub Pages:
 
 The deployment workflow builds the dependency-free static site, uploads `dist/`, and publishes it through GitHub Pages. Each browser keeps an independent local save.
 
-## Simulation rules
+## Current playable simulation rules · save version 11
+
+The following rules describe the current `main` implementation. The Research v2 documents above are approved replacements but are not playable until the implementation and save-version migration land.
 
 - Nanites are whole `bigint` counts; production never uses fractional workers.
 - Work is represented by cohorts with exact start and completion times.
@@ -65,6 +67,8 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - Active cohort summaries expose approximate per-second material, energy, or nanite flow without turning the underlying discrete jobs into continuous production.
 - Sound is synthesized live with Web Audio. Job ratios select the harmonic field, while digits of π and e govern its pulse and drift; no recorded soundtrack or audio dependency is shipped.
 
-See `docs/architecture.md` for the model boundary and extension rules.
+See [`docs/README.md`](docs/README.md) for the documentation source-of-truth index.
 
-See `docs/design-goals.md` and `docs/horizon-roadmap.md` for the approved long-horizon direction.
+See `docs/architecture.md` for the current model boundary and extension rules.
+
+See `docs/design-goals.md`, `docs/horizon-roadmap.md`, `docs/roadmap.md` and `docs/stage-2-industrial-transition.md` for the approved long-horizon direction and implementation roadmap.
