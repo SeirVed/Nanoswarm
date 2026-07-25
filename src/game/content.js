@@ -159,8 +159,8 @@ export const RESEARCH = Object.freeze({
   "parallel-directives": researchDefinition({
     id: "parallel-directives",
     name: "Parallel Directive Scheduling",
-    description: "Restore transit-compressed cohort scheduling and persistent allocation locks.",
-    effect: "Reconstitutes the control substrate required by all post-bootstrap research.",
+    description: "Restore autonomous multi-directive dispatch and persistent cohort scheduling.",
+    effect: "Assigned directives relaunch automatically and run concurrently after each cohort completes.",
     requiresStage: 1,
     trigger: "A second nanite makes simultaneous intent physically possible.",
     requiredNaniteMs: 24_000_000n,

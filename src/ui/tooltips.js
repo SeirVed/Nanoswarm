@@ -6,6 +6,7 @@ export const ACTION_TOOLTIPS = Object.freeze({
   begin: "Assume local directive authority over the stranded seed. This starts a new deterministic simulation with one damaged assembler and its recorded arrival history.",
   start: "Start one exact, indivisible job. Workers and inputs committed at launch cannot be redirected until that job reaches its completion boundary.",
   adjust: "Move one nanite into or out of this directive's target allocation. Hold the button to repeat progressively faster; in-flight cohorts still finish before workers return.",
+  dispatch: "Launch every assigned idle nanite into one discrete cohort cycle. Parallel Directive Scheduling removes the need to repeat this manual dispatch after jobs complete.",
   "step-share": "Change this persistent allocation target by one percentage point. Hold to accelerate; unlocked targets redistribute while protected targets retain their requested shares.",
   lock: "Protect this directive's percentage while other allocation targets change. Locking preserves intent, but never interrupts nanites already inside an indivisible cohort.",
   research: "Queue research intent without committing resources. When it reaches the front, its nanites and energy commit irreversibly if the physical limits permit formation.",

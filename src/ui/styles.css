@@ -438,6 +438,11 @@ body::after {
 .atom-card .atom-lifetime { margin-top: 4px; color: var(--green-dim); font-size: 6px; line-height: 1.45; letter-spacing: 0.04em; }
 
 .allocation-list { display: grid; }
+.manual-dispatch-control { padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); background: rgba(223, 178, 76, 0.035); }
+.manual-dispatch-control > div { display: grid; gap: 4px; }
+.manual-dispatch-control strong { color: var(--amber); font-size: 8px; letter-spacing: 0.1em; }
+.manual-dispatch-control small { color: var(--muted); font-size: 7px; line-height: 1.4; }
+.manual-dispatch-control .terminal-button { min-width: 170px; padding: 8px 10px; font-size: 7px; }
 .allocation-row { min-height: 60px; padding: 9px 12px; display: grid; grid-template-columns: minmax(130px, 1fr) 30px 54px 30px; align-items: center; gap: 7px; border-bottom: 1px solid var(--line); }
 .allocation-label { display: grid; gap: 4px; }
 .allocation-label > span { font-size: 10px; text-transform: uppercase; }

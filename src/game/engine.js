@@ -34,6 +34,8 @@ import { researchIsUnlocked } from "./unlocks.js";
 const minBigInt = (...values) => values.reduce((smallest, value) => (value < smallest ? value : smallest));
 const ceilDiv = (value, divisor) => (divisor <= 0n ? 0n : (value + divisor - 1n) / divisor);
 const hasResearch = (state, id) => state.completedResearch.includes(id);
+const hasPersistentDirectiveScheduling = (state) =>
+  hasResearch(state, "parallel-directives") || hasResearch(state, "relative-allocation");
 export const REPLICATION_EFFICIENCY_THRESHOLD_BPS = 9_900n;
 export const TEMPORARY_BURST_QUALIFICATION_MS = 30_000;
 export const REPLICATION_BATCH_WINDOW_MS = 5_000;
@@ -641,9 +643,11 @@ function shouldBatchReplication(state, shortfall) {
   return false;
 }
 
-function scheduleAllocations(state) {
+function scheduleAllocations(state, forceDispatch = false) {
   noteDepositExhaustion(state);
-  if (!state.discovery.directivesVisible) return;
+  if (!state.discovery.directivesVisible) return 0n;
+  if (!forceDispatch && !hasPersistentDirectiveScheduling(state)) return 0n;
+  let dispatched = 0n;
   const tuning = ensureReplicationTuning(state);
   armChargedBurstIfReady(state);
   for (const directive of WORK_DIRECTIVES) {
@@ -660,7 +664,7 @@ function scheduleAllocations(state) {
     if (shortfall > 0n && !converging) {
       if (directive === "replicate" && tuning.burstCharge) continue;
       if (directive === "replicate" && shouldBatchReplication(state, shortfall)) continue;
-      reserveJob(state, directive, shortfall, "allocation");
+      dispatched += reserveJob(state, directive, shortfall, "allocation");
     }
   }
   noteDepositExhaustion(state);
@@ -673,6 +677,7 @@ function scheduleAllocations(state) {
   ) {
     beginProspecting(state, "autonomous");
   }
+  return dispatched;
 }
 
 function initializeAllocationTargets(state) {
@@ -1056,7 +1061,24 @@ export function adjustAllocation(input, directive, delta, now = Date.now()) {
   }
   state.allocations[directive] = nextValue;
   resetReplicationQualificationIfNeeded(state);
-  scheduleAllocations(state);
+  scheduleAllocations(state, true);
+  return { ok: true, state };
+}
+
+export function dispatchAllocations(input, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  if (!state.discovery.directivesVisible) return failure(state, "Directive allocation is not yet available.");
+  if (hasPersistentDirectiveScheduling(state)) {
+    return failure(state, "Parallel Directive Scheduling already dispatches assigned cohorts automatically.");
+  }
+  const dispatched = scheduleAllocations(state, true);
+  if (dispatched <= 0n) {
+    return failure(state, "No assigned idle nanites can begin a directive.");
+  }
+  appendLog(
+    state,
+    `MANUAL DIRECTIVE DISPATCH · ${formatCount(dispatched)} NANITE${dispatched === 1n ? "" : "S"} RELEASED TO COHORTS.`,
+  );
   return { ok: true, state };
 }
 

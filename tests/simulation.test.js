@@ -19,6 +19,7 @@ import {
   cancelTemporaryBurst,
   cohortResonanceWindow,
   cohortSyncWindow,
+  dispatchAllocations,
   effectiveJobDuration,
   effectiveResearchCapacity,
   energyJobYield,
@@ -309,6 +310,33 @@ describe("cohort simulation", () => {
     assert.equal(completed.lifetime.energySpent, 0n);
   });
 
+  it("makes two-nanite allocation manual until Parallel Directive Scheduling restores persistent relaunch", () => {
+    const now = 1_300_000;
+    let state = createInitialState(now);
+    state.nanites = 2n;
+    state.stage = 1;
+    state.discovery.surveyComplete = true;
+    state.discovery.directivesVisible = true;
+    state.discovery.researchVisible = true;
+
+    state = success(adjustAllocation(state, "energy", 1n, now));
+    const firstCycle = state.cohorts.find((cohort) => cohort.directive === "energy");
+    assert.ok(firstCycle);
+    state = advanceSimulation(state, firstCycle.completesAt);
+    assert.equal(state.cohorts.some((cohort) => cohort.directive === "energy"), false);
+
+    state = success(dispatchAllocations(state, state.simTime));
+    assert.equal(state.cohorts.some((cohort) => cohort.directive === "energy"), true);
+    state = success(queueResearch(state, "parallel-directives", state.simTime));
+    state = advanceSimulation(state, state.simTime + 240_000);
+    assert.equal(state.completedResearch.includes("parallel-directives"), true);
+
+    const persistentCycle = state.cohorts.find((cohort) => cohort.directive === "energy");
+    assert.ok(persistentCycle);
+    state = advanceSimulation(state, persistentCycle.completesAt);
+    assert.equal(state.cohorts.some((cohort) => cohort.directive === "energy"), true);
+  });
+
   it("produces identical state for event-jump and stepped progression", () => {
     const sorted = reachSortedStockpile();
     let seeded = finishManual(sorted, "replicate", 55_000);
@@ -328,6 +356,7 @@ describe("cohort simulation", () => {
     state.nanites = 10n;
     state.discovery.surveyComplete = true;
     state.discovery.directivesVisible = true;
+    state.completedResearch.push("parallel-directives");
     state = success(adjustAllocation(state, "energy", 10n, now));
 
     const target = now + 20 * 86_400_000;
@@ -358,6 +387,7 @@ describe("cohort simulation", () => {
     state.nanites = 2n;
     state.discovery.surveyComplete = true;
     state.discovery.directivesVisible = true;
+    state.completedResearch.push("parallel-directives");
 
     state = success(adjustAllocation(state, "collect", 1n, now));
     state = success(adjustAllocation(state, "collect", 1n, now + 1_600));
@@ -687,7 +717,7 @@ describe("cohort simulation", () => {
     state.discovery.surveyComplete = true;
     state.discovery.directivesVisible = true;
     state.activeDeposit.matter = { carbon: 0n, silicon: 0n, copper: 0n, gold: 0n, unknown: 0n };
-    state.completedResearch.push("autonomous-prospecting");
+    state.completedResearch.push("parallel-directives", "autonomous-prospecting");
 
     const advanced = advanceSimulation(state, now + 1);
     assert.equal(advanced.cohorts.some((cohort) => cohort.directive === "prospect"), true);
