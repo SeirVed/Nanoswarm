@@ -5,6 +5,7 @@ import {
   adjustAllocation,
   advanceSimulation,
   cancelResearch,
+  dispatchAllocations,
   maximumMnemonicCommitment,
   moveResearch,
   queueResearch,
@@ -163,6 +164,7 @@ describe("catalogued matter pathways", () => {
     state.discovery.atmosphereVisible = true;
     state = success(adjustAllocation(state, "atmosphere", 1n, state.simTime));
     state = advanceSimulation(state, state.simTime + 10_500);
+    state = success(dispatchAllocations(state, state.simTime));
     state = success(adjustAllocation(state, "atmosphere", -1n, state.simTime));
     state = advanceSimulation(state, state.simTime + 10_500);
     const capturedBefore = totalMatter(state.capturedAtmosphere);

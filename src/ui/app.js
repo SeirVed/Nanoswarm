@@ -21,6 +21,7 @@ import {
   atmosphericCollectionCapacity,
   cohortResonanceWindow,
   cohortSyncWindow,
+  dispatchAllocations,
   directiveIsVisible,
   effectiveJobDuration,
   moveResearch,
@@ -575,6 +576,7 @@ function resourcesHtml(now) {
 function allocationsHtml() {
   if (!state.discovery.directivesVisible) return "";
   const unassigned = state.nanites - assignmentTotal(state);
+  const persistentScheduling = state.completedResearch.includes("parallel-directives");
   const relativeAllocation = state.completedResearch.includes("relative-allocation");
   const ratioPrognostics = state.completedResearch.includes("cohort-ratio-prognostics");
   const readiness = replicationReadiness(state);
@@ -686,10 +688,20 @@ function allocationsHtml() {
     <header class="panel-heading"><span>DIRECTIVE ALLOCATION</span><span>${formatCount(unassigned)} UNASSIGNED${
       ` · ${formatCount(readiness.unableToStart)} UNABLE TO START`
     }${
-      relativeAllocation ? " · RELATIVE AUTO" : ""
+      relativeAllocation ? " · RELATIVE AUTO" : persistentScheduling ? " · PERSISTENT AUTO" : " · MANUAL DISPATCH"
     }</span></header>
     ${replicationAlertHtml}
     ${pipelineHtml}
+    ${
+      persistentScheduling
+        ? ""
+        : `<div class="manual-dispatch-control" data-tooltip="Whole-number assignments launch once when changed. Until Parallel Directive Scheduling is restored, completed cohorts remain idle until manually dispatched again.">
+            <div><strong>SCHEDULER FIRMWARE INCOMPLETE</strong><small>ASSIGNMENT CHANGES LAUNCH ONCE · COMPLETED COHORTS WAIT</small></div>
+            <button class="terminal-button compact-button" data-action="dispatch" ${
+              idleWorkers(state) <= 0n || assignmentTotal(state) - state.allocations.research <= 0n ? "disabled" : ""
+            }>DISPATCH ASSIGNED COHORTS</button>
+          </div>`
+    }
     <div class="allocation-list">
       ${DIRECTIVES.filter((directive) => directiveIsVisible(state, directive)).map((directive) => {
         const locked = state.allocationLocks[directive];
@@ -735,7 +747,9 @@ function allocationsHtml() {
     <p class="panel-note">${
       relativeAllocation
         ? "Sliders express persistent workforce percentages. New nanites enter those shares automatically; locks protect ratios while other sliders change. Running cohorts still finish indivisibly."
-        : "Running cohorts finish their current indivisible job before a reduced assignment takes effect."
+        : persistentScheduling
+          ? "Whole-number assignments persist. Completed cohorts relaunch automatically across every assigned directive."
+          : "Whole-number assignments launch once when changed. Completed cohorts wait for manual dispatch until Parallel Directive Scheduling is restored."
     }${state.discovery.behaviouralMorphologies ? " Behavioural morphology priors are active; every nanite still uses the standard physical recipe." : ""}</p>
   </section>`;
 }
@@ -1169,6 +1183,8 @@ function performButtonAction(button) {
     const directive = button.dataset.directive;
     const delta = BigInt(button.dataset.delta);
     return acceptResult(adjustAllocation(state, directive, delta));
+  } else if (action === "dispatch") {
+    return acceptResult(dispatchAllocations(state));
   } else if (action === "step-share") {
     const directive = button.dataset.directive;
     const shareDelta = BigInt(button.dataset.shareDelta) * ALLOCATION_SHARE_SCALE / 10_000n;
