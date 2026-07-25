@@ -432,17 +432,17 @@ body::after {
 .action-row small { color: var(--muted); font-size: 9px; line-height: 1.4; }
 .action-row em { color: var(--green); font-size: 10px; font-style: normal; }
 
-.substrate-panel { padding-bottom: 11px; }
+.substrate-panel { padding-bottom: 16px; }
 .substrate-heading-status { display: grid; gap: 2px; }
 .substrate-heading-status small { color: var(--green-dim); font-size: 7px; font-weight: 500; letter-spacing: 0.08em; }
-.substrate-panel > strong { display: block; padding: 12px 13px 4px; color: var(--text); font-size: 10px; text-transform: uppercase; }
-.substrate-panel > p { margin: 0; padding: 0 13px; color: var(--muted); font-size: 8px; line-height: 1.45; }
-.substrate-panel > small { display: block; padding: 6px 13px 0; color: var(--green-dim); font-size: 7px; letter-spacing: 0.08em; line-height: 1.45; }
-.exhaustion-state, .atmosphere-state { margin: 10px 12px 0; padding: 9px; border: 1px solid var(--line); background: rgba(2, 7, 4, 0.42); }
+.substrate-panel > strong { display: block; padding: 16px 16px 5px; color: var(--text); font-size: 12px; text-transform: uppercase; }
+.substrate-panel > p { margin: 0; padding: 0 16px; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.substrate-panel > small { display: block; padding: 8px 16px 0; color: var(--green-dim); font-size: 8px; letter-spacing: 0.08em; }
+.exhaustion-state, .atmosphere-state { margin: 13px 15px 0; padding: 11px; border: 1px solid var(--line); background: rgba(2, 7, 4, 0.42); }
 .exhaustion-state { border-color: rgba(216, 120, 103, 0.35); }
-.exhaustion-state > strong { color: var(--danger); font-size: 8px; letter-spacing: 0.1em; }
-.atmosphere-state > strong { color: #8bd4ff; font-size: 8px; letter-spacing: 0.1em; }
-.exhaustion-state p, .atmosphere-state p { margin: 5px 0 0; color: var(--muted); font-size: 7px; line-height: 1.45; }
+.exhaustion-state > strong { color: var(--danger); font-size: 9px; letter-spacing: 0.1em; }
+.atmosphere-state > strong { color: #8bd4ff; font-size: 9px; letter-spacing: 0.1em; }
+.exhaustion-state p, .atmosphere-state p { margin: 6px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .search-button { width: 100%; margin-top: 10px; padding: 10px; display: flex; justify-content: space-between; gap: 12px; text-align: left; }
 .search-button span { color: var(--muted); font-size: 8px; }
 .substrate-search-progress { margin-top: 8px; padding: 10px; border: 1px solid rgba(216, 120, 103, 0.22); background: rgba(216, 120, 103, 0.035); }

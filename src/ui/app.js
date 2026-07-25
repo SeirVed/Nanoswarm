@@ -1070,8 +1070,8 @@ function structuralSignature() {
 function movablePanelHtml(panelId, html) {
   if (!html) return "";
   return html.replace(
-    '<section class="panel',
-    `<section class="panel movable-panel" data-panel-id="${panelId}" draggable="true"`,
+    /<section class="([^"]*)"/,
+    `<section class="$1 movable-panel" data-panel-id="${panelId}" draggable="true"`,
   );
 }
 
