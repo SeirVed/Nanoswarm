@@ -1061,7 +1061,7 @@ export function adjustAllocation(input, directive, delta, now = Date.now()) {
   }
   state.allocations[directive] = nextValue;
   resetReplicationQualificationIfNeeded(state);
-  scheduleAllocations(state, true);
+  scheduleAllocations(state);
   return { ok: true, state };
 }
 

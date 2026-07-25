@@ -260,6 +260,7 @@ describe("cohort simulation", () => {
     state.discovery.directivesVisible = true;
     state.discovery.atmosphereVisible = true;
     state = success(adjustAllocation(state, "atmosphere", 1n, now));
+    state = success(dispatchAllocations(state, state.simTime));
     state = advanceSimulation(state, now + 10_500);
     assert.equal(totalMatter(state.capturedAtmosphere), ATMOSPHERE_ATOMS_PER_NANITE);
     assert.equal(totalMatter(state.feedstock), 0n);
@@ -320,6 +321,8 @@ describe("cohort simulation", () => {
     state.discovery.researchVisible = true;
 
     state = success(adjustAllocation(state, "energy", 1n, now));
+    assert.equal(state.cohorts.some((cohort) => cohort.directive === "energy"), false);
+    state = success(dispatchAllocations(state, state.simTime));
     const firstCycle = state.cohorts.find((cohort) => cohort.directive === "energy");
     assert.ok(firstCycle);
     state = advanceSimulation(state, firstCycle.completesAt);
@@ -371,6 +374,7 @@ describe("cohort simulation", () => {
     state.nanites = 16n;
     state.discovery.surveyComplete = true;
     state.discovery.directivesVisible = true;
+    state.completedResearch.push("parallel-directives");
 
     state = success(adjustAllocation(state, "collect", 1n, now));
     state = success(adjustAllocation(state, "collect", 1n, now + 100));
@@ -432,6 +436,7 @@ describe("cohort simulation", () => {
     state.discovery.surveyComplete = true;
     state.discovery.directivesVisible = true;
     state = success(adjustAllocation(state, "collect", 2n, now));
+    state = success(dispatchAllocations(state, state.simTime));
     state = success(adjustAllocation(state, "collect", -2n, now + 100));
     state = success(adjustAllocation(state, "research", 2n, state.simTime));
 
@@ -759,6 +764,7 @@ describe("cohort simulation", () => {
     allocated.energy = NANITE_RECIPE.energy;
     for (const [key, amount] of Object.entries(NANITE_RECIPE.atoms)) allocated.atoms[key] = amount;
     allocated = success(adjustAllocation(allocated, "replicate", 1n, allocated.simTime));
+    allocated = success(dispatchAllocations(allocated, allocated.simTime));
     assert.equal(allocated.cohorts.some((cohort) => cohort.directive === "replicate"), true);
     assert.deepEqual(replicationShortages(allocated), []);
   });
