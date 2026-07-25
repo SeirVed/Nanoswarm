@@ -12,7 +12,9 @@ import {
   LOCAL_SHELL_COUNT,
   NANITE_RECIPE,
   RESEARCH,
+  SEED_RESEARCH_CORE_CAPACITY,
   SORT_ATOMS_PER_NANITE,
+  STOCKPILE_ELEMENT_KEYS,
   WORK_DIRECTIVES,
   createProspectedDeposit,
   emptyMatter,
@@ -108,14 +110,27 @@ function nextEntityId(state, prefix) {
   return id;
 }
 
-function researchCoreCapacity(state) {
-  const divisor = hasResearch(state, "distributed-reasoning-mesh") ? 50n : 100n;
-  const proportional = ceilDiv(state.nanites, divisor);
-  return proportional > 100n ? proportional : 100n;
+export function researchCapacityHundredths(state) {
+  return (
+    SEED_RESEARCH_CORE_CAPACITY * 100n +
+    activeResearchWorkers(state) * 100n +
+    (state.mnemonicBanks ?? 0n)
+  );
 }
 
 export function effectiveResearchCapacity(state) {
-  return researchCoreCapacity(state) + activeResearchWorkers(state);
+  return researchCapacityHundredths(state) / 100n;
+}
+
+export function maximumMnemonicCommitment(activeNanites) {
+  if (activeNanites < 10n) return 0n;
+  let lowerMagnitude = 1n;
+  let cursor = activeNanites;
+  while (cursor >= 100n) {
+    cursor /= 10n;
+    lowerMagnitude *= 10n;
+  }
+  return lowerMagnitude * 9n;
 }
 
 export function replicationBufferCapacity(state) {
@@ -335,12 +350,13 @@ function nextSyncBoundary(state, now) {
   return Math.floor(now / window) * window + window;
 }
 
-function pendingSyncCohort(state, directive) {
+function pendingSyncCohort(state, directive, payload) {
   return state.cohorts
     .filter(
       (cohort) =>
         cohort.origin === "allocation" &&
         cohort.directive === directive &&
+        (directive !== "atmosphere" || cohort.payload.fractionated === payload.fractionated) &&
         cohort.startedAt >= state.simTime &&
         cohort.startedAt - state.simTime <= cohortSyncWindow(state),
     )
@@ -351,11 +367,19 @@ function mergePayload(target, addition) {
   if (target.kind !== addition.kind) throw new Error("Cannot merge unlike cohort payloads");
   if (target.kind === "energy") return { kind: "energy", energy: target.energy + addition.energy };
   if (target.kind === "collect") return { kind: "collect", matter: addMatter(target.matter, addition.matter) };
+  if (target.kind === "atmosphere") {
+    return {
+      kind: "atmosphere",
+      matter: addMatter(target.matter, addition.matter),
+      fractionated: target.fractionated,
+    };
+  }
   if (target.kind === "sort") {
     return {
       kind: "sort",
       atoms: addAtoms(target.atoms, addition.atoms),
       residuum: addMatter(target.residuum, addition.residuum),
+      newlyProcessed: addMatter(target.newlyProcessed ?? emptyMatter(), addition.newlyProcessed ?? emptyMatter()),
     };
   }
   if (target.kind === "replicate") {
@@ -374,6 +398,11 @@ function atmosphericMatter(amount) {
 }
 
 const knownAtomsAsMatter = (atoms) => ({ ...emptyMatter(), ...atoms });
+const cataloguedSolidElements = (state) =>
+  state.discovery.ironCatalogued ? [...ATOM_KEYS, "iron"] : ATOM_KEYS;
+const atmosphericElements = Object.freeze(["nitrogen", "oxygen", "argon", "carbon"]);
+const resortableResiduum = (state) =>
+  cataloguedSolidElements(state).reduce((total, key) => total + (state.residuum[key] ?? 0n), 0n);
 
 function ensureReplicationTuning(state) {
   state.replicationTuning ??= { qualifyingMs: 0, batchUntil: null, burstCharge: null, burst: null };
@@ -466,19 +495,30 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     state.activeDeposit.matter = depositMatter;
     payload = { kind: "collect", matter: taken };
   } else if (directive === "atmosphere") {
-    payload = { kind: "collect", matter: atmosphericMatter(atmosphericCollectionCapacity(state) * workers) };
+    payload = {
+      kind: "atmosphere",
+      matter: atmosphericMatter(atmosphericCollectionCapacity(state) * workers),
+      fractionated: hasResearch(state, "atmospheric-fractionation"),
+    };
   } else if (directive === "sort") {
-    const availableFeedstock = totalMatter(state.feedstock);
-    if (availableFeedstock <= 0n) return 0n;
+    const sortingFeedstock = totalMatter(state.feedstock) > 0n;
+    const source = sortingFeedstock ? state.feedstock : state.residuum;
+    if (!sortingFeedstock && resortableResiduum(state) <= 0n) return 0n;
+    const availableFeedstock = totalMatter(source);
     const capacityPerWorker = sortingCapacity(state);
     const usefulWorkers = ceilDiv(availableFeedstock, capacityPerWorker);
     workers = workers < usefulWorkers ? workers : usefulWorkers;
     const { taken, remaining } = takeMatterProportionally(
-      state.feedstock,
+      source,
       capacityPerWorker * workers,
     );
-    state.feedstock = remaining;
-    payload = { kind: "sort", ...splitSortedMatter(taken) };
+    if (sortingFeedstock) state.feedstock = remaining;
+    else state.residuum = remaining;
+    payload = {
+      kind: "sort",
+      ...splitSortedMatter(taken, cataloguedSolidElements(state)),
+      newlyProcessed: sortingFeedstock ? taken : emptyMatter(),
+    };
   } else if (directive === "replicate") {
     const burst = state.replicationTuning?.burst;
     if (burst) {
@@ -499,7 +539,7 @@ function reserveJob(state, directive, requestedWorkers, origin) {
     throw new Error(`Unknown job directive: ${directive}`);
   }
 
-  const mergeTarget = origin === "allocation" ? pendingSyncCohort(state, directive) : undefined;
+  const mergeTarget = origin === "allocation" ? pendingSyncCohort(state, directive, payload) : undefined;
   const startedAt =
     origin === "allocation" ? (mergeTarget?.startedAt ?? nextSyncBoundary(state, state.simTime)) : state.simTime;
 
@@ -714,7 +754,7 @@ function completeCohort(state, cohort) {
         undefined,
         "medium",
       );
-      appendLog(state, "RESEARCH SIGNAL RESOLVED · ATMOSPHERIC FRACTIONATION.", "good", undefined, "medium");
+      appendLog(state, "RESEARCH SIGNAL RESOLVED · ATMOSPHERIC SPECTROSCOPY.", "good", undefined, "medium");
     }
     appendLog(
       state,
@@ -735,6 +775,28 @@ function completeCohort(state, cohort) {
       cohort.directive === "atmosphere" ? "ATMOSPHERIC HARVEST" : "COLLECTION RUN"
     } COMPLETE · ${formatCount(totalMatter(payload.matter))} constituent atoms · ≈${formatInventoryMass(payload.matter)} returned to Feedstock.`, "good");
     if (firstCollection) appendLog(state, "MIXED MATERIAL REQUIRES ELEMENTAL SORTING.", "muted", undefined, "medium");
+  } else if (payload.kind === "atmosphere") {
+    state.lifetime.collected = addMatter(state.lifetime.collected, payload.matter);
+    if (payload.fractionated) {
+      const separated = Object.fromEntries(
+        STOCKPILE_ELEMENT_KEYS.map((key) => [key, atmosphericElements.includes(key) ? payload.matter[key] : 0n]),
+      );
+      state.atoms = addAtoms(state.atoms, separated);
+      state.lifetime.processed = addMatter(state.lifetime.processed, payload.matter);
+      state.discovery.elementsVisible = true;
+      appendLog(
+        state,
+        `ATMOSPHERIC FRACTIONATION COMPLETE · ${formatCount(totalMatter(payload.matter))} constituent atoms · ≈${formatInventoryMass(payload.matter)} separated.`,
+        "good",
+      );
+    } else {
+      state.capturedAtmosphere = addMatter(state.capturedAtmosphere, payload.matter);
+      appendLog(
+        state,
+        `ATMOSPHERIC HARVEST COMPLETE · ${formatCount(totalMatter(payload.matter))} constituent atoms · ≈${formatInventoryMass(payload.matter)} retained as Captured Atmosphere.`,
+        "good",
+      );
+    }
   } else if (payload.kind === "sort") {
     const firstSort = !state.discovery.elementsVisible;
     state.atoms = addAtoms(state.atoms, payload.atoms);
@@ -742,7 +804,7 @@ function completeCohort(state, cohort) {
     state.discovery.elementsVisible = true;
     state.discovery.residuumVisible = totalMatter(state.residuum) > 0n;
     const sortedMatter = addMatter(knownAtomsAsMatter(payload.atoms), payload.residuum);
-    state.lifetime.processed = addMatter(state.lifetime.processed, sortedMatter);
+    state.lifetime.processed = addMatter(state.lifetime.processed, payload.newlyProcessed ?? sortedMatter);
     appendLog(
       state,
       `SORTING RUN COMPLETE · ${formatCount(totalMatter(sortedMatter))} constituent atoms · ≈${formatInventoryMass(sortedMatter)} processed.`,
@@ -792,43 +854,82 @@ function completeCohort(state, cohort) {
   }
 }
 
+function tryStartResearch(state) {
+  const item = state.researchQueue[0];
+  if (!item || item.status !== "queued") return false;
+  const definition = RESEARCH[item.id];
+  const requiredNanites = definition.cost.mnemonicNanites;
+  if (requiredNanites > maximumMnemonicCommitment(state.nanites)) return false;
+  if (idleWorkers(state) < requiredNanites || state.energy < definition.cost.energy) return false;
+
+  state.nanites -= requiredNanites;
+  state.energy -= definition.cost.energy;
+  state.lifetime.energySpent += definition.cost.energy;
+  item.status = "forming";
+  item.committedNanites = requiredNanites;
+  item.energySpent = definition.cost.energy;
+  item.progressCentinaniteMs ??= 0n;
+  item.paused = false;
+  reconcileRelativeAllocations(state);
+  appendLog(
+    state,
+    definition.restoredFirmware
+      ? `FIRMWARE RESTORATION STARTED · ${definition.name.toUpperCase()}.`
+      : `MNEMONIC FORMATION STARTED · ${definition.name.toUpperCase()} · ${formatCount(requiredNanites)} NANITES COMMITTED.`,
+    "good",
+    undefined,
+    "medium",
+  );
+  return true;
+}
+
 function nextResearchCompletion(state) {
   const item = state.researchQueue[0];
-  if (!item) return null;
-  const remaining = RESEARCH[item.id].requiredNaniteMs - item.progressNaniteMs;
+  if (!item || item.status !== "forming" || item.paused) return null;
+  const requiredWork = RESEARCH[item.id].requiredNaniteMs * 100n;
+  const remaining = requiredWork - item.progressCentinaniteMs;
   if (remaining <= 0n) return state.simTime;
-  const duration = ceilDiv(remaining, effectiveResearchCapacity(state));
+  const duration = ceilDiv(remaining, researchCapacityHundredths(state));
   const capped = duration > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : duration;
   return state.simTime + Number(capped);
 }
 
 function advanceResearch(state, deltaMs) {
   const item = state.researchQueue[0];
-  if (item && deltaMs > 0) item.progressNaniteMs += effectiveResearchCapacity(state) * BigInt(deltaMs);
+  if (item?.status === "forming" && !item.paused && deltaMs > 0) {
+    item.progressCentinaniteMs += researchCapacityHundredths(state) * BigInt(deltaMs);
+  }
 }
 
 function completeResearchIfReady(state) {
   const item = state.researchQueue[0];
-  if (!item) return false;
+  if (!item || item.status !== "forming" || item.paused) return false;
   const definition = RESEARCH[item.id];
-  if (item.progressNaniteMs < definition.requiredNaniteMs) return false;
+  if (item.progressCentinaniteMs < definition.requiredNaniteMs * 100n) return false;
   state.researchQueue.shift();
-  const spentCost = item.reservedCost ?? definition.cost;
-  state.lifetime.spent = addMatter(state.lifetime.spent, knownAtomsAsMatter(spentCost.atoms));
-  state.lifetime.energySpent += spentCost.energy;
+  state.mnemonicBanks += item.committedNanites;
   if (!state.completedResearch.includes(item.id)) state.completedResearch.push(item.id);
   if (item.id === "relative-allocation") {
     initializeAllocationTargets(state);
     reconcileRelativeAllocations(state);
   }
   if (item.id === "residuum-indexing") state.discovery.residuumIndexed = true;
-  if (item.id === "ferromagnetic-phase-analysis") state.discovery.ironCatalogued = true;
+  if (item.id === "ferromagnetic-phase-analysis") {
+    state.discovery.ironCatalogued = true;
+    appendLog(
+      state,
+      `ELEMENTAL CATALOG EXPANDED · IRON · ${formatCount(state.residuum.iron)} ATOMS AVAILABLE FOR RE-SORTING.`,
+      "good",
+      undefined,
+      "medium",
+    );
+  }
   if (item.id === "atmospheric-spectroscopy") state.discovery.atmosphereCatalogued = true;
-  if (item.id === "specialized-morphologies") state.discovery.behaviouralMorphologies = true;
   appendLog(state, `RESEARCH COMPLETE · ${definition.name.toUpperCase()}.`, "good", undefined, "medium");
   if (definition.trigger) {
     appendLog(state, `COGNITIVE MODEL UPDATED · ${definition.effect.toUpperCase()}`, "good", undefined, "medium");
   }
+  tryStartResearch(state);
   return true;
 }
 
@@ -854,6 +955,7 @@ export function advanceSimulation(input, targetTime) {
   const state = cloneState(input);
   if (targetTime <= state.simTime) return state;
   scheduleAllocations(state);
+  tryStartResearch(state);
 
   while (state.simTime < targetTime) {
     const cohortTime = state.cohorts.reduce(
@@ -881,9 +983,10 @@ export function advanceSimulation(input, targetTime) {
       for (const cohort of completed) completeCohort(state, cohort);
     }
     const researchCompleted = completeResearchIfReady(state);
+    const researchStarted = tryStartResearch(state);
     scheduleAllocations(state);
 
-    if (eventTime <= previousTime && completed.length === 0 && !researchCompleted) {
+    if (eventTime <= previousTime && completed.length === 0 && !researchCompleted && !researchStarted) {
       throw new Error("Simulation stalled without a processable event");
     }
     if (eventTime === targetTime) break;
@@ -1130,18 +1233,16 @@ export function queueResearch(input, id, now = Date.now()) {
   if (definition.unlockNanites && state.nanites < definition.unlockNanites) {
     return failure(state, `Research signal requires ${formatCount(definition.unlockNanites)} active nanites.`);
   }
-  if (state.energy < definition.cost.energy) return failure(state, "Insufficient energy.");
-  for (const key of ATOM_KEYS) {
-    if (state.atoms[key] < definition.cost.atoms[key]) return failure(state, `Insufficient ${key}.`);
-  }
-  state.energy -= definition.cost.energy;
-  for (const key of ATOM_KEYS) state.atoms[key] -= definition.cost.atoms[key];
   state.researchQueue.push({
     id,
-    progressNaniteMs: 0n,
-    reservedCost: { energy: definition.cost.energy, atoms: { ...definition.cost.atoms } },
+    status: "queued",
+    progressCentinaniteMs: 0n,
+    committedNanites: 0n,
+    energySpent: 0n,
+    paused: false,
   });
-  appendLog(state, `RESEARCH QUEUED · ${definition.name.toUpperCase()}.`);
+  appendLog(state, `RESEARCH INTENT QUEUED · ${definition.name.toUpperCase()}.`);
+  tryStartResearch(state);
   return { ok: true, state };
 }
 
@@ -1149,16 +1250,32 @@ export function cancelResearch(input, id, now = Date.now()) {
   const state = advanceSimulation(input, now);
   const queueIndex = state.researchQueue.findIndex((item) => item.id === id);
   if (queueIndex < 0) return failure(state, "Research is not queued.");
+  if (state.researchQueue[queueIndex].status === "forming") {
+    return failure(state, "Active mnemonic formation is irreversible; pause it instead.");
+  }
 
   const [cancelled] = state.researchQueue.splice(queueIndex, 1);
   const definition = RESEARCH[cancelled.id];
-  const reservedCost = cancelled.reservedCost ?? definition.cost;
-  state.energy += reservedCost.energy;
-  for (const key of ATOM_KEYS) state.atoms[key] += reservedCost.atoms[key];
   appendLog(
     state,
-    `RESEARCH CANCELLED · ${definition.name.toUpperCase()} · RESERVED INPUTS RELEASED.`,
+    `RESEARCH INTENT REMOVED · ${definition.name.toUpperCase()} · NO PHYSICAL INPUTS WERE COMMITTED.`,
     "muted",
+  );
+  tryStartResearch(state);
+  return { ok: true, state };
+}
+
+export function toggleResearchPause(input, id, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  const item = state.researchQueue.find((candidate) => candidate.id === id);
+  if (!item || item.status !== "forming") return failure(state, "Research is not actively forming.");
+  item.paused = !item.paused;
+  appendLog(
+    state,
+    `MNEMONIC FORMATION ${item.paused ? "PAUSED" : "RESUMED"} · ${RESEARCH[id].name.toUpperCase()}.`,
+    item.paused ? "muted" : "good",
+    undefined,
+    "medium",
   );
   return { ok: true, state };
 }
@@ -1167,10 +1284,16 @@ export function moveResearch(input, id, direction, now = Date.now()) {
   const state = advanceSimulation(input, now);
   const queueIndex = state.researchQueue.findIndex((item) => item.id === id);
   if (queueIndex < 0) return failure(state, "Research is not queued.");
+  if (state.researchQueue[queueIndex].status === "forming") {
+    return failure(state, "Active mnemonic formation cannot be reordered.");
+  }
   if (direction !== -1 && direction !== 1) return failure(state, "Invalid research queue direction.");
   const targetIndex = queueIndex + direction;
   if (targetIndex < 0 || targetIndex >= state.researchQueue.length) {
     return failure(state, "Research is already at that end of the queue.");
+  }
+  if (state.researchQueue[targetIndex].status === "forming") {
+    return failure(state, "Queued intent cannot move ahead of active mnemonic formation.");
   }
 
   [state.researchQueue[queueIndex], state.researchQueue[targetIndex]] = [
@@ -1178,6 +1301,7 @@ export function moveResearch(input, id, direction, now = Date.now()) {
     state.researchQueue[queueIndex],
   ];
   appendLog(state, `RESEARCH QUEUE REORDERED · ${RESEARCH[id].name.toUpperCase()}.`, "muted");
+  tryStartResearch(state);
   return { ok: true, state };
 }
 

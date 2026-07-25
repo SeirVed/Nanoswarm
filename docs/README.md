@@ -21,10 +21,10 @@ This directory contains several kinds of material. Their status matters.
 | [`horizon-roadmap.md`](horizon-roadmap.md) | Working design overview | Human-readable long-horizon mass progression. Treat stage boundaries and quantities as planning until modelled. |
 | [`../src/design/horizons.js`](../src/design/horizons.js) | Editable canonical design data | Structured horizon data used by the mass-horizon workbench. The obsolete bridge-review text is identified for removal in the repository audit. |
 | [`roadmap.md`](roadmap.md) | Roadmap | Active implementation checklist. Keep validated decisions distinct from exploratory design work. |
-| [`research-mnemonic-substrate.md`](research-mnemonic-substrate.md) | Working design | Purified Research v2 principles, confidence levels, open decisions and balance-evidence requirements. |
-| [`research-v2-catalogue-conversion.md`](research-v2-catalogue-conversion.md) | Working inventory and calibration method | Catalogue families, audit template and evidence required before assigning any cost. Earlier linear values are withdrawn. |
-| [`research-v2-implementation-handoff.md`](research-v2-implementation-handoff.md) | Implementation design brief | Architectural boundaries, affected systems and a risk-oriented development sequence without premature schema or balance mandates. |
-| [`research-v2-regression-plan.md`](research-v2-regression-plan.md) | Verification charter | Critical risks, representative scenarios and release evidence without micromanaging individual tests. |
+| [`research-mnemonic-substrate.md`](research-mnemonic-substrate.md) | Historical design record | Planning evidence that led to the implemented mnemonic-bank system. Runtime rules and values now live in code and `architecture.md`. |
+| [`research-v2-catalogue-conversion.md`](research-v2-catalogue-conversion.md) | Historical calibration record | Catalogue audit method and rejected linear conversion approaches retained for provenance. |
+| [`research-v2-implementation-handoff.md`](research-v2-implementation-handoff.md) | Historical implementation brief | Boundaries used during the Research v2 implementation; superseded by code and `architecture.md`. |
+| [`research-v2-regression-plan.md`](research-v2-regression-plan.md) | Historical verification charter | Risk inventory used to select the implemented Research v2 tests. |
 | [`stage-2-industrial-transition.md`](stage-2-industrial-transition.md) | Working design | Candidate phase change from alien nanite replication to larger, slower chemical and mechanical production systems. |
 | [`repository-audit-and-cleanup.md`](repository-audit-and-cleanup.md) | Audit | Findings from the repository continuity review, including stale bridge material, orphaned documentation, CI gaps and the unsafe PR #3 implementation spike. |
 | [`prototype-audit.md`](prototype-audit.md) | Historical | Record of what was and was not retained from the Lovable prototype. Its old resource-funded research wording is historical, not current design. |
@@ -32,7 +32,7 @@ This directory contains several kinds of material. Their status matters.
 ## Branch and pull-request authority
 
 - `main` is the current playable implementation.
-- Draft PR #4, branch `agent/research-mnemonic-substrate`, is the working planning branch for Research v2. Its structural ideas and all quantities remain subject to review.
+- Research v2 is implemented on the current integration branch. `src/game/`, its tests, and `architecture.md` are authoritative; the planning documents preserve design history rather than override shipped behaviour.
 - Draft PR #3, branch `agent/mnemonic-research`, is a superseded implementation spike. It may be consulted for isolated migration ideas and test scenarios, but it must not be merged or used as the base of the final implementation.
 
 PR #3 duplicates the runtime into `*-legacy.js` files, advances legacy simulation and mnemonic research in separate passes, patches the UI after render through a `MutationObserver`, exposes state through `globalThis`, and sidelines much of the existing regression suite. These are explicitly rejected implementation patterns.

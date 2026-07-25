@@ -1,4 +1,4 @@
-import { ATOM_KEYS, MATTER_KEYS, emptyMatter } from "./content.js";
+import { MATTER_KEYS, STOCKPILE_ELEMENT_KEYS, emptyAtoms, emptyMatter } from "./content.js";
 
 export function totalMatter(matter) {
   return MATTER_KEYS.reduce((total, key) => total + (matter[key] ?? 0n), 0n);
@@ -13,7 +13,9 @@ export function subtractMatter(left, right) {
 }
 
 export function addAtoms(left, right) {
-  return Object.fromEntries(ATOM_KEYS.map((key) => [key, left[key] + right[key]]));
+  return Object.fromEntries(
+    STOCKPILE_ELEMENT_KEYS.map((key) => [key, (left[key] ?? 0n) + (right[key] ?? 0n)]),
+  );
 }
 
 /** Remove an exact atom count while preserving composition as closely as integers permit. */
@@ -45,15 +47,15 @@ export function takeMatterProportionally(source, requested) {
   return { taken, remaining: subtractMatter(source, taken) };
 }
 
-export function splitSortedMatter(input) {
+export function splitSortedMatter(input, cataloguedKeys) {
+  const catalogued = new Set(cataloguedKeys);
+  const atoms = emptyAtoms();
   const residuum = emptyMatter();
   for (const key of MATTER_KEYS) {
-    if (!ATOM_KEYS.includes(key)) residuum[key] = input[key] ?? 0n;
+    if (catalogued.has(key)) atoms[key] = input[key] ?? 0n;
+    else residuum[key] = input[key] ?? 0n;
   }
-  return {
-    atoms: Object.fromEntries(ATOM_KEYS.map((key) => [key, input[key] ?? 0n])),
-    residuum,
-  };
+  return { atoms, residuum };
 }
 
 /** Allocate an exact atom count across a fixed integer atom-ratio recipe. */

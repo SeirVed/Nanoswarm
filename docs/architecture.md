@@ -51,19 +51,27 @@ The loop detects a genuine zero-time stall rather than imposing a fixed event-co
 
 ## Permanent log
 
-Log significance and visual tone are separate fields. `world` records history-scale state changes, `critical` marks conditions requiring attention, `medium` records discoveries and unlocks, and `info` carries routine operations such as job starts and completions. World, critical, and medium history is permanent; only the oldest info entries are removed once 200 routine events are retained. Filters are a presentation concern and never alter retention. Version 3 saves infer the missing significance field during migration.
+Log significance and visual tone are separate fields. `world` records history-scale state changes, `critical` marks conditions requiring attention, `medium` records discoveries and unlocks, and `info` carries routine operations such as job starts and completions. World, critical, and medium history is permanent; only the oldest info entries are removed once 200 routine events are retained. Filters are a presentation concern and never alter retention.
 
 ## Research
 
-Research jobs consume their material cost when queued. Work is measured in nanite-milliseconds. Prerequisites, stage, completed material searches, and environmental signals are validated by the simulation, not merely hidden by the interface. Parallel Directive Scheduling is the sole initial root, requires `24,000,000` nanite-milliseconds, and therefore takes four minutes on the base 100 n-eq seed reasoning substrate. Relative Directive Allocation requires that root, and every remaining topic explicitly requires Relative Directive Allocation before it can be revealed or queued. The interface withholds the catalog-wide completed/total fraction. Completed research modifies capacity functions used when new cohorts reserve their payloads; already-running cohorts preserve the recipe and output with which they began.
+Research v2 separates queue intent, physical formation and installed memory. Queueing is free and validates discovery gates and prerequisites. When the first waiting topic can start, the simulation permanently removes its mnemonic footprint from idle active nanites, spends its facilitation energy and begins fixed formation work measured in nanite-milliseconds. Only one bank forms at a time. Active formation is irreversible but pausable; waiting intent may be reordered or removed.
 
-Queued topics retain their accumulated work when reordered. Cancelling a topic discards that work and releases its reserved input cost. Reassigning nanites from an indivisible production cohort into research changes the target immediately, but those workers do not contribute research capacity until their existing cohort returns.
+Parallel Directive Scheduling and Relative Directive Allocation are transit-compressed firmware restoration. They use the same work clock but commit no memory or energy. Every other live topic has an authored mnemonic footprint and energy demand. A topic can begin only when that footprint is no larger than the largest single-digit quantity one exponent below the active swarm. Only idle nanites can be committed; workers inside indivisible cohorts are never seized.
 
-The embedded seed reasoning substrate initially supplies the greater of 100 nanite-equivalents or 1% of the total swarm; Distributed Reasoning Mesh raises the proportional contribution to 2%. Explicitly allocated research nanites add to that capacity. The term computronium is reserved for the later stellar-forge compound rather than this conventional protected hardware.
+Capacity is stored and accumulated in hundredths of a nanite-equivalent:
 
-Most throughput branches are authored as additive five-percent refinement series. Their work and resource costs rise by one order of magnitude per tier, matching the one-order material searches at 0.9 g, 9 g, 90 g, and 900 g. Tier V and later remain unavailable until their environments are authored. Search-one work is calibrated against the 1% reasoning core at exhaustion of the exact 0.1 g contact: Capacitive Buffer Lattice I, Payload Frame Reinforcement I, Packetized Sorting I, Route Memory I, and Residuum Indexing initially read as 20, 25, 30, 35, and 40 minutes. Their inputs equal one through five minutes of the balanced first-shell resource pipeline. Because the work is fixed while reasoning capacity continues growing with the swarm, those ETAs collapse after replication rather than being artificial wall-clock delays.
+```text
+100 n-eq fixed seed core
++ genuinely available nanites assigned to Research
++ 1% of installed mnemonic-bank nanites
+```
 
-Each research definition may carry a revealing observation. These are player-facing traces of the swarm's growing model rather than flavour detached from mechanics. Residuum Indexing follows the first imperfect material catalogue; the chassis then independently permits Ferromagnetic Phase Analysis and Atmospheric Spectroscopy. Specialized Morphologies I records behavioural role persistence only: it has no capacity bonus and does not alter `NANITE_RECIPE`.
+The active swarm has no passive proportional contribution. Fixed-point capacity makes a 1-nanite bank worth exactly `0.01` n-eq without floating-point drift. Reassigning workers from an indivisible production cohort changes the research target immediately, but they contribute only after the cohort returns.
+
+The runtime catalogue contains only authored opening capabilities. Generated throughput tiers and later topics with unauthored dependencies are excluded rather than exposed as disconnected or fabricated progression. Each definition carries the observation that revealed it.
+
+Ferromagnetic Phase Analysis adds iron to the sortable catalogue. Existing iron remains in its Residuum lot until a sorting cohort processes that lot again. Atmospheric harvest is stored separately as Captured Atmosphere and never becomes solid Residuum. Atmospheric Spectroscopy reveals N/O/Ar/C composition without separation; Atmospheric Fractionation configures future gas-harvest cohorts to deliver separated elements. A cohort preserves the fractionation capability it had when its payload was reserved.
 
 Later morphology research equips the canonical nanite with interchangeable tools, coatings, reservoirs or assembled temporary structures. It must not silently replace the base recipe. Compound recognition and compound decomposition remain separate research layers on the path to universal molecular disassembly and assembly. Elemental transmutation is outside the chemical assembler model and belongs to a much later flux-based nuclear system.
 

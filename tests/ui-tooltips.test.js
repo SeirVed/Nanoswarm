@@ -14,7 +14,7 @@ describe("delayed tooltips", () => {
     assert.equal(TOOLTIP_UPDATE_GRACE_MS, 300);
     for (const action of [
       "begin", "start", "adjust", "step-share", "lock", "research", "research-move",
-      "research-cancel", "research-tab", "log-filter", "prospect", "audio", "reset", "volume",
+      "research-cancel", "research-pause", "research-tab", "log-filter", "prospect", "audio", "reset", "volume",
       "set-share", "set-share-percent",
     ]) {
       assert.equal(typeof ACTION_TOOLTIPS[action], "string");

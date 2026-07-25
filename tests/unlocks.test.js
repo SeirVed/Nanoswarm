@@ -30,18 +30,17 @@ describe("unlock acknowledgements", () => {
     assert.equal(ids.includes("research:relative-allocation"), false);
   });
 
-  it("migrates already-visible version-six features as acknowledged", () => {
+  it("rejects prior-iteration saves instead of silently rewriting their laws", () => {
     const state = createInitialState(7_100_000);
     state.version = 6;
     state.discovery.surveyComplete = true;
     state.discovery.feedstockVisible = true;
     delete state.seenUnlocks;
 
-    const restored = deserializeState(serializeState(state));
-    assert.equal(restored.version, 11);
-    assert.deepEqual(restored.seenUnlocks, unlockedIdsForState(restored));
-    assert.equal(restored.seenUnlocks.includes("substrate"), true);
-    assert.equal(restored.seenUnlocks.includes("materials"), true);
+    assert.throws(
+      () => deserializeState(serializeState(state)),
+      /prior NanoSwarm iteration/,
+    );
   });
 
   it("acknowledges clicked unlock identifiers once and persists unrelated notices", () => {

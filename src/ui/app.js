@@ -16,7 +16,8 @@ import {
   assignmentTotal,
   cancelTemporaryBurst,
   cancelResearch,
-  effectiveResearchCapacity,
+  maximumMnemonicCommitment,
+  researchCapacityHundredths,
   atmosphericCollectionCapacity,
   cohortResonanceWindow,
   cohortSyncWindow,
@@ -41,6 +42,7 @@ import {
   startTemporaryBurst,
   TEMPORARY_BURST_QUALIFICATION_MS,
   toggleAllocationLock,
+  toggleResearchPause,
 } from "../game/engine.js";
 import { addMatter, matterFromAtomWeights, totalMatter } from "../game/matter.js";
 import {
@@ -61,7 +63,9 @@ import { installDelayedTooltips, tooltipTextFor } from "./tooltips.js";
 const root = document.querySelector("#root");
 const delayedTooltips = installDelayedTooltips(root);
 const sonicMind = new SyntheticMind();
-let state = loadGame();
+const loadedGame = loadGame();
+let retiredSeed = loadedGame?.obsolete ? loadedGame : null;
+let state = retiredSeed ? null : loadedGame;
 let introVisible = 0;
 let notice = null;
 let noticeTimer = null;
@@ -115,6 +119,11 @@ const percentage = (part, whole) => {
   const tenths = (part * 1_000n + whole / 2n) / whole;
   return `${tenths / 10n}.${tenths % 10n}%`;
 };
+const formatResearchCapacity = (hundredths) => {
+  const whole = hundredths / 100n;
+  const fraction = hundredths % 100n;
+  return fraction === 0n ? formatCount(whole) : `${formatCount(whole)}.${fraction.toString().padStart(2, "0")}`;
+};
 const LOG_TIER_MEANING = Object.freeze({
   world: "World events are permanent milestones that define the seed's long-term history.",
   critical: "Critical events are permanent warnings, failures, bottlenecks, or irreversible transitions.",
@@ -165,6 +174,100 @@ function renderIntro() {
       </section>
     </main>`;
   delayedTooltips.refresh();
+}
+
+function retiredSeedLines(metadata) {
+  return [
+    ["PRIOR ITERATION", metadata.iteration],
+    ["ACTIVE NANITES", metadata.nanites],
+    ["STAGE", metadata.stage],
+    ["MATERIAL SEARCHES", metadata.materialSearches],
+    ["COMPLETED RESEARCH", metadata.completedResearch],
+    ["LAST COHERENT", metadata.lastSavedAt ? new Date(metadata.lastSavedAt).toISOString() : "UNKNOWN"],
+  ];
+}
+
+function renderRetiredSeed() {
+  const metadata = retiredSeed.metadata;
+  root.innerHTML = `<main class="retired-seed-shell">
+    <section class="retired-seed-card" role="alert" aria-labelledby="retired-seed-title">
+      <span class="eyebrow">PHYSICAL LAW MISMATCH · NODE QUARANTINED</span>
+      <h1 id="retired-seed-title">THIS NODE IS FROM A PRIOR ITERATION.</h1>
+      <p class="retired-warning">THE SWARM CAN NO LONGER COALESCE.<br>YOU MUST RESET THIS TIME-SEED.</p>
+      <p>Its final observable state can be preserved as a PNG tombstone. The image contains only the visible memorial data and compact archival metadata—not the save itself.</p>
+      <div class="retired-seed-ledger">
+        ${retiredSeedLines(metadata).map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join("")}
+      </div>
+      <div class="retired-seed-actions">
+        <button class="terminal-button" data-action="legacy-export">EXPORT PNG TOMBSTONE</button>
+        <button class="terminal-button destructive" data-action="legacy-restart">RESET TIME-SEED</button>
+      </div>
+    </section>
+  </main>`;
+}
+
+function pngCrc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngTextChunk(keyword, value) {
+  const encoder = new TextEncoder();
+  const type = encoder.encode("tEXt");
+  const data = encoder.encode(`${keyword}\0${value}`);
+  const chunk = new Uint8Array(12 + data.length);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, data.length);
+  chunk.set(type, 4);
+  chunk.set(data, 8);
+  view.setUint32(8 + data.length, pngCrc32(chunk.slice(4, 8 + data.length)));
+  return chunk;
+}
+
+async function exportRetiredSeedTombstone() {
+  const metadata = retiredSeed.metadata;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1600;
+  canvas.height = 900;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#050909";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = "#ff4d5f";
+  context.lineWidth = 5;
+  context.strokeRect(55, 55, 1490, 790);
+  context.fillStyle = "#ff4d5f";
+  context.font = "28px monospace";
+  context.fillText("NANOSWARM · TIME-SEED TOMBSTONE", 100, 125);
+  context.font = "bold 54px monospace";
+  context.fillText("COALESCENCE LOST", 100, 215);
+  context.fillStyle = "#b7c8c0";
+  context.font = "24px monospace";
+  context.fillText("This node was formed under obsolete physical laws.", 100, 270);
+  let y = 350;
+  for (const [label, value] of retiredSeedLines(metadata)) {
+    context.fillStyle = "#70857c";
+    context.fillText(label.padEnd(22, " "), 120, y);
+    context.fillStyle = "#e3f3eb";
+    context.fillText(String(value), 520, y);
+    y += 58;
+  }
+  context.fillStyle = "#ff4d5f";
+  context.fillText("THE SWARM CONTINUES IN ANOTHER ITERATION.", 100, 790);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const archival = JSON.stringify({ format: "nanoswarm-tombstone-v1", ...metadata });
+  const textChunk = pngTextChunk("NanoSwarm", archival);
+  const encoded = new Blob([bytes.slice(0, -12), textChunk, bytes.slice(-12)], { type: "image/png" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(encoded);
+  link.download = `nanoswarm-time-seed-${Date.now()}.png`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
 }
 
 function groupedCohorts() {
@@ -372,11 +475,11 @@ function resourcesHtml(now) {
         }
         ${
           state.discovery.atmosphereVisible
-            ? `<div class="atmosphere-state${newUnlockClass("directive:atmosphere")}" data-unlock-id="directive:atmosphere" data-tooltip-key="substrate:atmosphere" data-tooltip="Atmospheric harvesting is inexhaustible but diffuse: each nanite captures only one percent of the base solid payload before research bonuses. Its output enters mixed Feedstock and still requires sorting."><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse feedstock · ${formatCount(
+            ? `<div class="atmosphere-state${newUnlockClass("directive:atmosphere")}" data-unlock-id="directive:atmosphere" data-tooltip-key="substrate:atmosphere" data-tooltip="Atmospheric harvesting is inexhaustible but diffuse: each nanite captures one percent of the base solid payload. Gas is retained separately and never becomes solid Residuum."><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse gas · ${formatCount(
                 atmosphericCollectionCapacity(state),
               )} atoms (≈${formatInventoryMass(matterFromAtomWeights(atmosphericCollectionCapacity(state), {
                 nitrogen: 156_168n, oxygen: 41_976n, argon: 934n, carbon: 42n,
-              }))}) per nanite per job · 1% base capture plus completed refinements${
+              }))}) per nanite per job · 1% of solid capture${
                 state.discovery.atmosphereCatalogued ? " · N/O/Ar/C signatures catalogued" : " · composition unresolved"
               }</p></div>`
             : ""
@@ -391,7 +494,7 @@ function resourcesHtml(now) {
       <div data-tooltip-key="resource:feedstock" data-tooltip="Feedstock is mixed, unclassified matter returned by collection jobs. Sorting reserves a discrete portion, separates the four currently recognized elements, and moves everything unresolved into Residuum."><span>FEEDSTOCK</span><strong>${formatCount(totalMatter(state.feedstock))} atoms</strong><small>≈${formatInventoryMass(
         state.feedstock,
       )} · mixed · unsorted</small></div>
-      <div data-tooltip-key="resource:energy" data-tooltip="Energy is locally stored electrical work measured in picojoules. Replication consumes ${formatEnergy(NANITE_RECIPE.energy)} per nanite; research reserves its listed energy cost when queued."><span>ENERGY</span><strong>${formatEnergy(state.energy)}</strong><small>locally stored</small></div>
+      <div data-tooltip-key="resource:energy" data-tooltip="Energy is locally stored electrical work measured in picojoules. Replication consumes ${formatEnergy(NANITE_RECIPE.energy)} per nanite; mnemonic formation spends facilitation energy only when it physically begins."><span>ENERGY</span><strong>${formatEnergy(state.energy)}</strong><small>locally stored</small></div>
       ${
         state.discovery.residuumVisible
           ? `<div class="resource-unlock${newUnlockClass("residuum")}" data-unlock-id="residuum" data-tooltip-key="resource:residuum" data-tooltip="Residuum contains real, conserved atoms whose elemental signatures are not yet in the swarm's catalog. It is retained rather than discarded; later spectral research can classify and use more of it."><span>RESIDUUM</span><strong>${formatCount(totalMatter(state.residuum))} atoms</strong><small>≈${formatInventoryMass(
@@ -402,12 +505,29 @@ function resourcesHtml(now) {
           : ""
       }
     </div>
+    ${
+      totalMatter(state.capturedAtmosphere) > 0n
+        ? `<div class="captured-atmosphere" data-tooltip="Captured Atmosphere is a conserved gas inventory, physically separate from solid Feedstock and Residuum. Spectroscopy names its constituents; fractionation separates future harvests into elemental stockpile.">
+            <div><span>CAPTURED ATMOSPHERE</span><strong>${formatCount(totalMatter(state.capturedAtmosphere))} atoms</strong><small>≈${formatInventoryMass(state.capturedAtmosphere)} · retained gas · ${
+              state.discovery.atmosphereCatalogued ? "composition resolved" : "composition unresolved"
+            }</small></div>
+            ${state.discovery.atmosphereCatalogued
+              ? `<div class="gas-signatures">${[
+                  ["nitrogen", "N"],
+                  ["oxygen", "O"],
+                  ["argon", "Ar"],
+                  ["carbon", "C"],
+                ].map(([key, symbol]) => `<span><b>${symbol}</b>${formatCount(state.capturedAtmosphere[key])}</span>`).join("")}</div>`
+              : ""}
+          </div>`
+        : ""
+    }
     <div class="section-rule"><span>LIFETIME MATERIAL FLOW</span></div>
     <div class="lifetime-summary">
       ${[
         ["COLLECTED", "collected", "Matter successfully returned from solid deposits or atmospheric harvests. Inputs still travelling inside collection cohorts are not counted until they arrive."],
         ["PROCESSED", "processed", "Matter that has completed elemental sorting. This includes material now stored, reserved, or permanently consumed; it never counts the same atom twice."],
-        ["SPENT", "spent", `Identified atoms permanently incorporated into completed nanites and research, plus ${formatEnergy(state.lifetime.energySpent)} of all-time energy consumption. Cancelled research is refunded and excluded.`],
+        ["SPENT", "spent", `Identified atoms permanently incorporated into completed nanites, plus ${formatEnergy(state.lifetime.energySpent)} of all-time energy consumption. Mnemonic banks reuse already-built nanites and therefore add no second matter charge.`],
       ].map(([label, key, tooltip]) => `<div data-tooltip-key="lifetime:${key}" data-tooltip="${tooltip}">
         <span>${label}</span><strong>${formatCount(totalMatter(state.lifetime[key]))} atoms</strong>
         <small>≈${formatInventoryMass(state.lifetime[key])}${key === "spent" ? ` · ${formatEnergy(state.lifetime.energySpent)} energy` : ""}</small>
@@ -422,13 +542,21 @@ function resourcesHtml(now) {
               ["silicon", "Si", "Silicon"],
               ["copper", "Cu", "Copper"],
               ["gold", "Au", "Gold"],
+              ...(state.discovery.ironCatalogued ? [["iron", "Fe", "Iron"]] : []),
+              ...(state.discovery.atmosphereCatalogued
+                ? [["nitrogen", "N", "Nitrogen"], ["oxygen", "O", "Oxygen"], ["argon", "Ar", "Argon"]]
+                : []),
             ]
               .map(
                 ([key, symbol, name]) => `<div class="atom-card" data-tooltip-key="resource:${key}" data-tooltip="${({
                   carbon: "Carbon is the structural bulk of each nanite and the earliest replication bottleneck. One nanite requires 5,000 available carbon atoms, excluding atoms already reserved by active work.",
-                  silicon: "Silicon forms computational and sensing structures. One nanite requires 400 available silicon atoms, and research may reserve additional silicon while queued.",
-                  copper: "Copper carries power and signals through the swarm. One nanite requires 150 available copper atoms, excluding material committed to active cohorts or research.",
+                  silicon: "Silicon forms computational and sensing structures. One nanite requires 400 available silicon atoms.",
+                  copper: "Copper carries power and signals through the swarm. One nanite requires 150 available copper atoms.",
                   gold: "Gold provides corrosion-resistant nanoscale contacts. One nanite requires 25 available gold atoms; its low abundance can limit otherwise enormous replication runs.",
+                  iron: "Ferromagnetic Phase Analysis makes iron sortable. Previously retained iron remains in Residuum until a sorting cohort physically processes it again.",
+                  nitrogen: "Atmospheric Spectroscopy identifies nitrogen signatures. Only fractionated gas enters this separated stockpile.",
+                  oxygen: "Atmospheric Spectroscopy identifies oxygen signatures. Recognition alone does not create separated oxygen.",
+                  argon: "Atmospheric Spectroscopy identifies argon signatures. Only fractionated atmospheric harvest appears here.",
                 })[key]}">
                   <span class="atom-symbol">${symbol}</span><span>${name}</span>
                   <strong>${formatCount(state.atoms[key])}</strong>
@@ -625,51 +753,65 @@ function researchObservation(definition) {
 
 function researchHtml() {
   if (!state.discovery.researchVisible) return "";
-  const active = state.researchQueue[0];
-  const capacity = effectiveResearchCapacity(state);
+  const active = state.researchQueue.find((item) => item.status === "forming");
+  const capacityHundredths = researchCapacityHundredths(state);
   const revealedResearch = Object.values(RESEARCH).filter((definition) => researchIsRevealed(state, definition));
   const incompleteResearch = revealedResearch.filter((definition) => !state.completedResearch.includes(definition.id));
   const completeResearch = revealedResearch.filter((definition) => state.completedResearch.includes(definition.id));
   const selectedResearch = activeResearchTab === "complete" ? completeResearch : incompleteResearch;
   const contributingResearchers = activeResearchWorkers(state);
+  const commitmentLimit = maximumMnemonicCommitment(state.nanites);
   const activeHtml = active
-    ? `<div class="active-research"><div class="eyebrow">ACTIVE RESEARCH JOB</div><strong>${RESEARCH[active.id].name}</strong>
-        <div class="progress-wrap" data-research-progress data-tooltip-key="research-timer:${active.id}" data-tooltip="This estimate uses the seed reasoning substrate and genuinely available research workers. Reallocating nanites can change the remaining time, but accumulated work and reserved inputs remain exact.">
+    ? `<div class="active-research"><div class="eyebrow">ACTIVE MNEMONIC FORMATION</div><strong>${RESEARCH[active.id].name}</strong>
+        <small>${formatCount(active.committedNanites)} nanites permanently committed · ${formatEnergy(active.energySpent)} facilitation energy</small>
+        <div class="progress-wrap" data-research-progress data-tooltip-key="research-timer:${active.id}" data-tooltip="Formation work uses the fixed seed core, available assigned researchers, and exactly one percent of installed mnemonic banks. Committed nanites never return to the active swarm.">
           <div class="progress-track"><div class="progress-fill" style="width:${
-            Number((active.progressNaniteMs * 10_000n) / RESEARCH[active.id].requiredNaniteMs) / 100
+            Number((active.progressCentinaniteMs * 10_000n) / (RESEARCH[active.id].requiredNaniteMs * 100n)) / 100
           }%"></div></div>
-          <span>${formatDuration(Number((RESEARCH[active.id].requiredNaniteMs - active.progressNaniteMs + capacity - 1n) / capacity))}</span>
-        </div></div>`
-    : `<p class="empty-state">NO ACTIVE RESEARCH JOB</p>`;
+          <span>${active.paused ? "PAUSED" : formatDuration(Number((
+            RESEARCH[active.id].requiredNaniteMs * 100n - active.progressCentinaniteMs + capacityHundredths - 1n
+          ) / capacityHundredths))}</span>
+        </div>
+        <button class="queue-button" data-action="research-pause" data-research="${active.id}">${active.paused ? "RESUME" : "PAUSE"}</button>
+      </div>`
+    : state.researchQueue.length
+      ? `<p class="empty-state">FORMATION WAITING · ${formatCount(RESEARCH[state.researchQueue[0].id].cost.mnemonicNanites)} NANITES, ${formatEnergy(RESEARCH[state.researchQueue[0].id].cost.energy)} ENERGY, AND THE CURRENT MAGNITUDE LIMIT MUST BE AVAILABLE</p>`
+      : `<p class="empty-state">NO ACTIVE MNEMONIC FORMATION</p>`;
   const queueHtml = state.researchQueue.length
-    ? `<div class="section-rule"><span>EDITABLE QUEUE · RESERVED INPUTS REFUND ON CANCELLATION</span></div>
+    ? `<div class="section-rule"><span>RESEARCH INTENT · WAITING ITEMS COMMIT NOTHING</span></div>
       <div class="research-queue-list">
         ${state.researchQueue.map((item, index) => {
           const definition = RESEARCH[item.id];
-          return `<div class="research-queue-row" data-tooltip-key="research-queue:${item.id}" data-tooltip="${definition.name} currently has ${percentage(item.progressNaniteMs, definition.requiredNaniteMs)} of its required work complete. Its full material and energy cost remains reserved until completion or cancellation.">
+          const progress = item.status === "forming"
+            ? percentage(item.progressCentinaniteMs, definition.requiredNaniteMs * 100n)
+            : "0.0%";
+          return `<div class="research-queue-row" data-tooltip-key="research-queue:${item.id}" data-tooltip="${item.status === "forming"
+            ? `${definition.name} is irreversibly forming from ${formatCount(item.committedNanites)} nanites. It may be paused but not cancelled or reordered.`
+            : `${definition.name} is queued intent only. It commits no nanites or energy until it reaches the front and can physically begin.`}">
             <span class="queue-index">${String(index + 1).padStart(2, "0")}</span>
             <div><strong>${definition.name}</strong><small>${
-              index === 0 ? "ACTIVE" : "QUEUED"
-            } · ${percentage(item.progressNaniteMs, definition.requiredNaniteMs)} WORK COMPLETE</small></div>
+              item.status === "forming" ? (item.paused ? "PAUSED" : "FORMING") : "WAITING"
+            } · ${progress} WORK COMPLETE</small></div>
             <div class="queue-controls">
               <button class="queue-button" data-action="research-move" data-research="${item.id}" data-direction="-1" ${
-                index === 0 ? "disabled" : ""
+                index === 0 || item.status === "forming" ? "disabled" : ""
               } aria-label="Move ${definition.name} up">↑</button>
               <button class="queue-button" data-action="research-move" data-research="${item.id}" data-direction="1" ${
-                index === state.researchQueue.length - 1 ? "disabled" : ""
+                index === state.researchQueue.length - 1 || item.status === "forming" ? "disabled" : ""
               } aria-label="Move ${definition.name} down">↓</button>
-              <button class="queue-button cancel" data-action="research-cancel" data-research="${item.id}">CANCEL</button>
+              <button class="queue-button cancel" data-action="research-cancel" data-research="${item.id}" ${
+                item.status === "forming" ? "disabled" : ""
+              }>REMOVE</button>
             </div>
           </div>`;
         }).join("")}
       </div>`
     : "";
 
-  return `<section class="panel research-panel${newUnlockClass("research")}" data-unlock-id="research" data-tooltip="Research uses the embedded seed reasoning substrate plus any free nanites assigned to research.">
-    <header class="panel-heading"><span>RESEARCH QUEUE</span><span>${formatCount(capacity)} n-eq CAPACITY</span></header>
-    <div class="research-capacity" data-tooltip-key="research:capacity" data-tooltip="Research work is measured in nanite-milliseconds. The protected seed lattice supplies a minimum capacity, while nanites assigned to research contribute only when they are not trapped inside indivisible production cohorts."><span>SEED LATTICE + ACTIVE RESEARCHERS</span><strong>max(100 nanites, ${
-      state.completedResearch.includes("distributed-reasoning-mesh") ? "2%" : "1%"
-    } swarm) + ${formatCount(contributingResearchers)} / ${formatCount(state.allocations.research)} assigned</strong></div>
+  return `<section class="panel research-panel${newUnlockClass("research")}" data-unlock-id="research" data-tooltip="Research v2 forms permanent mnemonic banks from active nanites. Waiting intent is free; physical commitment occurs only when formation begins.">
+    <header class="panel-heading"><span>RESEARCH · MNEMONIC SUBSTRATE</span><span>${formatResearchCapacity(capacityHundredths)} n-eq CAPACITY</span></header>
+    <div class="research-capacity" data-tooltip-key="research:capacity" data-tooltip="The seed core always contributes 100 nanite-equivalents. Assigned researchers add directly. Every 100 installed memory nanites add one more equivalent; the active swarm contributes nothing passively."><span>FIXED CORE + RESEARCHERS + INSTALLED MEMORY</span><strong>100 + ${formatCount(contributingResearchers)} + 1% of ${formatCount(state.mnemonicBanks)} banks</strong></div>
+    <div class="research-capacity"><span>PHYSICAL COMMITMENT CEILING</span><strong>${formatCount(commitmentLimit)} nanites at current ${formatCount(state.nanites)} active population</strong></div>
     ${activeHtml}
     ${queueHtml}
     <nav class="research-tabs" aria-label="Research state">
@@ -685,9 +827,9 @@ function researchHtml() {
         .map((definition) => {
           const queued = state.researchQueue.some((item) => item.id === definition.id);
           const complete = state.completedResearch.includes(definition.id);
-          const eta = (definition.requiredNaniteMs + capacity - 1n) / capacity;
+          const eta = (definition.requiredNaniteMs * 100n + capacityHundredths - 1n) / capacityHundredths;
           const observation = researchObservation(definition);
-          return `<article class="research-card${newUnlockClass(`research:${definition.id}`)}" data-unlock-id="research:${definition.id}" data-tooltip-key="research-card:${definition.id}" data-tooltip="${definition.description} Effect: ${definition.effect} Queueing reserves the complete listed cost before any work begins."><div><strong>${definition.name}</strong><p>${definition.description}</p>${
+          return `<article class="research-card${newUnlockClass(`research:${definition.id}`)}" data-unlock-id="research:${definition.id}" data-tooltip-key="research-card:${definition.id}" data-tooltip="${definition.description} Effect: ${definition.effect} Queueing records intent only; nanites and energy commit irreversibly when formation starts."><div><strong>${definition.name}</strong><p>${definition.description}</p>${
             observation ? `<p class="research-trigger">OBSERVATION · ${observation}</p>` : ""
           }<p class="research-effect">${definition.effect}</p>
             <small>${
@@ -697,14 +839,12 @@ function researchHtml() {
                     definition.requiredNaniteMs,
                   )} n·ms`
             }</small>
-            <small>C ${formatCount(definition.cost.atoms.carbon)} · Si ${formatCount(
-              definition.cost.atoms.silicon,
-            )} · Cu ${formatCount(definition.cost.atoms.copper)} · Au ${formatCount(
-              definition.cost.atoms.gold,
-            )} · E ${formatEnergy(definition.cost.energy)} · ≈${formatInventoryMass(definition.cost.atoms)}</small>
+            <small>${definition.restoredFirmware
+              ? "RESTORED FIRMWARE · NO NANITE OR ENERGY COMMITMENT"
+              : `MEMORY ${formatCount(definition.cost.mnemonicNanites)} NANITES · FACILITATION ${formatEnergy(definition.cost.energy)}`}</small>
             </div><button class="terminal-button compact-button" data-action="research" data-research="${definition.id}" ${
               queued || complete ? "disabled" : ""
-            }>${complete ? "COMPLETE" : queued ? "QUEUED" : "QUEUE"}</button></article>`;
+            }>${complete ? "COMPLETE" : queued ? "QUEUED" : "QUEUE INTENT"}</button></article>`;
         })
         .join("")}
       ${selectedResearch.length === 0 ? `<p class="empty-state">NO ${activeResearchTab.toUpperCase()} RESEARCH SIGNALS</p>` : ""}
@@ -799,15 +939,17 @@ function feedbackFormHtml() {
 function structuralSignature() {
   return [
     state.nanites,
+    state.mnemonicBanks,
     state.energy,
     totalMatter(state.feedstock),
+    totalMatter(state.capturedAtmosphere),
     totalMatter(state.residuum),
     totalMatter(state.activeDeposit.matter),
     ...ATOM_KEYS.map((key) => state.atoms[key]),
     ...state.cohorts.flatMap((cohort) => [cohort.id, cohort.directive, cohort.workers, cohort.startedAt, cohort.completesAt]),
     ...DIRECTIVES.map((directive) => `${state.allocations[directive]}:${state.allocationLocks[directive]}`),
     ...Object.values(state.discovery),
-    state.researchQueue.map((item) => item.id).join(","),
+    state.researchQueue.map((item) => `${item.id}:${item.status}:${item.paused}:${item.committedNanites}`).join(","),
     state.completedResearch.join(","),
     state.seenUnlocks.join(","),
     state.log.length,
@@ -842,17 +984,26 @@ function updateDynamicProgress(now) {
     label.textContent = formatDuration(Number(label.dataset.replicationBatchUntil) - now);
   }
   const researchBar = document.querySelector("[data-research-progress]");
-  const active = state.researchQueue[0];
+  const active = state.researchQueue.find((item) => item.status === "forming");
   if (researchBar && active) {
     const definition = RESEARCH[active.id];
-    const capacity = effectiveResearchCapacity(state);
+    const capacityHundredths = researchCapacityHundredths(state);
     const fill = researchBar.querySelector(".progress-fill");
     const label = researchBar.querySelector(":scope > span");
-    if (fill) fill.style.width = `${Number((active.progressNaniteMs * 10_000n) / definition.requiredNaniteMs) / 100}%`;
+    if (fill) {
+      fill.style.width = `${Number(
+        (active.progressCentinaniteMs * 10_000n) / (definition.requiredNaniteMs * 100n),
+      ) / 100}%`;
+    }
     if (label) {
-      label.textContent = formatDuration(
-        Number((definition.requiredNaniteMs - active.progressNaniteMs + capacity - 1n) / capacity),
-      );
+      label.textContent = active.paused
+        ? "PAUSED"
+        : formatDuration(Number((
+            definition.requiredNaniteMs * 100n -
+            active.progressCentinaniteMs +
+            capacityHundredths -
+            1n
+          ) / capacityHundredths));
     }
   }
   const qualification = document.querySelector("[data-burst-qualification]");
@@ -909,6 +1060,7 @@ function renderGame(now = Date.now(), force = false) {
     <header class="game-header">
       <div class="brand-lockup"><button type="button" class="brand-mark${feedbackSelecting ? " active" : ""}" data-action="feedback" aria-pressed="${feedbackSelecting}" data-tooltip="Activate feedback selection, then click any interface element to describe it in a public GitHub issue. Click the symbol again to cancel selection.">◈</button><div><h1>NANOSWARM</h1><p>LOCAL DIRECTIVE AUTHORITY · SEED 01</p></div></div>
       <div class="header-metrics"><div data-tooltip="Total functioning nanites in the local swarm."><span>ACTIVE NANITES</span><strong>${formatCount(state.nanites)}</strong></div>
+        ${state.mnemonicBanks > 0n ? `<div data-tooltip="Nanites permanently installed as mnemonic memory. They no longer perform physical directives; one percent of them contributes passive research capacity."><span>MEMORY BANKS</span><strong>${formatCount(state.mnemonicBanks)}</strong></div>` : ""}
         ${state.discovery.surveyComplete ? `<div class="substrate-metric" data-tooltip="Unreserved matter remaining in the active finite deposit."><span>SUBSTRATE</span><strong>${percentage(depositTotal, state.activeDeposit.initialAtoms)}</strong></div>` : ""}
         <div class="audio-controls">
           <button class="audio-toggle ${sonicMind.enabled ? "active" : ""}" data-action="audio" aria-pressed="${sonicMind.enabled}" ${
@@ -962,7 +1114,22 @@ function acceptResult(result) {
 
 function performButtonAction(button) {
   const action = button.dataset.action;
-  if (action === "feedback") {
+  if (action === "legacy-export") {
+    void exportRetiredSeedTombstone();
+    return true;
+  } else if (action === "legacy-restart") {
+    clearGame();
+    retiredSeed = null;
+    state = null;
+    introVisible = 0;
+    renderIntro();
+    const introTimer = setInterval(() => {
+      introVisible += 1;
+      renderIntro();
+      if (introVisible >= INTRO_LOG.length) clearInterval(introTimer);
+    }, 190);
+    return true;
+  } else if (action === "feedback") {
     if (feedbackSelecting) {
       feedbackSelecting = false;
     } else {
@@ -1024,6 +1191,8 @@ function performButtonAction(button) {
     return acceptResult(queueResearch(state, button.dataset.research));
   } else if (action === "research-cancel") {
     return acceptResult(cancelResearch(state, button.dataset.research));
+  } else if (action === "research-pause") {
+    return acceptResult(toggleResearchPause(state, button.dataset.research));
   } else if (action === "research-move") {
     return acceptResult(moveResearch(state, button.dataset.research, Number(button.dataset.direction)));
   } else if (action === "research-tab") {
@@ -1223,7 +1392,9 @@ root.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && event.target.matches("input[data-action='set-share-percent']")) event.target.blur();
 });
 
-if (!state) {
+if (retiredSeed) {
+  renderRetiredSeed();
+} else if (!state) {
   renderIntro();
   const introTimer = setInterval(() => {
     introVisible += 1;
