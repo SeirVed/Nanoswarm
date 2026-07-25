@@ -85,6 +85,10 @@ export function createInitialState(now = Date.now()) {
       burstCharge: null,
       burst: null,
     },
+    ablation: {
+      active: null,
+      dischargesByDeposit: {},
+    },
     researchQueue: [],
     completedResearch: [],
     seenUnlocks: [],

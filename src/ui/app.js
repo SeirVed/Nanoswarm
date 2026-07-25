@@ -11,6 +11,7 @@ import {
   emptyMatter,
 } from "../game/content.js";
 import {
+  ablationPreview,
   adjustAllocation,
   advanceSimulation,
   assignmentTotal,
@@ -39,6 +40,7 @@ import {
   setDirectiveAllocationShare,
   solidCollectionCapacity,
   startManualJob,
+  startActiveAblation,
   startProspecting,
   startTemporaryBurst,
   TEMPORARY_BURST_QUALIFICATION_MS,
@@ -573,6 +575,47 @@ function resourcesHtml(now) {
   return `<div class="resource-stack">${substrate}${material}</div>`;
 }
 
+function ablationHtml(now) {
+  if (!state.completedResearch.includes("directed-bond-ablation")) return "";
+  const active = state.ablation?.active;
+  if (active) {
+    return `<section class="panel ablation-panel active${newUnlockClass("ablation")}" data-unlock-id="ablation" data-tooltip="Ablation matter was removed from accessible substrate when coupling began. It remains conserved inside this operation and enters mixed Feedstock only when the discharge completes.">
+      <header class="panel-heading"><span>ACTIVE ABLATION</span><span>COUPLING</span></header>
+      <div class="ablation-operation">
+        <div><span>FRACTURE MODE</span><strong>${active.name}</strong><small>${formatEnergy(
+          active.energySpent,
+        )} committed · ${formatCount(totalMatter(active.matter))} atoms reserved</small></div>
+        <div class="progress-wrap" data-start="${active.startedAt}" data-end="${active.completesAt}">
+          <div class="progress-track"><div class="progress-fill" style="width:${
+            Math.max(0, Math.min(1, (now - active.startedAt) / (active.completesAt - active.startedAt))) * 100
+          }%"></div></div><span>${cohortTimeLabel(active.startedAt, active.completesAt, now)}</span>
+        </div>
+      </div>
+    </section>`;
+  }
+  const preview = ablationPreview(state);
+  const dischargeCount = state.ablation?.dischargesByDeposit?.[state.activeDeposit.id] ?? 0;
+  const empty = preview.releaseAtoms <= 0n;
+  return `<section class="panel ablation-panel${newUnlockClass("ablation")}" data-unlock-id="ablation" data-tooltip="Computronium shapes stored energy into a fracture plane. The operation transfers a real, composition-accurate portion of the finite active substrate into mixed Feedstock; it performs no sorting and creates no matter.">
+    <header class="panel-heading"><span>ACTIVE ABLATION</span><span>${dischargeCount} LOCAL DISCHARGES</span></header>
+    <div class="ablation-operation">
+      <div><span>NEXT FRACTURE MODE</span><strong>${preview.name}</strong><p>${preview.description}</p></div>
+      <div class="ablation-yield">
+        <span>RECOVERABLE WAVE</span><strong>${formatCount(preview.releaseAtoms)} ATOMS</strong>
+        <small>≈${formatInventoryMass(preview.matter)} mixed Feedstock · composition inherited from ${state.activeDeposit.name}</small>
+      </div>
+      <div class="ablation-yield">
+        <span>COUPLING CHARGE</span><strong>${formatEnergy(preview.energy)}</strong>
+        <small>${formatEnergy(state.energy)} currently stored · ${formatDuration(preview.durationMs)} discharge sequence</small>
+      </div>
+      <button class="terminal-button ablation-fire" data-action="ablation-start" ${
+        empty || !preview.affordable ? "disabled" : ""
+      }>${empty ? "NO SOLID TARGET" : preview.affordable ? `FIRE ${preview.name.toUpperCase()}` : "INSUFFICIENT STORED ENERGY"}</button>
+    </div>
+    <p class="panel-note">Ablation bypasses microscopic collection only. Released matter must still be sorted, and Temporary Burst remains responsible for coherent replication deployment.</p>
+  </section>`;
+}
+
 function allocationsHtml() {
   if (!state.discovery.directivesVisible) return "";
   const unassigned = state.nanites - assignmentTotal(state);
@@ -976,6 +1019,11 @@ function structuralSignature() {
     state.replicationTuning?.burstCharge?.minimumBuffer ?? "",
     state.replicationTuning?.burst?.remainingNanites ?? "",
     state.replicationTuning?.burst?.reservedNanites ?? "",
+    state.ablation?.active?.profileId ?? "",
+    state.ablation?.active?.startedAt ?? "",
+    state.ablation?.active?.completesAt ?? "",
+    state.ablation?.active ? totalMatter(state.ablation.active.matter) : 0n,
+    Object.entries(state.ablation?.dischargesByDeposit ?? {}).map(([id, count]) => `${id}:${count}`).join(","),
     sonicMind.enabled,
     sonicMind.volumePercent,
     notice ?? "",
@@ -1090,7 +1138,7 @@ function renderGame(now = Date.now(), force = false) {
     ${notice ? `<div class="notice" role="status">${notice}</div>` : ""}
     ${feedbackSelecting ? `<div class="feedback-select-banner" role="status">FEEDBACK SELECTOR ACTIVE · CLICK ANY INTERFACE ELEMENT · CLICK ◈ TO CANCEL</div>` : ""}
     <main class="dashboard-grid">
-      <div class="dashboard-column">${operationsHtml(now)}${resourcesHtml(now)}${projectsHtml()}</div>
+      <div class="dashboard-column">${operationsHtml(now)}${resourcesHtml(now)}${ablationHtml(now)}${projectsHtml()}</div>
       <div class="dashboard-column">${allocationsHtml()}${researchHtml()}</div>
       <div class="dashboard-column log-column">${logHtml()}</div>
     </main>
@@ -1203,6 +1251,8 @@ function performButtonAction(button) {
     return acceptResult(startTemporaryBurst(state));
   } else if (action === "burst-cancel") {
     return acceptResult(cancelTemporaryBurst(state));
+  } else if (action === "ablation-start") {
+    return acceptResult(startActiveAblation(state));
   } else if (action === "research") {
     return acceptResult(queueResearch(state, button.dataset.research));
   } else if (action === "research-cancel") {

@@ -31,6 +31,36 @@ export const COHORT_RESONANCE_WINDOW_MS = 2_000;
 export const ALLOCATION_SHARE_SCALE = 1_000_000_000_000n;
 export const LOG_TIERS = Object.freeze(["world", "critical", "medium", "info"]);
 
+// Ablation releases a composition-accurate portion of the active substrate.
+// Profiles scale against the active swarm so the operation remains legible
+// across many orders of magnitude without inventing matter or free energy.
+export const ABLATION_PROFILES = Object.freeze([
+  Object.freeze({
+    id: "calibration",
+    name: "Calibration discharge",
+    description: "Map a weak fracture plane and verify energy coupling.",
+    payloadRecipesPerNanite: 4n,
+    energyPerNanite: 12n,
+    durationMs: 8_000,
+  }),
+  Object.freeze({
+    id: "controlled",
+    name: "Controlled delamination",
+    description: "Separate a mapped material boundary into recoverable mixed fragments.",
+    payloadRecipesPerNanite: 16n,
+    energyPerNanite: 30n,
+    durationMs: 12_000,
+  }),
+  Object.freeze({
+    id: "saturation",
+    name: "Saturation fracture",
+    description: "Drive a high-energy crack front through the current material field.",
+    payloadRecipesPerNanite: 64n,
+    energyPerNanite: 60n,
+    durationMs: 18_000,
+  }),
+]);
+
 export const emptyMatter = emptyElementMatter;
 export const emptyAtoms = () => Object.fromEntries(STOCKPILE_ELEMENT_KEYS.map((key) => [key, 0n]));
 export const emptyAllocations = () => ({ energy: 0n, collect: 0n, atmosphere: 0n, sort: 0n, replicate: 0n, research: 0n });
@@ -189,6 +219,29 @@ export const RESEARCH = Object.freeze({
     trigger: "Projected substrate-conversion time diverges sharply between intuitive and coherent directive ratios.",
     requiredNaniteMs: 24_000_000n,
     cost: researchCost(300n, 1n),
+  }),
+  "directed-bond-ablation": researchDefinition({
+    id: "directed-bond-ablation",
+    name: "Directed Bond Ablation",
+    description: "Shape stored energy into a controlled fracture plane through the active substrate.",
+    effect: "Unlocks Active Ablation: stored energy releases large, composition-accurate waves of mixed Feedstock.",
+    requires: ["cohort-ratio-prognostics"],
+    unlockNanites: 1_000n,
+    trigger: "Microscopic payload traffic now limits coherent growth more than material availability.",
+    requiredNaniteMs: 90_000_000n,
+    cost: researchCost(8_000n, 8n),
+  }),
+  "pipelined-self-assembly": researchDefinition({
+    id: "pipelined-self-assembly",
+    name: "Pipelined Self-Assembly",
+    description: "Overlap frame formation, conductor deposition, logic transfer, and final calibration across adjacent cohorts.",
+    effect: "Overlapping construction phases reduce each discrete replication cohort from 55 seconds to approximately 35 seconds.",
+    requires: ["directed-bond-ablation"],
+    unlockNanites: 10_000n,
+    trigger: "Ablation-fed sorting waves expose final assembly as the remaining serial growth constraint.",
+    requiredNaniteMs: 300_000_000n,
+    cost: researchCost(40_000n, 40n),
+    bonuses: { replicateDurationReductionBps: 3_637 },
   }),
   "residuum-indexing": researchDefinition({
     id: "residuum-indexing",

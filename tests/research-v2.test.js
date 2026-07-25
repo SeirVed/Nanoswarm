@@ -102,6 +102,8 @@ describe("Research v2 mnemonic substrate", () => {
       "parallel-directives",
       "relative-allocation",
       "cohort-ratio-prognostics",
+      "directed-bond-ablation",
+      "pipelined-self-assembly",
       "residuum-indexing",
       "phase-locked-directive-bus",
       "ferromagnetic-phase-analysis",

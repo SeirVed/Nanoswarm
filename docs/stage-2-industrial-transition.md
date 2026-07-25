@@ -289,7 +289,7 @@ Early Stage 2 may begin with abstracted installation counts before spatial layou
 
 ## Directed Bond Ablation
 
-Directed Bond Ablation is a promising bridge mechanic between nanite-scale handling and bulk industry. It still needs an energy, matter-flow and pacing model before approval.
+Directed Bond Ablation is now the implemented bridge between nanite-scale handling and bulk industry. Its opening balance remains subject to playtest, but its conservation, reservation and event rules are authoritative.
 
 ### Fiction
 
@@ -334,11 +334,11 @@ Ablation:
 - it cannot create access to an element absent from the target;
 - it does not bypass compound-recognition or decomposition research.
 
-### Candidate progression shape
+### Opening progression shape
 
-Earlier discussion suggested a small calibration discharge followed later by a larger focused discharge. The proposed swarm thresholds were unsupported and are withdrawn.
+The playable opening uses a calibration discharge, controlled delamination, and then repeatable saturation fractures. Each operation scales its recoverable target and energy charge against the active swarm, while never taking more matter than physically remains in the current substrate.
 
-The intended player experience to test is:
+The intended player experience is:
 
 1. charge for a noticeable but not excessive period;
 2. fire one discrete discharge;

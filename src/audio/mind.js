@@ -27,6 +27,7 @@ function bigintPresence(value) {
 function completionDirective(message) {
   if (message.startsWith("ENERGY ACQUISITION COMPLETE")) return "energy";
   if (message.startsWith("COLLECTION RUN COMPLETE")) return "collect";
+  if (message.startsWith("ACTIVE ABLATION COMPLETE")) return "collect";
   if (message.startsWith("ATMOSPHERIC HARVEST COMPLETE")) return "atmosphere";
   if (message.startsWith("SORTING RUN COMPLETE")) return "sort";
   if (message.startsWith("REPLICATION COMPLETE")) return "replicate";

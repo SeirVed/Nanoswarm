@@ -1,4 +1,5 @@
 import {
+  ABLATION_PROFILES,
   ALLOCATION_SHARE_SCALE,
   ATMOSPHERE_ATOMS_PER_NANITE,
   ATOM_KEYS,
@@ -84,11 +85,37 @@ export const cohortResonanceWindow = (state) =>
   hasResearch(state, "phase-locked-directive-bus") ? 8_000 : COHORT_RESONANCE_WINDOW_MS;
 export function effectiveJobDuration(state, directive) {
   let reductionBps = directive === "collect" ? researchBonusBps(state, "collectDurationReductionBps") : 0n;
+  if (directive === "replicate") reductionBps += researchBonusBps(state, "replicateDurationReductionBps");
   if (directive !== "survey" && directive !== "prospect") {
     reductionBps += researchBonusBps(state, "allDurationReductionBps");
   }
   const retainedBps = 10_000n - (reductionBps > 9_000n ? 9_000n : reductionBps);
   return Math.max(100, Number(BigInt(JOB_DURATION_MS[directive]) * retainedBps / 10_000n));
+}
+
+function ablationProfile(state) {
+  const completed = state.ablation?.dischargesByDeposit?.[state.activeDeposit.id] ?? 0;
+  return ABLATION_PROFILES[Math.min(completed, ABLATION_PROFILES.length - 1)];
+}
+
+export function ablationPreview(state) {
+  const profile = ablationProfile(state);
+  const recipeAtoms = ATOM_KEYS.reduce((total, key) => total + NANITE_RECIPE.atoms[key], 0n);
+  const requestedAtoms = recipeAtoms * state.nanites * profile.payloadRecipesPerNanite;
+  const availableAtoms = totalMatter(state.activeDeposit.matter);
+  const releaseAtoms = requestedAtoms < availableAtoms ? requestedAtoms : availableAtoms;
+  const matter = takeMatterProportionally(state.activeDeposit.matter, releaseAtoms).taken;
+  const nominalEnergy = state.nanites * profile.energyPerNanite;
+  const energy = requestedAtoms > 0n
+    ? ceilDiv(nominalEnergy * releaseAtoms, requestedAtoms)
+    : 0n;
+  return {
+    ...profile,
+    releaseAtoms,
+    matter,
+    energy,
+    affordable: releaseAtoms > 0n && state.energy >= energy,
+  };
 }
 
 export function directiveIsVisible(state, directive) {
@@ -231,6 +258,7 @@ export function replicationSubstrateProjection(state) {
   const metrics = replicationPipelineMetrics(state);
   const reachableAtoms = Object.fromEntries(ATOM_KEYS.map((key) => {
     let amount = state.atoms[key] + state.feedstock[key] + state.activeDeposit.matter[key];
+    amount += state.ablation?.active?.matter?.[key] ?? 0n;
     for (const cohort of state.cohorts) {
       if (cohort.payload.kind === "collect") amount += cohort.payload.matter[key];
       if (cohort.payload.kind === "sort") amount += cohort.payload.atoms[key];
@@ -295,7 +323,7 @@ function incomingResourceAmount(state, key) {
   if (state.allocations.sort <= 0n) return sortedIncoming;
   const unsortedReachable = state.cohorts.reduce(
     (total, cohort) => cohort.payload.kind === "collect" ? total + cohort.payload.matter[key] : total,
-    state.feedstock[key],
+    state.feedstock[key] + (state.ablation?.active?.matter?.[key] ?? 0n),
   );
   return sortedIncoming + unsortedReachable;
 }
@@ -938,6 +966,27 @@ function completeResearchIfReady(state) {
   return true;
 }
 
+function completeAblation(state) {
+  const active = state.ablation?.active;
+  if (!active || active.completesAt > state.simTime) return false;
+  state.feedstock = addMatter(state.feedstock, active.matter);
+  state.lifetime.collected = addMatter(state.lifetime.collected, active.matter);
+  state.discovery.feedstockVisible = true;
+  state.ablation.dischargesByDeposit[active.depositId] =
+    (state.ablation.dischargesByDeposit[active.depositId] ?? 0) + 1;
+  state.ablation.active = null;
+  appendLog(
+    state,
+    `ACTIVE ABLATION COMPLETE · ${active.name.toUpperCase()} · ${formatCount(
+      totalMatter(active.matter),
+    )} CONSTITUENT ATOMS · ≈${formatInventoryMass(active.matter)} RELEASED TO FEEDSTOCK.`,
+    "good",
+    undefined,
+    "medium",
+  );
+  return true;
+}
+
 function advanceReplicationQualification(state, deltaMs) {
   if (!state.replicationTuning || deltaMs <= 0) return;
   const qualified = hasResearch(state, "cohort-ratio-prognostics") &&
@@ -968,10 +1017,12 @@ export function advanceSimulation(input, targetTime) {
       null,
     );
     const researchTime = nextResearchCompletion(state);
+    const ablationTime = state.ablation?.active?.completesAt ?? null;
     const batchTime = state.replicationTuning?.batchUntil;
     let eventTime = targetTime;
     if (cohortTime !== null && cohortTime < eventTime) eventTime = cohortTime;
     if (researchTime !== null && researchTime < eventTime) eventTime = researchTime;
+    if (ablationTime !== null && ablationTime < eventTime) eventTime = ablationTime;
     if (batchTime !== null && batchTime !== undefined && batchTime > state.simTime && batchTime < eventTime) {
       eventTime = batchTime;
     }
@@ -988,10 +1039,17 @@ export function advanceSimulation(input, targetTime) {
       for (const cohort of completed) completeCohort(state, cohort);
     }
     const researchCompleted = completeResearchIfReady(state);
+    const ablationCompleted = completeAblation(state);
     const researchStarted = tryStartResearch(state);
     scheduleAllocations(state);
 
-    if (eventTime <= previousTime && completed.length === 0 && !researchCompleted && !researchStarted) {
+    if (
+      eventTime <= previousTime &&
+      completed.length === 0 &&
+      !researchCompleted &&
+      !ablationCompleted &&
+      !researchStarted
+    ) {
       throw new Error("Simulation stalled without a processable event");
     }
     if (eventTime === targetTime) break;
@@ -1205,6 +1263,44 @@ export function startTemporaryBurst(input, now = Date.now()) {
     armTemporaryBurst(state, charge);
   }
   scheduleAllocations(state);
+  return { ok: true, state };
+}
+
+export function startActiveAblation(input, now = Date.now()) {
+  const state = advanceSimulation(input, now);
+  if (!hasResearch(state, "directed-bond-ablation")) {
+    return failure(state, "Directed Bond Ablation research is incomplete.");
+  }
+  state.ablation ??= { active: null, dischargesByDeposit: {} };
+  if (state.ablation.active) return failure(state, "An ablation discharge is already coupling.");
+  const preview = ablationPreview(state);
+  if (preview.releaseAtoms <= 0n) return failure(state, "No accessible solid substrate remains to ablate.");
+  if (state.energy < preview.energy) {
+    return failure(state, `Ablation charge requires ${formatEnergy(preview.energy)}.`);
+  }
+  const { taken, remaining } = takeMatterProportionally(state.activeDeposit.matter, preview.releaseAtoms);
+  state.activeDeposit.matter = remaining;
+  state.energy -= preview.energy;
+  state.lifetime.energySpent += preview.energy;
+  state.ablation.active = {
+    profileId: preview.id,
+    name: preview.name,
+    depositId: state.activeDeposit.id,
+    startedAt: state.simTime,
+    completesAt: state.simTime + preview.durationMs,
+    energySpent: preview.energy,
+    matter: taken,
+  };
+  appendLog(
+    state,
+    `ACTIVE ABLATION INITIATED · ${preview.name.toUpperCase()} · ${formatEnergy(
+      preview.energy,
+    )} COUPLED · ${formatCount(preview.releaseAtoms)} ATOMS RESERVED ALONG FRACTURE PLANE.`,
+    "good",
+    undefined,
+    "medium",
+  );
+  noteDepositExhaustion(state);
   return { ok: true, state };
 }
 

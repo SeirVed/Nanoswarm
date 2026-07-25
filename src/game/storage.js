@@ -17,6 +17,9 @@ function normalizeCurrentState(state) {
   state.atoms = { ...emptyAtoms(), ...(state.atoms ?? {}) };
   state.activeDeposit.matter = normalizedMatter(state.activeDeposit.matter);
   state.mnemonicBanks ??= 0n;
+  state.ablation ??= { active: null, dischargesByDeposit: {} };
+  state.ablation.dischargesByDeposit ??= {};
+  if (state.ablation.active?.matter) state.ablation.active.matter = normalizedMatter(state.ablation.active.matter);
   for (const cohort of state.cohorts ?? []) {
     if (cohort.payload?.matter) cohort.payload.matter = normalizedMatter(cohort.payload.matter);
     if (cohort.payload?.residuum) cohort.payload.residuum = normalizedMatter(cohort.payload.residuum);

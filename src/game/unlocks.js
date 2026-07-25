@@ -42,5 +42,6 @@ export function unlockedIdsForState(state) {
     }
   }
   if (state.discovery.projectsVisible) ids.push("projects");
+  if (state.completedResearch.includes("directed-bond-ablation")) ids.push("ablation");
   return ids;
 }

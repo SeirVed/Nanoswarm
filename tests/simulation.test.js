@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ABLATION_PROFILES,
   ALLOCATION_SHARE_SCALE,
   ATMOSPHERE_ATOMS_PER_NANITE,
   COLLECTION_ATOMS_PER_NANITE,
@@ -12,6 +13,7 @@ import {
   emptyMatter,
 } from "../src/game/content.js";
 import {
+  ablationPreview,
   adjustAllocation,
   atmosphericCollectionCapacity,
   advanceSimulation,
@@ -39,6 +41,7 @@ import {
   solidCollectionCapacity,
   sortingCapacity,
   startManualJob,
+  startActiveAblation,
   startProspecting,
   startTemporaryBurst,
   substrateExhaustionProjection,
@@ -77,6 +80,54 @@ function reachStageOneStockpile(now = 1_000_000) {
 }
 
 describe("cohort simulation", () => {
+  it("reserves and releases an exact, energy-paid ablation wave", () => {
+    let state = reachStageOneStockpile();
+    state.nanites = 1_000n;
+    state.energy = 100_000n;
+    state.completedResearch.push("cohort-ratio-prognostics", "directed-bond-ablation");
+    const preview = ablationPreview(state);
+    assert.equal(preview.id, "calibration");
+    assert.equal(preview.energy, 12_000n);
+
+    const beforeDeposit = totalMatter(state.activeDeposit.matter);
+    const beforeFeedstock = totalMatter(state.feedstock);
+    state = success(startActiveAblation(state, state.simTime));
+    assert.equal(state.energy, 88_000n);
+    assert.equal(totalMatter(state.activeDeposit.matter), beforeDeposit - preview.releaseAtoms);
+    assert.equal(totalMatter(state.ablation.active.matter), preview.releaseAtoms);
+    assert.equal(
+      totalMatter(state.activeDeposit.matter) + totalMatter(state.ablation.active.matter),
+      beforeDeposit,
+    );
+    assert.equal(totalMatter(state.feedstock), beforeFeedstock);
+
+    state = advanceSimulation(state, state.ablation.active.completesAt);
+    assert.equal(state.ablation.active, null);
+    assert.equal(totalMatter(state.feedstock), beforeFeedstock + preview.releaseAtoms);
+    assert.equal(state.ablation.dischargesByDeposit[state.activeDeposit.id], 1);
+    assert.equal(state.lifetime.energySpent, preview.energy);
+  });
+
+  it("progresses ablation from calibration to controlled and repeatable saturation fractures", () => {
+    const state = reachStageOneStockpile();
+    state.nanites = 1_000n;
+    state.completedResearch.push("directed-bond-ablation");
+    assert.equal(ablationPreview(state).id, ABLATION_PROFILES[0].id);
+    state.ablation.dischargesByDeposit[state.activeDeposit.id] = 1;
+    assert.equal(ablationPreview(state).id, ABLATION_PROFILES[1].id);
+    state.ablation.dischargesByDeposit[state.activeDeposit.id] = 2;
+    assert.equal(ablationPreview(state).id, ABLATION_PROFILES[2].id);
+    state.ablation.dischargesByDeposit[state.activeDeposit.id] = 9;
+    assert.equal(ablationPreview(state).id, ABLATION_PROFILES[2].id);
+  });
+
+  it("keeps replication discrete while pipelined self-assembly shortens cohort cadence", () => {
+    const state = reachStageOneStockpile();
+    assert.equal(effectiveJobDuration(state, "replicate"), 55_000);
+    state.completedResearch.push("pipelined-self-assembly");
+    assert.equal(effectiveJobDuration(state, "replicate"), 34_996);
+  });
+
   it("caps only routine info events while preserving every significant log entry", () => {
     const state = createInitialState(500_000);
     const significant = [
@@ -1100,6 +1151,13 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     assert.deepEqual(restored, state);
     assert.equal(typeof restored.atoms.gold, "bigint");
+  });
+
+  it("adds empty ablation state when loading an earlier version-twelve snapshot", () => {
+    const state = createInitialState();
+    delete state.ablation;
+    const restored = deserializeState(serializeState(state));
+    assert.deepEqual(restored.ablation, { active: null, dischargesByDeposit: {} });
   });
 
   it.skip("legacy: reconstructs lifetime material flow when upgrading a version-seven save", () => {

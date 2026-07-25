@@ -49,6 +49,9 @@
 - [x] Expose the complete-recipe buffer and its limiting identified input.
 - [x] Require 30 continuous seconds at 99% replication efficiency before burst control is eligible.
 - [x] Implement Temporary Burst with exact whole-recipe reservation, refundable undispatched inputs, and restoration of prior targets and locks.
+- [x] Add Directed Bond Ablation as an energy-paid, event-driven transfer from finite substrate into exact mixed Feedstock.
+- [x] Progress ablation through calibration, controlled delamination, and repeatable saturation-fracture modes.
+- [x] Add Pipelined Self-Assembly as a one-time physical phase change from 55-second serial replication to a 35-second filled-pipeline cadence.
 - [ ] Test a later τ-coherence acceleration layer after the allocation loop has real play data.
 - [ ] Defer heat management until waste heat has consequences through entropy, visibility or human detection.
 
