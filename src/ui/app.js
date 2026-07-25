@@ -695,8 +695,8 @@ function allocationsHtml() {
     ${
       persistentScheduling
         ? ""
-        : `<div class="manual-dispatch-control" data-tooltip="Whole-number assignments launch once when changed. Until Parallel Directive Scheduling is restored, completed cohorts remain idle until manually dispatched again.">
-            <div><strong>SCHEDULER FIRMWARE INCOMPLETE</strong><small>ASSIGNMENT CHANGES LAUNCH ONCE · COMPLETED COHORTS WAIT</small></div>
+        : `<div class="manual-dispatch-control" data-tooltip="Whole-number controls edit assignment intent only. Until Parallel Directive Scheduling is restored, no assigned cohort launches without an explicit manual dispatch.">
+            <div><strong>SCHEDULER FIRMWARE INCOMPLETE</strong><small>ASSIGNMENT CONTROLS SET INTENT · DISPATCH LAUNCHES WORK</small></div>
             <button class="terminal-button compact-button" data-action="dispatch" ${
               idleWorkers(state) <= 0n || assignmentTotal(state) - state.allocations.research <= 0n ? "disabled" : ""
             }>DISPATCH ASSIGNED COHORTS</button>
@@ -749,7 +749,7 @@ function allocationsHtml() {
         ? "Sliders express persistent workforce percentages. New nanites enter those shares automatically; locks protect ratios while other sliders change. Running cohorts still finish indivisibly."
         : persistentScheduling
           ? "Whole-number assignments persist. Completed cohorts relaunch automatically across every assigned directive."
-          : "Whole-number assignments launch once when changed. Completed cohorts wait for manual dispatch until Parallel Directive Scheduling is restored."
+          : "Whole-number controls set assignment intent only. Press Dispatch Assigned Cohorts to launch one cycle; completed cohorts then wait until Parallel Directive Scheduling is restored."
     }${state.discovery.behaviouralMorphologies ? " Behavioural morphology priors are active; every nanite still uses the standard physical recipe." : ""}</p>
   </section>`;
 }

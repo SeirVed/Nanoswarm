@@ -146,6 +146,7 @@ describe("catalogued matter pathways", () => {
     state.discovery.ironCatalogued = true;
     state.residuum = { ...emptyMatter(), iron: 100n, oxygen: 900n };
     state = success(adjustAllocation(state, "sort", 1n, state.simTime));
+    state = success(dispatchAllocations(state, state.simTime));
     state = advanceSimulation(state, state.simTime + 12_500);
 
     assert.equal(state.atoms.iron, 100n);
@@ -163,6 +164,7 @@ describe("catalogued matter pathways", () => {
     state.discovery.researchVisible = true;
     state.discovery.atmosphereVisible = true;
     state = success(adjustAllocation(state, "atmosphere", 1n, state.simTime));
+    state = success(dispatchAllocations(state, state.simTime));
     state = advanceSimulation(state, state.simTime + 10_500);
     state = success(dispatchAllocations(state, state.simTime));
     state = success(adjustAllocation(state, "atmosphere", -1n, state.simTime));
