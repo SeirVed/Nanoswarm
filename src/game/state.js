@@ -102,6 +102,7 @@ export function createInitialState(now = Date.now()) {
       directivesVisible: false,
       researchVisible: false,
       projectsVisible: false,
+      atmosphereDetected: false,
       atmosphereVisible: false,
       ironCatalogued: false,
       atmosphereCatalogued: false,

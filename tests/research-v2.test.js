@@ -115,11 +115,29 @@ describe("Research v2 mnemonic substrate", () => {
     assert.equal(RESEARCH["parallel-directives"].cost.mnemonicNanites, 0n);
   });
 
+  it("keeps the stage-two analytical formations meaningful at a mature swarm", () => {
+    const state = researchReadyState();
+    state.nanites = 1_000_000_000_000_000_000n;
+    state.allocations.research = 10_000_000_000_000_000n;
+    const capacity = researchCapacityHundredths(state);
+
+    for (const [id, minimumMinutes, maximumMinutes] of [
+      ["ferromagnetic-phase-analysis", 15n, 17n],
+      ["atmospheric-spectroscopy", 23n, 25n],
+      ["atmospheric-fractionation", 59n, 61n],
+    ]) {
+      const definition = RESEARCH[id];
+      const durationMinutes = definition.requiredNaniteMs * 100n / capacity / 60_000n;
+      assert.ok(durationMinutes >= minimumMinutes && durationMinutes <= maximumMinutes, id);
+      assert.ok(definition.cost.mnemonicNanites <= maximumMnemonicCommitment(state.nanites), id);
+    }
+  });
+
   it("keeps waiting intent editable without refunds because nothing was committed", () => {
     let state = researchReadyState(8_100_000, 1_000n);
     state.stage = 2;
     state.prospecting.searchesCompleted = 4;
-    state.discovery.atmosphereVisible = true;
+    state.discovery.atmosphereDetected = true;
     state.completedResearch.push("residuum-indexing");
     state.energy = 0n;
     state = success(queueResearch(state, "ferromagnetic-phase-analysis", state.simTime));
@@ -164,6 +182,7 @@ describe("catalogued matter pathways", () => {
     state.discovery.surveyComplete = true;
     state.discovery.directivesVisible = true;
     state.discovery.researchVisible = true;
+    state.discovery.atmosphereDetected = true;
     state.discovery.atmosphereVisible = true;
     state = success(adjustAllocation(state, "atmosphere", 1n, state.simTime));
     state = success(dispatchAllocations(state, state.simTime));
@@ -176,18 +195,21 @@ describe("catalogued matter pathways", () => {
     assert.equal(totalMatter(state.feedstock), 0n);
     assert.equal(totalMatter(state.residuum), 0n);
 
-    state.nanites = 1_000n;
+    state.nanites = 1_000_000_000_000_000_000n;
+    state.allocations.research = 10_000_000_000_000_000n;
+    state.allocationTargets.research = 10_000_000_000n;
     state.prospecting.searchesCompleted = 4;
     state.completedResearch.push("parallel-directives", "relative-allocation", "residuum-indexing");
     state.energy = RESEARCH["atmospheric-spectroscopy"].cost.energy;
     state = success(queueResearch(state, "atmospheric-spectroscopy", state.simTime));
-    state = advanceSimulation(state, state.simTime + 6_000_000);
+    state = advanceSimulation(state, state.simTime + 1_500_000);
     assert.equal(state.discovery.atmosphereCatalogued, true);
     assert.equal(totalMatter(state.capturedAtmosphere), capturedBefore);
 
     state.energy = RESEARCH["atmospheric-fractionation"].cost.energy;
     state = success(queueResearch(state, "atmospheric-fractionation", state.simTime));
-    state = advanceSimulation(state, state.simTime + 40_000_000);
+    state = advanceSimulation(state, state.simTime + 3_800_000);
+    assert.equal(state.completedResearch.includes("atmospheric-fractionation"), true);
     state = success(adjustAllocation(state, "atmosphere", 1n, state.simTime));
     state = advanceSimulation(state, state.simTime + 10_500);
 

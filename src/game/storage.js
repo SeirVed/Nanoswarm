@@ -16,6 +16,7 @@ function normalizeCurrentState(state) {
   state.residuum = normalizedMatter(state.residuum);
   state.atoms = { ...emptyAtoms(), ...(state.atoms ?? {}) };
   state.activeDeposit.matter = normalizedMatter(state.activeDeposit.matter);
+  state.discovery.atmosphereDetected ??= state.discovery.atmosphereVisible ?? false;
   state.mnemonicBanks ??= 0n;
   state.ablation ??= { active: null, dischargesByDeposit: {} };
   state.ablation.dischargesByDeposit ??= {};

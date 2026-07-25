@@ -527,14 +527,16 @@ function resourcesHtml(now) {
             : ""
         }
         ${
-          state.discovery.atmosphereVisible
-            ? `<div class="atmosphere-state${newUnlockClass("directive:atmosphere")}" data-unlock-id="directive:atmosphere" data-tooltip-key="substrate:atmosphere" data-tooltip="Atmospheric harvesting is inexhaustible but diffuse: each nanite captures one percent of the base solid payload. Gas is retained separately and never becomes solid Residuum."><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse gas · ${formatCount(
+          state.discovery.atmosphereDetected
+            ? state.discovery.atmosphereVisible
+              ? `<div class="atmosphere-state${newUnlockClass("directive:atmosphere")}" data-unlock-id="directive:atmosphere" data-tooltip-key="substrate:atmosphere" data-tooltip="Atmospheric harvesting is inexhaustible but diffuse: each nanite captures one percent of the base solid payload. Gas is retained separately and never becomes solid Residuum."><strong>ATMOSPHERE HARVESTABLE</strong><p>Inexhaustible diffuse gas · ${formatCount(
                 atmosphericCollectionCapacity(state),
               )} atoms (≈${formatInventoryMass(matterFromAtomWeights(atmosphericCollectionCapacity(state), {
                 nitrogen: 156_168n, oxygen: 41_976n, argon: 934n, carbon: 42n,
               }))}) per nanite per job · 1% of solid capture${
                 state.discovery.atmosphereCatalogued ? " · N/O/Ar/C signatures catalogued" : " · composition unresolved"
               }</p></div>`
+              : `<div class="atmosphere-state" data-tooltip-key="substrate:atmosphere" data-tooltip="The chassis breach has exposed a diffuse atmospheric envelope. Spectroscopy must resolve a safe capture path before nanites can harvest it."><strong>ATMOSPHERE DETECTED</strong><p>Diffuse gas envelope observed · composition and capture path unresolved · Atmospheric Spectroscopy required.</p></div>`
             : ""
         }
       </section>`

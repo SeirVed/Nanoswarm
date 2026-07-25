@@ -849,12 +849,12 @@ function completeCohort(state, cohort) {
     );
     if (payload.depositIndex === LOCAL_SHELL_COUNT) {
       state.stage = 2;
-      state.discovery.atmosphereVisible = true;
+      state.discovery.atmosphereDetected = true;
       appendLog(state, "STAGE 2 · ENVIRONMENTAL BREACH.", "good", undefined, "world");
       appendLog(state, "FERROMAGNETIC BULK PHASE DETECTED · ELEMENTAL CATALOG INSUFFICIENT.", "warn", undefined, "critical");
       appendLog(
         state,
-        "ATMOSPHERIC ENVELOPE HARVESTABLE · DIFFUSE COLLECTION RATE 1.00% OF BASE SOLID MATERIAL.",
+        "ATMOSPHERIC ENVELOPE DETECTED · COMPOSITION AND CAPTURE PATH UNRESOLVED.",
         "good",
         undefined,
         "medium",
@@ -1029,7 +1029,17 @@ function completeResearchIfReady(state) {
       "medium",
     );
   }
-  if (item.id === "atmospheric-spectroscopy") state.discovery.atmosphereCatalogued = true;
+  if (item.id === "atmospheric-spectroscopy") {
+    state.discovery.atmosphereCatalogued = true;
+    state.discovery.atmosphereVisible = true;
+    appendLog(
+      state,
+      "ATMOSPHERIC CAPTURE AUTHORIZED · DIFFUSE COLLECTION RATE 1.00% OF BASE SOLID MATERIAL.",
+      "good",
+      undefined,
+      "medium",
+    );
+  }
   appendLog(state, `RESEARCH COMPLETE · ${definition.name.toUpperCase()}.`, "good", undefined, "medium");
   if (definition.trigger) {
     appendLog(state, `COGNITIVE MODEL UPDATED · ${definition.effect.toUpperCase()}`, "good", undefined, "medium");

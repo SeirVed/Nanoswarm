@@ -265,7 +265,7 @@ describe("cohort simulation", () => {
     assert.equal(state.atoms.oxygen, 0n);
   });
 
-  it("advances through local shells and reveals atmosphere only at the chassis", () => {
+  it("advances through local shells and detects atmosphere only at the chassis", () => {
     const now = 1_500_000;
     let state = createInitialState(now);
     state.discovery.surveyComplete = true;
@@ -274,6 +274,7 @@ describe("cohort simulation", () => {
     for (let shell = 1; shell <= LOCAL_SHELL_COUNT; shell += 1) {
       state.activeDeposit.matter = emptyMatter();
       state = success(startProspecting(state, state.simTime));
+      assert.equal(state.discovery.atmosphereDetected, false);
       assert.equal(state.discovery.atmosphereVisible, false);
       state = advanceSimulation(state, state.simTime + prospectingDuration(state, shell));
       assert.equal(state.activeDeposit.id, createProspectedDeposit(shell).id);
@@ -281,8 +282,10 @@ describe("cohort simulation", () => {
     }
     assert.equal(state.activeDeposit.id, "pc-chassis");
     assert.equal(state.stage, 2);
-    assert.equal(state.discovery.atmosphereVisible, true);
+    assert.equal(state.discovery.atmosphereDetected, true);
+    assert.equal(state.discovery.atmosphereVisible, false);
     assert.equal(state.log.some((entry) => entry.message.includes("ENVIRONMENTAL BREACH")), true);
+    assert.equal(state.log.some((entry) => entry.message.includes("CAPTURE PATH UNRESOLVED")), true);
     state.activeDeposit.matter = emptyMatter();
     const beyondChassis = startProspecting(state, state.simTime);
     assert.equal(beyondChassis.ok, false);
@@ -343,6 +346,7 @@ describe("cohort simulation", () => {
     state.nanites = 2n;
     state.discovery.surveyComplete = true;
     state.discovery.directivesVisible = true;
+    state.discovery.atmosphereDetected = true;
     state.discovery.atmosphereVisible = true;
     state = success(adjustAllocation(state, "atmosphere", 1n, now));
     state = success(dispatchAllocations(state, state.simTime));
@@ -722,7 +726,7 @@ describe("cohort simulation", () => {
     const state = reachStageOneStockpile(3_737_000);
     state.stage = 2;
     state.prospecting.searchesCompleted = 4;
-    state.discovery.atmosphereVisible = true;
+    state.discovery.atmosphereDetected = true;
     state.completedResearch.push("parallel-directives", "relative-allocation", "residuum-indexing");
 
     assert.equal(researchIsRevealed(state, RESEARCH["ferromagnetic-phase-analysis"]), true);
@@ -1185,6 +1189,15 @@ describe("cohort simulation", () => {
     const restored = deserializeState(serializeState(state));
     assert.deepEqual(restored, state);
     assert.equal(typeof restored.atoms.gold, "bigint");
+  });
+
+  it("preserves atmospheric capture for saves made before detection was split out", () => {
+    const state = createInitialState(5_950_000);
+    state.discovery.atmosphereVisible = true;
+    delete state.discovery.atmosphereDetected;
+    const restored = deserializeState(serializeState(state));
+    assert.equal(restored.discovery.atmosphereDetected, true);
+    assert.equal(restored.discovery.atmosphereVisible, true);
   });
 
   it("adds empty ablation state when loading an earlier version-twelve snapshot", () => {

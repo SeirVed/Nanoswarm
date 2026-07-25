@@ -494,8 +494,8 @@ body::after {
 .production-stalled { border-color: rgba(216, 120, 103, 0.34); }
 .production-halt-alert { margin: 11px 12px 4px; padding: 11px 13px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; border: 1px solid rgba(216, 120, 103, 0.58); background: rgba(68, 17, 13, 0.38); box-shadow: inset 3px 0 var(--danger), 0 0 18px rgba(216, 120, 103, 0.08); }
 .production-halt-alert strong { color: var(--danger); font-size: 11px; letter-spacing: 0.12em; }
-.production-halt-alert span { color: #f0b2a8; font-size: 9px; letter-spacing: 0.1em; text-align: right; }
-.production-halt-alert small { grid-column: 1 / -1; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.production-halt-alert span { min-width: 0; overflow: hidden; color: #f0b2a8; font-size: 9px; letter-spacing: 0.1em; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.production-halt-alert small { min-width: 0; min-height: 12px; overflow: hidden; grid-column: 1 / -1; color: var(--muted); font-size: 8px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
 .production-halt-alert.waiting { border-color: rgba(226, 184, 111, 0.52); background: rgba(58, 43, 13, 0.34); box-shadow: inset 3px 0 var(--amber), 0 0 18px rgba(226, 184, 111, 0.07); }
 .production-halt-alert.waiting strong, .production-halt-alert.waiting span { color: var(--amber); }
 .production-waiting { border-color: rgba(226, 184, 111, 0.25); }
