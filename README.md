@@ -22,6 +22,8 @@ The mass-horizon workbench is available at `http://127.0.0.1:4173/horizon-planne
 
 Research v2 is live. Its design history remains in [`docs/research-mnemonic-substrate.md`](docs/research-mnemonic-substrate.md), the implementation boundary is described in [`docs/research-v2-implementation-handoff.md`](docs/research-v2-implementation-handoff.md), and [`docs/README.md`](docs/README.md) identifies the status of every design document.
 
+The proposed replacement for unrestricted linear energy acquisition is documented in [`docs/energy-locality-storage-and-thermal-model.md`](docs/energy-locality-storage-and-thermal-model.md). It treats per-nanite yield as a microscopic processing ceiling while local source power, accessible interface, transmission, storage and heat rejection constrain total realised power.
+
 ## Play online
 
 The `main` branch deploys automatically to GitHub Pages:
@@ -70,4 +72,4 @@ See [`docs/README.md`](docs/README.md) for the documentation source-of-truth ind
 
 See `docs/architecture.md` for the current model boundary and extension rules.
 
-See `docs/design-goals.md`, `docs/horizon-roadmap.md`, `docs/roadmap.md` and `docs/stage-2-industrial-transition.md` for the working long-horizon direction and implementation roadmap.
+See `docs/design-goals.md`, `docs/horizon-roadmap.md`, `docs/roadmap.md`, `docs/stage-2-industrial-transition.md` and `docs/energy-locality-storage-and-thermal-model.md` for the working long-horizon direction and implementation roadmap.
