@@ -328,6 +328,42 @@ body::after {
 .dashboard-column > * { flex: 0 0 auto; }
 .log-column { position: sticky; top: 16px; height: calc(100vh - 110px); }
 .log-column .log-panel { flex: 1 1 auto; }
+.log-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+.log-heading-actions > strong { font: inherit; }
+.log-collapse-button {
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: transparent;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.log-collapse-button:hover { border-color: var(--line-bright); color: var(--green); }
+.collapsed-log-toggle {
+  position: fixed;
+  z-index: 20;
+  top: 50%;
+  right: 0;
+  min-height: 116px;
+  padding: 10px 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  transform: translateY(-50%);
+  border: 1px solid var(--line-bright);
+  border-right: 0;
+  color: var(--green-dim);
+  background: rgba(4, 13, 7, 0.97);
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.26);
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  font: 700 8px/1 "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 0.16em;
+}
+.collapsed-log-toggle strong { color: var(--green); font-size: 7px; }
+.collapsed-log-toggle:hover { color: var(--green); background: rgba(16, 38, 22, 0.98); }
 
 .panel {
   border: 1px solid var(--line);
@@ -643,6 +679,7 @@ body::after {
     align-items: stretch;
     overflow: hidden;
   }
+  .dashboard-grid.log-collapsed { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .dashboard-column {
     min-height: 0;
     max-height: 100%;
@@ -679,6 +716,17 @@ body::after {
   .dashboard-grid { grid-template-columns: 1fr; padding: 12px; }
   .log-column { grid-column: auto; height: 480px; }
   .log-filters { display: flex; overflow-x: auto; }
+  .collapsed-log-toggle {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    min-height: 0;
+    padding: 9px 11px;
+    flex-direction: row;
+    transform: none;
+    border-right: 1px solid var(--line-bright);
+    writing-mode: initial;
+  }
   .log-filter { flex: 1 0 72px; }
   .telemetry-line { grid-template-columns: 60px 46px minmax(0, 1fr); gap: 6px; }
   .allocation-row { grid-template-columns: minmax(110px, 1fr) 28px 38px 28px; padding-inline: 8px; }

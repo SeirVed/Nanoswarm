@@ -63,6 +63,7 @@ import { installDelayedTooltips, tooltipTextFor } from "./tooltips.js";
 const root = document.querySelector("#root");
 const delayedTooltips = installDelayedTooltips(root);
 const sonicMind = new SyntheticMind();
+const LOG_COLLAPSED_STORAGE_KEY = "nanoswarm.log-collapsed";
 const loadedGame = loadGame();
 let retiredSeed = loadedGame?.obsolete ? loadedGame : null;
 let state = retiredSeed ? null : loadedGame;
@@ -73,6 +74,7 @@ let lastSave = Date.now();
 let lastStructuralSignature = null;
 let activeLogTier = "all";
 let activeResearchTab = "incomplete";
+let logCollapsed = false;
 let feedbackSelecting = false;
 let feedbackSelection = null;
 let feedbackOpened = false;
@@ -82,6 +84,12 @@ let feedbackDraft = {
   details: "",
   includeDiagnostics: true,
 };
+
+try {
+  logCollapsed = window.localStorage.getItem(LOG_COLLAPSED_STORAGE_KEY) === "true";
+} catch {
+  // The layout remains usable when browser storage is unavailable.
+}
 
 const escapeAttribute = (value) => String(value)
   .replaceAll("&", "&amp;")
@@ -896,9 +904,9 @@ function logHtml() {
     LOG_TIERS.map((tier) => [tier, state.log.filter((entry) => entry.tier === tier).length]),
   );
   return `<section class="panel log-panel" data-tooltip="World, critical, and medium history is permanent; the newest 200 info events are retained.">
-    <header class="panel-heading"><span>RUNNING LOG</span><span>${String(visibleLog.length).padStart(3, "0")} / ${String(
+    <header class="panel-heading"><span>RUNNING LOG</span><span class="log-heading-actions"><strong>${String(visibleLog.length).padStart(3, "0")} / ${String(
       state.log.length,
-    ).padStart(3, "0")} EVENTS</span></header>
+    ).padStart(3, "0")} EVENTS</strong><button class="log-collapse-button" data-action="log-toggle" aria-expanded="true" data-tooltip="Collapse the running log into a side tab. The operational interface expands into three columns.">COLLAPSE</button></span></header>
     <nav class="log-filters" aria-label="Running log event tier">
       ${[
         ["all", state.log.length],
@@ -921,6 +929,12 @@ function logHtml() {
       <div id="log-end"></div>
     </div>
   </section>`;
+}
+
+function collapsedLogHtml() {
+  return `<button class="collapsed-log-toggle" data-action="log-toggle" aria-expanded="false" data-tooltip="Expand the running log. World, critical, and medium history is permanent; the newest 200 info events are retained.">
+    <span>RUNNING LOG</span><strong>${String(state.log.length).padStart(3, "0")}</strong>
+  </button>`;
 }
 
 function feedbackDiagnostics() {
@@ -982,6 +996,7 @@ function structuralSignature() {
     state.log.at(-1)?.id ?? "",
     activeLogTier,
     activeResearchTab,
+    logCollapsed,
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
     state.replicationTuning?.batchUntil ?? "",
     state.ablation?.active?.profileId ?? "",
@@ -1098,11 +1113,12 @@ function renderGame(now = Date.now(), force = false) {
     </header>
     ${notice ? `<div class="notice" role="status">${notice}</div>` : ""}
     ${feedbackSelecting ? `<div class="feedback-select-banner" role="status">FEEDBACK SELECTOR ACTIVE · CLICK ANY INTERFACE ELEMENT · CLICK ◈ TO CANCEL</div>` : ""}
-    <main class="dashboard-grid">
+    <main class="dashboard-grid${logCollapsed ? " log-collapsed" : ""}">
       <div class="dashboard-column">${operationsHtml(now)}${resourcesHtml(now)}${ablationHtml(now)}${projectsHtml()}</div>
-      <div class="dashboard-column">${allocationsHtml()}${researchHtml()}</div>
-      <div class="dashboard-column log-column">${logHtml()}</div>
+      <div class="dashboard-column">${allocationsHtml()}${logCollapsed ? "" : researchHtml()}</div>
+      ${logCollapsed ? `<div class="dashboard-column">${researchHtml()}</div>` : `<div class="dashboard-column log-column">${logHtml()}</div>`}
     </main>
+    ${logCollapsed ? collapsedLogHtml() : ""}
     ${feedbackFormHtml()}
   </div>`;
   const log = document.querySelector(".telemetry-log");
@@ -1224,6 +1240,15 @@ function performButtonAction(button) {
     return true;
   } else if (action === "log-filter") {
     activeLogTier = button.dataset.tier;
+    renderGame(Date.now(), true);
+    return true;
+  } else if (action === "log-toggle") {
+    logCollapsed = !logCollapsed;
+    try {
+      window.localStorage.setItem(LOG_COLLAPSED_STORAGE_KEY, String(logCollapsed));
+    } catch {
+      // The preference remains active for this session when storage is unavailable.
+    }
     renderGame(Date.now(), true);
     return true;
   } else if (action === "audio") {
