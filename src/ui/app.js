@@ -15,7 +15,6 @@ import {
   adjustAllocation,
   advanceSimulation,
   assignmentTotal,
-  cancelTemporaryBurst,
   cancelResearch,
   maximumMnemonicCommitment,
   researchCapacityHundredths,
@@ -42,8 +41,6 @@ import {
   startManualJob,
   startActiveAblation,
   startProspecting,
-  startTemporaryBurst,
-  TEMPORARY_BURST_QUALIFICATION_MS,
   toggleAllocationLock,
   toggleResearchPause,
 } from "../game/engine.js";
@@ -612,7 +609,7 @@ function ablationHtml(now) {
         empty || !preview.affordable ? "disabled" : ""
       }>${empty ? "NO SOLID TARGET" : preview.affordable ? `FIRE ${preview.name.toUpperCase()}` : "INSUFFICIENT STORED ENERGY"}</button>
     </div>
-    <p class="panel-note">Ablation bypasses microscopic collection only. Released matter must still be sorted, and Temporary Burst remains responsible for coherent replication deployment.</p>
+    <p class="panel-note">Ablation bypasses microscopic collection only. Released matter must still be sorted before it can feed replication.</p>
   </section>`;
 }
 
@@ -623,11 +620,9 @@ function allocationsHtml() {
   const relativeAllocation = state.completedResearch.includes("relative-allocation");
   const ratioPrognostics = state.completedResearch.includes("cohort-ratio-prognostics");
   const readiness = replicationReadiness(state);
-  const burst = state.replicationTuning?.burst;
-  const burstCharge = state.replicationTuning?.burstCharge;
   const batchUntil = state.replicationTuning?.batchUntil;
   const batching = batchUntil !== null && batchUntil !== undefined && batchUntil > state.simTime;
-  const replicationDisplayMode = burstCharge || batching ? "waiting" : readiness.mode;
+  const replicationDisplayMode = batching ? "waiting" : readiness.mode;
   const replicateHalt = readiness.shortages;
   const haltedResources = replicateHalt.map((shortage) => shortage.name.toUpperCase()).join(" · ");
   const haltDetail = replicateHalt.map((shortage) =>
@@ -643,9 +638,7 @@ function allocationsHtml() {
   const replicateStatusHtml = `<small class="directive-recipe">${recipeText}</small>${
     readiness.unableToStart > 0n
       ? `<strong class="directive-alert ${replicationDisplayMode}">${formatCount(readiness.unableToStart)} UNABLE TO START · ${
-          burstCharge
-            ? "BURST BUFFER CHARGING"
-            : batching
+          batching
               ? "BATCHING INPUTS"
               : readiness.mode === "waiting"
                 ? "AWAITING INPUT PIPELINE"
@@ -653,13 +646,7 @@ function allocationsHtml() {
         }</strong>`
       : ""
   }`;
-  const replicationAlertHtml = burstCharge
-    ? `<div class="production-halt-alert waiting" role="status" data-tooltip-key="replication:burst-charge" data-tooltip="Normal replication is deliberately paused while existing collection, sorting, and energy cohorts accumulate the minimum complete-recipe buffer. The burst arms automatically as soon as the stored buffer reaches its target.">
-        <strong>REPLICATION HELD · BURST CHARGING</strong>
-        <span>${formatCount(replicationBufferCapacity(state))} / ${formatCount(burstCharge.minimumBuffer)} RECIPES</span>
-        <small>UPSTREAM DIRECTIVES CONTINUE · AUTOMATIC ARM ON TARGET</small>
-      </div>`
-    : batching
+  const replicationAlertHtml = batching
       ? `<div class="production-halt-alert waiting" role="status" data-tooltip-key="replication:batching" data-tooltip="A partial recipe payload arrived while more upstream material is already in flight. Replication waits up to ${REPLICATION_BATCH_WINDOW_MS / 1000} seconds so adjacent inputs launch as one larger cohort instead of many fragments.">
           <strong>REPLICATION INPUT BATCHING</strong>
           <span data-replication-batch-until="${batchUntil}">${formatDuration(batchUntil - state.simTime)}</span>
@@ -675,17 +662,15 @@ function allocationsHtml() {
       } ${haltDetail}.">
         <strong>REPLICATION ${readiness.mode === "waiting" ? "WAITING" : "PRODUCTION HALTED"}</strong>
         <span>${formatCount(readiness.unableToStart)} UNABLE TO START</span>
-        <small>${haltDetail || "Reserved burst recipes are already being deployed."}</small>
+        <small>${haltDetail || "No complete recipe is currently available."}</small>
       </div>`
     : "";
-  const pipelineVisible = ratioPrognostics || Boolean(burst) || Boolean(burstCharge);
+  const pipelineVisible = ratioPrognostics;
   const pipeline = pipelineVisible ? replicationPipelineMetrics(state) : null;
   const projection = pipelineVisible ? replicationSubstrateProjection(state) : null;
-  const qualifyingMs = state.replicationTuning?.qualifyingMs ?? 0;
-  const minimumBurstBuffer = state.nanites / 100n > 0n ? state.nanites / 100n : 1n;
-  const burstEligible = ratioPrognostics && !burst && !burstCharge &&
-    pipeline.efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS &&
-    qualifyingMs >= TEMPORARY_BURST_QUALIFICATION_MS;
+  const runningReplicationCohorts = state.cohorts.filter(
+    (cohort) => cohort.directive === "replicate" && cohort.completesAt > state.simTime,
+  ).length;
   const efficiencyText = pipeline
     ? `${pipeline.efficiencyBps / 100n}.${(pipeline.efficiencyBps % 100n).toString().padStart(2, "0")}%`
     : "";
@@ -697,34 +682,18 @@ function allocationsHtml() {
     : projection?.speedup && projection.speedup > 1.005
       ? `${projection.speedup.toFixed(projection.speedup >= 10 ? 0 : 1)}× FASTER`
       : "RATIO COHERENT";
-  const burstStatus = !pipeline
+  const adaptiveStatus = !pipeline
     ? ""
-    : burst
-    ? `${formatCount(burst.remainingNanites)} OF ${formatCount(burst.reservedNanites)} RESERVED RECIPES AWAITING COHORTS`
-    : burstCharge
-      ? `CHARGING · ${formatCount(pipeline.bufferCapacity)} / ${formatCount(burstCharge.minimumBuffer)} RECIPES`
     : pipeline.efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS
       ? "RAISE EFFICIENCY TO 99.00%"
-      : qualifyingMs < TEMPORARY_BURST_QUALIFICATION_MS
-        ? `STABILISING · <span data-burst-qualification>${(qualifyingMs / 1000).toFixed(1)} / 30.0s</span>`
-        : pipeline.bufferCapacity < minimumBurstBuffer
-          ? `READY TO CHARGE · BUFFER ${formatCount(pipeline.bufferCapacity)} / ${formatCount(minimumBurstBuffer)}`
-          : "EXACT BUFFER RESERVATION READY";
+      : `${runningReplicationCohorts} RUNNING REPLICATION COHORT${runningReplicationCohorts === 1 ? "" : "S"} · ${runningReplicationCohorts}S CADENCE REDUCTION`;
   const pipelineHtml = pipelineVisible
     ? `<div class="pipeline-readout" data-tooltip-key="replication:efficiency" data-tooltip="Efficiency compares the current Collect, Sort, Energy, and Replicate workforce ratio with the exact sustainable ratio implied by current job times, yields, and the universal nanite recipe. Heterogeneous substrate composition is deliberately excluded: this measures directive coherence, not whether the local material contains enough gold.">
         <div><span>REPLICATION EFFICIENCY</span><strong>${efficiencyText}</strong><small>BOTTLENECK · ${bottleneckText}</small><small>PROJECTED LOCAL CONVERSION · ${currentProjectionText}<br>COHERENT RATIO · ${coherentProjectionText} · ${projectionGainText}</small></div>
-        <div data-tooltip-key="replication:buffer" data-tooltip="Complete-recipe buffer counts nanites that could begin replication immediately from unreserved sorted atoms and energy. The lowest resource capacity is ${pipeline.limitingResource}; every input is reserved atom-for-atom when a burst is armed."><span>COMPLETE-RECIPE BUFFER</span><strong>${formatCount(
+        <div data-tooltip-key="replication:buffer" data-tooltip="Complete-recipe buffer counts nanites that could begin replication immediately from sorted atoms and stored energy."><span>COMPLETE-RECIPE BUFFER</span><strong>${formatCount(
           pipeline.bufferCapacity,
         )} NANITES</strong><small>LIMITING INPUT · ${pipeline.limitingResource.toUpperCase()}</small></div>
-        <div class="burst-control"><small>${burstStatus}</small><button class="terminal-button compact-button" data-action="${
-          burst || burstCharge ? "burst-cancel" : "burst-start"
-        }" ${!burst && !burstCharge && !burstEligible ? "disabled" : ""} data-tooltip="${
-          burst
-            ? "Cancel the undispatched portion of the burst, refund its still-reserved recipes exactly, and restore the prior percentage targets and locks. Replication cohorts already launched remain indivisible."
-            : burstCharge
-              ? "Cancel buffer charging and release normal replication. No recipes have been reserved, and the original directive ratios remain in place."
-              : "After efficiency remains at 99% or higher for 30 seconds, pause normal replication until at least 1% of the swarm can be built from the buffer. The burst then arms automatically, deploys every complete stored recipe, and restores the prior targets and locks."
-        }">${burstCharge ? "CANCEL CHARGE" : burst ? "CANCEL BURST" : "TEMPORARY BURST"}</button></div>
+        <div class="burst-control"><small>${adaptiveStatus}</small></div>
       </div>`
     : "";
   return `<section class="panel allocation-panel${replicationDisplayMode === "halted" ? " production-stalled" : ""}${replicationDisplayMode === "waiting" ? " production-waiting" : ""}${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
@@ -1014,11 +983,7 @@ function structuralSignature() {
     activeLogTier,
     activeResearchTab,
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
-    state.replicationTuning?.qualifyingMs >= TEMPORARY_BURST_QUALIFICATION_MS,
     state.replicationTuning?.batchUntil ?? "",
-    state.replicationTuning?.burstCharge?.minimumBuffer ?? "",
-    state.replicationTuning?.burst?.remainingNanites ?? "",
-    state.replicationTuning?.burst?.reservedNanites ?? "",
     state.ablation?.active?.profileId ?? "",
     state.ablation?.active?.startedAt ?? "",
     state.ablation?.active?.completesAt ?? "",
@@ -1067,10 +1032,6 @@ function updateDynamicProgress(now) {
             1n
           ) / capacityHundredths));
     }
-  }
-  const qualification = document.querySelector("[data-burst-qualification]");
-  if (qualification) {
-    qualification.textContent = `${((state.replicationTuning?.qualifyingMs ?? 0) / 1000).toFixed(1)} / 30.0s`;
   }
 }
 
@@ -1247,10 +1208,6 @@ function performButtonAction(button) {
     state = toggleAllocationLock(state, button.dataset.directive);
     renderGame();
     return true;
-  } else if (action === "burst-start") {
-    return acceptResult(startTemporaryBurst(state));
-  } else if (action === "burst-cancel") {
-    return acceptResult(cancelTemporaryBurst(state));
   } else if (action === "ablation-start") {
     return acceptResult(startActiveAblation(state));
   } else if (action === "research") {

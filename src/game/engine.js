@@ -40,6 +40,8 @@ const hasPersistentDirectiveScheduling = (state) =>
 export const REPLICATION_EFFICIENCY_THRESHOLD_BPS = 9_900n;
 export const TEMPORARY_BURST_QUALIFICATION_MS = 30_000;
 export const REPLICATION_BATCH_WINDOW_MS = 5_000;
+export const ADAPTIVE_REPLICATION_STEP_MS = 1_000;
+export const ADAPTIVE_REPLICATION_FLOOR_MS = 5_000;
 
 const gcd = (left, right) => {
   let a = left < 0n ? -left : left;
@@ -83,14 +85,32 @@ export const cohortSyncWindow = (state) =>
   hasResearch(state, "directive-compilation") ? 100 : COHORT_SYNC_WINDOW_MS;
 export const cohortResonanceWindow = (state) =>
   hasResearch(state, "phase-locked-directive-bus") ? 8_000 : COHORT_RESONANCE_WINDOW_MS;
-export function effectiveJobDuration(state, directive) {
+function fixedJobDuration(state, directive) {
   let reductionBps = directive === "collect" ? researchBonusBps(state, "collectDurationReductionBps") : 0n;
-  if (directive === "replicate") reductionBps += researchBonusBps(state, "replicateDurationReductionBps");
   if (directive !== "survey" && directive !== "prospect") {
     reductionBps += researchBonusBps(state, "allDurationReductionBps");
   }
   const retainedBps = 10_000n - (reductionBps > 9_000n ? 9_000n : reductionBps);
   return Math.max(100, Number(BigInt(JOB_DURATION_MS[directive]) * retainedBps / 10_000n));
+}
+
+function activeReplicationCohorts(state) {
+  return state.cohorts.filter(
+    (cohort) => cohort.directive === "replicate" && cohort.completesAt > state.simTime,
+  ).length;
+}
+
+export function effectiveJobDuration(state, directive, options = {}) {
+  const fixed = fixedJobDuration(state, directive);
+  if (directive !== "replicate" || options.adaptive === false) return fixed;
+  if (!hasResearch(state, "pipelined-self-assembly")) return fixed;
+  const baseline = replicationPipelineMetrics(state, { adaptive: false });
+  if (baseline.efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS) return fixed;
+  const runningCohorts = activeReplicationCohorts(state);
+  return Math.max(
+    ADAPTIVE_REPLICATION_FLOOR_MS,
+    fixed - runningCohorts * ADAPTIVE_REPLICATION_STEP_MS,
+  );
 }
 
 function ablationProfile(state) {
@@ -172,31 +192,32 @@ export function replicationBufferCapacity(state) {
   );
 }
 
-export function replicationPipelineMetrics(state) {
+export function replicationPipelineMetrics(state, options = {}) {
+  const adaptive = options.adaptive !== false;
   const recipeAtoms = ATOM_KEYS.reduce((total, key) => total + NANITE_RECIPE.atoms[key], 0n);
   const paths = [
     {
       directive: "collect",
       output: solidCollectionCapacity(state),
-      duration: BigInt(effectiveJobDuration(state, "collect")),
+      duration: BigInt(effectiveJobDuration(state, "collect", { adaptive })),
       requirement: recipeAtoms,
     },
     {
       directive: "sort",
       output: sortingCapacity(state),
-      duration: BigInt(effectiveJobDuration(state, "sort")),
+      duration: BigInt(effectiveJobDuration(state, "sort", { adaptive })),
       requirement: recipeAtoms,
     },
     {
       directive: "energy",
       output: energyJobYield(state),
-      duration: BigInt(effectiveJobDuration(state, "energy")),
+      duration: BigInt(effectiveJobDuration(state, "energy", { adaptive })),
       requirement: NANITE_RECIPE.energy,
     },
     {
       directive: "replicate",
       output: 1n,
-      duration: BigInt(effectiveJobDuration(state, "replicate")),
+      duration: BigInt(effectiveJobDuration(state, "replicate", { adaptive })),
       requirement: 1n,
     },
   ];
