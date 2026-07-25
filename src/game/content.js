@@ -235,7 +235,7 @@ export const RESEARCH = Object.freeze({
     id: "pipelined-self-assembly",
     name: "Pipelined Self-Assembly",
     description: "Overlap frame formation, conductor deposition, logic transfer, and final calibration across adjacent cohorts.",
-    effect: "At 99%+ directive efficiency, every running replication cohort trims one second from the next cohort's formation time, until a stable cadence emerges.",
+    effect: "At 99%+ directive efficiency, every running replication cohort trims one second from the next cohort's formation time. A 20-second stability window holds each faster cadence while the swarm retunes.",
     requires: ["directed-bond-ablation"],
     unlockNanites: 10_000n,
     trigger: "Ablation-fed sorting waves expose final assembly as the remaining serial growth constraint.",

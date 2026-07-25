@@ -31,6 +31,7 @@ import {
   prospectingWorkerRequirement,
   queueResearch,
   REPLICATION_BATCH_WINDOW_MS,
+  REPLICATION_PIPELINE_STABILITY_WINDOW_MS,
   replicationPipelineMetrics,
   replicationReadiness,
   replicationSubstrateProjection,
@@ -121,11 +122,44 @@ describe("cohort simulation", () => {
     assert.equal(ablationPreview(state).id, ABLATION_PROFILES[2].id);
   });
 
-  it("keeps replication discrete while pipelined self-assembly shortens cohort cadence", () => {
+  it("keeps replication discrete while active cohorts trim the next cadence", () => {
     const state = reachStageOneStockpile();
     assert.equal(effectiveJobDuration(state, "replicate"), 55_000);
     state.completedResearch.push("pipelined-self-assembly");
-    assert.equal(effectiveJobDuration(state, "replicate"), 34_996);
+    assert.equal(effectiveJobDuration(state, "replicate"), 55_000);
+    state.allocations = { collect: 5_575n, atmosphere: 0n, sort: 6_690n, energy: 10_000n, replicate: 55_000n, research: 0n };
+    state.cohorts.push({ directive: "replicate", completesAt: state.simTime + 10_000, workers: 1n });
+    state.replicationTuning.pipelineStabilityUntil = state.simTime + REPLICATION_PIPELINE_STABILITY_WINDOW_MS;
+    state.replicationTuning.pipelineCadenceMs = 54_000;
+    assert.equal(effectiveJobDuration(state, "replicate"), 54_000);
+  });
+
+  it("holds a pipelined cadence briefly while allocations retune", () => {
+    const now = 750_000;
+    let state = createInitialState(now);
+    state.nanites = 15_453n;
+    state.discovery.directivesVisible = true;
+    state.completedResearch.push("parallel-directives", "pipelined-self-assembly");
+    state.allocations = { collect: 1_115n, atmosphere: 0n, sort: 1_338n, energy: 2_000n, replicate: 11_000n, research: 0n };
+    state.cohorts.push({
+      id: "pipeline-probe",
+      directive: "replicate",
+      workers: 1n,
+      startedAt: now,
+      completesAt: now + 50_000,
+      origin: "allocation",
+      payload: { kind: "replicate", nanites: 1n, burst: false },
+    });
+
+    state = advanceSimulation(state, now + 1);
+    assert.equal(state.replicationTuning.pipelineStabilityUntil, now + REPLICATION_PIPELINE_STABILITY_WINDOW_MS);
+    assert.equal(state.replicationTuning.pipelineCadenceMs, 54_000);
+    assert.equal(effectiveJobDuration(state, "replicate"), 54_000);
+
+    state = advanceSimulation(state, now + REPLICATION_PIPELINE_STABILITY_WINDOW_MS + 2);
+    assert.equal(state.replicationTuning.pipelineStabilityUntil, null);
+    assert.equal(state.replicationTuning.pipelineCadenceMs, null);
+    assert.equal(effectiveJobDuration(state, "replicate"), 55_000);
   });
 
   it("caps only routine info events while preserving every significant log entry", () => {

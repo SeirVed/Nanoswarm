@@ -42,6 +42,7 @@ export const TEMPORARY_BURST_QUALIFICATION_MS = 30_000;
 export const REPLICATION_BATCH_WINDOW_MS = 5_000;
 export const ADAPTIVE_REPLICATION_STEP_MS = 1_000;
 export const ADAPTIVE_REPLICATION_FLOOR_MS = 5_000;
+export const REPLICATION_PIPELINE_STABILITY_WINDOW_MS = 20_000;
 
 const gcd = (left, right) => {
   let a = left < 0n ? -left : left;
@@ -104,13 +105,22 @@ export function effectiveJobDuration(state, directive, options = {}) {
   const fixed = fixedJobDuration(state, directive);
   if (directive !== "replicate" || options.adaptive === false) return fixed;
   if (!hasResearch(state, "pipelined-self-assembly")) return fixed;
-  const baseline = replicationPipelineMetrics(state, { adaptive: false });
-  if (baseline.efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS) return fixed;
   const runningCohorts = activeReplicationCohorts(state);
-  return Math.max(
+  const accelerated = Math.max(
     ADAPTIVE_REPLICATION_FLOOR_MS,
     fixed - runningCohorts * ADAPTIVE_REPLICATION_STEP_MS,
   );
+  if (accelerated === fixed) return fixed;
+  const tuning = state.replicationTuning;
+  if (
+    tuning?.pipelineCadenceMs === accelerated &&
+    (tuning.pipelineStabilityUntil ?? 0) > state.simTime
+  ) return accelerated;
+  const acceleratedPipeline = replicationPipelineMetrics(state, {
+    adaptive: false,
+    replicationDurationMs: accelerated,
+  });
+  return acceleratedPipeline.efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS ? accelerated : fixed;
 }
 
 function ablationProfile(state) {
@@ -194,6 +204,7 @@ export function replicationBufferCapacity(state) {
 
 export function replicationPipelineMetrics(state, options = {}) {
   const adaptive = options.adaptive !== false;
+  const replicationDuration = options.replicationDurationMs ?? effectiveJobDuration(state, "replicate", { adaptive });
   const recipeAtoms = ATOM_KEYS.reduce((total, key) => total + NANITE_RECIPE.atoms[key], 0n);
   const paths = [
     {
@@ -217,7 +228,7 @@ export function replicationPipelineMetrics(state, options = {}) {
     {
       directive: "replicate",
       output: 1n,
-      duration: BigInt(effectiveJobDuration(state, "replicate", { adaptive })),
+      duration: BigInt(replicationDuration),
       requirement: 1n,
     },
   ];
@@ -456,9 +467,11 @@ const resortableResiduum = (state) =>
   cataloguedSolidElements(state).reduce((total, key) => total + (state.residuum[key] ?? 0n), 0n);
 
 function ensureReplicationTuning(state) {
-  state.replicationTuning ??= { qualifyingMs: 0, batchUntil: null, burstCharge: null, burst: null };
+  state.replicationTuning ??= { qualifyingMs: 0, batchUntil: null, pipelineStabilityUntil: null, pipelineCadenceMs: null, burstCharge: null, burst: null };
   state.replicationTuning.qualifyingMs ??= 0;
   state.replicationTuning.batchUntil ??= null;
+  state.replicationTuning.pipelineStabilityUntil ??= null;
+  state.replicationTuning.pipelineCadenceMs ??= null;
   state.replicationTuning.burstCharge ??= null;
   state.replicationTuning.burst ??= null;
   return state.replicationTuning;
@@ -692,6 +705,43 @@ function shouldBatchReplication(state, shortfall) {
   return false;
 }
 
+function refreshPipelineStabilityWindow(state) {
+  const tuning = ensureReplicationTuning(state);
+  if (!hasResearch(state, "pipelined-self-assembly") || activeReplicationCohorts(state) <= 0) {
+    if (tuning.pipelineStabilityUntil !== null && tuning.pipelineStabilityUntil <= state.simTime) {
+      tuning.pipelineStabilityUntil = null;
+      tuning.pipelineCadenceMs = null;
+    }
+    return;
+  }
+  const fixed = fixedJobDuration(state, "replicate");
+  const accelerated = Math.max(
+    ADAPTIVE_REPLICATION_FLOOR_MS,
+    fixed - activeReplicationCohorts(state) * ADAPTIVE_REPLICATION_STEP_MS,
+  );
+  if (accelerated === fixed) return;
+  const acceleratedPipeline = replicationPipelineMetrics(state, {
+    adaptive: false,
+    replicationDurationMs: accelerated,
+  });
+  if (acceleratedPipeline.efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS) {
+    tuning.pipelineStabilityUntil = state.simTime + REPLICATION_PIPELINE_STABILITY_WINDOW_MS;
+    tuning.pipelineCadenceMs = accelerated;
+  } else if (tuning.pipelineCadenceMs !== accelerated) {
+    const baselinePipeline = replicationPipelineMetrics(state, { adaptive: false });
+    if (baselinePipeline.efficiencyBps >= REPLICATION_EFFICIENCY_THRESHOLD_BPS) {
+      tuning.pipelineStabilityUntil = state.simTime + REPLICATION_PIPELINE_STABILITY_WINDOW_MS;
+      tuning.pipelineCadenceMs = accelerated;
+    } else {
+      tuning.pipelineStabilityUntil = null;
+      tuning.pipelineCadenceMs = null;
+    }
+  } else if (tuning.pipelineStabilityUntil !== null && tuning.pipelineStabilityUntil <= state.simTime) {
+    tuning.pipelineStabilityUntil = null;
+    tuning.pipelineCadenceMs = null;
+  }
+}
+
 function scheduleAllocations(state, forceDispatch = false) {
   noteDepositExhaustion(state);
   if (!state.discovery.directivesVisible) return 0n;
@@ -726,6 +776,7 @@ function scheduleAllocations(state, forceDispatch = false) {
   ) {
     beginProspecting(state, "autonomous");
   }
+  refreshPipelineStabilityWindow(state);
   return dispatched;
 }
 

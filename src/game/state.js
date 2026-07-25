@@ -82,6 +82,8 @@ export function createInitialState(now = Date.now()) {
     replicationTuning: {
       qualifyingMs: 0,
       batchUntil: null,
+      pipelineStabilityUntil: null,
+      pipelineCadenceMs: null,
       burstCharge: null,
       burst: null,
     },

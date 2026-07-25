@@ -35,6 +35,7 @@ import {
   substrateExhaustionProjection,
   REPLICATION_BATCH_WINDOW_MS,
   REPLICATION_EFFICIENCY_THRESHOLD_BPS,
+  REPLICATION_PIPELINE_STABILITY_WINDOW_MS,
   researchIsRevealed,
   setDirectiveAllocationShare,
   solidCollectionCapacity,
@@ -674,6 +675,8 @@ function allocationsHtml() {
   const readiness = replicationReadiness(state);
   const batchUntil = state.replicationTuning?.batchUntil;
   const batching = batchUntil !== null && batchUntil !== undefined && batchUntil > state.simTime;
+  const pipelineStabilityUntil = state.replicationTuning?.pipelineStabilityUntil;
+  const stabilisingPipeline = pipelineStabilityUntil !== null && pipelineStabilityUntil !== undefined && pipelineStabilityUntil > state.simTime;
   const replicationDisplayMode = batching ? "waiting" : readiness.mode;
   const replicateHalt = readiness.shortages;
   const haltedResources = replicateHalt.map((shortage) => shortage.name.toUpperCase()).join(" · ");
@@ -737,15 +740,17 @@ function allocationsHtml() {
   const adaptiveStatus = !pipeline
     ? ""
     : pipeline.efficiencyBps < REPLICATION_EFFICIENCY_THRESHOLD_BPS
-      ? "RAISE EFFICIENCY TO 99.00%"
+      ? stabilisingPipeline
+        ? "PIPELINE STABILISING · RETUNE FOR THE FASTER CADENCE"
+        : "RAISE EFFICIENCY TO 99.00%"
       : `${runningReplicationCohorts} RUNNING REPLICATION COHORT${runningReplicationCohorts === 1 ? "" : "S"} · ${runningReplicationCohorts}S CADENCE REDUCTION`;
   const pipelineHtml = pipelineVisible
-    ? `<div class="pipeline-readout" data-tooltip-key="replication:efficiency" data-tooltip="Efficiency compares the current Collect, Sort, Energy, and Replicate workforce ratio with the exact sustainable ratio implied by current job times, yields, and the universal nanite recipe. Heterogeneous substrate composition is deliberately excluded: this measures directive coherence, not whether the local material contains enough gold.">
+    ? `<div class="pipeline-readout" data-tooltip-key="replication:efficiency" data-tooltip="Efficiency compares the current Collect, Sort, Energy, and Replicate workforce ratio with the exact sustainable ratio implied by current job times, yields, and the universal nanite recipe. When Pipelined Self-Assembly advances the replication cadence, a ${REPLICATION_PIPELINE_STABILITY_WINDOW_MS / 1000}-second stability window holds that new cadence so the swarm can be retuned before it is reassessed. Heterogeneous substrate composition is deliberately excluded: this measures directive coherence, not whether the local material contains enough gold.">
         <div><span>REPLICATION EFFICIENCY</span><strong>${efficiencyText}</strong><small>BOTTLENECK · ${bottleneckText}</small><small>PROJECTED LOCAL CONVERSION · ${currentProjectionText}<br>COHERENT RATIO · ${coherentProjectionText} · ${projectionGainText}</small></div>
         <div data-tooltip-key="replication:buffer" data-tooltip="Complete-recipe buffer counts nanites that could begin replication immediately from sorted atoms and stored energy."><span>COMPLETE-RECIPE BUFFER</span><strong>${formatCount(
           pipeline.bufferCapacity,
         )} NANITES</strong><small>LIMITING INPUT · ${pipeline.limitingResource.toUpperCase()}</small></div>
-        <div class="burst-control"><small>${adaptiveStatus}</small></div>
+        <div class="burst-control"><small>${adaptiveStatus}</small>${stabilisingPipeline ? `<small data-pipeline-stability-until="${pipelineStabilityUntil}">NEXT CADENCE HELD · ${formatDuration(pipelineStabilityUntil - state.simTime)}</small>` : ""}</div>
       </div>`
     : "";
   return `<section class="panel allocation-panel${replicationDisplayMode === "halted" ? " production-stalled" : ""}${replicationDisplayMode === "waiting" ? " production-waiting" : ""}${newUnlockClass("allocations")}" data-unlock-id="allocations" data-tooltip="Allocate active nanites among known directives. Running cohorts remain indivisible until completion.">
@@ -1044,6 +1049,8 @@ function structuralSignature() {
     panelLayout.map((column) => column.join(",")).join("/"),
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
     state.replicationTuning?.batchUntil ?? "",
+    state.replicationTuning?.pipelineStabilityUntil ?? "",
+    state.replicationTuning?.pipelineCadenceMs ?? "",
     state.ablation?.active?.profileId ?? "",
     state.ablation?.active?.startedAt ?? "",
     state.ablation?.active?.completesAt ?? "",
@@ -1098,6 +1105,9 @@ function updateDynamicProgress(now) {
   }
   for (const label of document.querySelectorAll("[data-replication-batch-until]")) {
     label.textContent = formatDuration(Number(label.dataset.replicationBatchUntil) - now);
+  }
+  for (const label of document.querySelectorAll("[data-pipeline-stability-until]")) {
+    label.textContent = `NEXT CADENCE HELD · ${formatDuration(Number(label.dataset.pipelineStabilityUntil) - now)}`;
   }
   const researchBar = document.querySelector("[data-research-progress]");
   const active = state.researchQueue.find((item) => item.status === "forming");
