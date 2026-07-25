@@ -1,7 +1,7 @@
 import { RESEARCH } from "../game/content.js";
 
 const root = document.querySelector("#research-planner-root");
-const STORAGE_KEY = "nanoswarm.research-planner.v2";
+const STORAGE_KEY = "nanoswarm.research-planner.v3";
 const LEGACY_STORAGE_KEY = "nanoswarm.research-planner.v1";
 const NODE_WIDTH = 174;
 const NODE_HEIGHT = 62;
@@ -63,7 +63,7 @@ root.innerHTML = `
       <section class="planner-intro">
         <div>
           <h2>RESEARCH TREE PLANNER</h2>
-          <p>Drag empty space to pan, use the wheel or controls to zoom, and drag nodes to arrange them. Select a node to edit its work, costs, effects, gates, and dependencies. This is a private browser draft until its JSON is copied or downloaded.</p>
+          <p>Drag empty space to pan, use the wheel or controls to zoom, and drag nodes to arrange them. Select a node to edit its mnemonic footprint, facilitation energy, work, effects, gates, and dependencies. This is a private browser draft until its JSON is copied or downloaded.</p>
         </div>
       </section>
       <div class="planner-toolbar" aria-label="Planner controls">
@@ -74,7 +74,6 @@ root.innerHTML = `
         <span class="planner-badge" data-stat="zoom">100% ZOOM</span>
         <button class="planner-button" type="button" data-action="connect" aria-pressed="false">CONNECT DEPENDENCY</button>
         <button class="planner-button" type="button" data-action="add">ADD RESEARCH</button>
-        <label class="planner-switch"><input type="checkbox" data-action="expand"> SHOW EVERY REFINEMENT</label>
         <button class="planner-button" type="button" data-action="reset">RESET DRAFT</button>
         <button class="planner-button primary" type="button" data-action="copy-changes">COPY CHANGES FOR PETE</button>
         <button class="planner-button" type="button" data-action="download">DOWNLOAD FULL PLAN</button>
@@ -114,13 +113,10 @@ root.innerHTML = `
               <label class="planner-field">CATEGORY<select class="planner-select" name="category"><option value="coordination">Coordination</option><option value="analysis">Analysis</option><option value="energy">Energy</option><option value="collection">Collection</option><option value="sorting">Sorting</option><option value="atmosphere">Atmosphere</option><option value="compute">Compute</option><option value="autonomy">Autonomy</option><option value="morphology">Morphology</option></select></label>
             </div>
             <section class="planner-section">
-              <strong>RESOURCE COST</strong>
+              <strong>MNEMONIC FORMATION</strong>
               <div class="planner-cost-grid">
-                <label class="planner-field">ENERGY<input class="planner-input" name="energy" inputmode="numeric"></label>
-                <label class="planner-field">CARBON<input class="planner-input" name="carbon" inputmode="numeric"></label>
-                <label class="planner-field">SILICON<input class="planner-input" name="silicon" inputmode="numeric"></label>
-                <label class="planner-field">COPPER<input class="planner-input" name="copper" inputmode="numeric"></label>
-                <label class="planner-field">GOLD<input class="planner-input" name="gold" inputmode="numeric"></label>
+                <label class="planner-field">FACILITATION ENERGY<input class="planner-input" name="energy" inputmode="numeric"></label>
+                <label class="planner-field">MEMORY NANITES<input class="planner-input" name="mnemonicNanites" inputmode="numeric"></label>
               </div>
             </section>
             <section class="planner-section">
@@ -475,7 +471,7 @@ function renderEditor() {
     editor.elements[key].value = item[key] ?? "";
   }
   editor.elements.energy.value = item.cost.energy;
-  for (const key of ["carbon", "silicon", "copper", "gold"]) editor.elements[key].value = item.cost.atoms[key];
+  editor.elements.mnemonicNanites.value = item.cost.mnemonicNanites;
   editor.elements.bonuses.value = JSON.stringify(item.bonuses ?? {}, null, 2);
   const dependencies = root.querySelector("[data-dependencies]");
   dependencies.replaceChildren();
@@ -542,7 +538,7 @@ function addResearch() {
     requiresDiscovery: "",
     requiresStage: "",
     requiresSearch: "",
-    cost: { energy: "0", atoms: { carbon: "0", silicon: "0", copper: "0", gold: "0" } },
+    cost: { energy: "0", mnemonicNanites: "0" },
     bonuses: {},
     category: "analysis",
     series: "",
@@ -593,6 +589,7 @@ function importJson() {
     item.requiresSearch ??= "";
     item.trigger ??= "";
     item.bonuses ??= {};
+    item.cost.mnemonicNanites ??= "0";
   }
   nodes = imported;
   suggestions = typeof parsed.suggestions === "string" ? parsed.suggestions : suggestions;
@@ -608,7 +605,7 @@ editor.addEventListener("input", (event) => {
   const field = event.target.name;
   if (!item || !field || ["id", "newDependency", "bonuses"].includes(field)) return;
   if (field === "energy") item.cost.energy = event.target.value;
-  else if (["carbon", "silicon", "copper", "gold"].includes(field)) item.cost.atoms[field] = event.target.value;
+  else if (field === "mnemonicNanites") item.cost.mnemonicNanites = event.target.value;
   else item[field] = event.target.value;
   saveDraft();
   renderGraph();
@@ -724,16 +721,6 @@ root.addEventListener("click", async (event) => {
     URL.revokeObjectURL(url);
     showMessage("FULL PLAN DOWNLOADED", "success");
   }
-});
-
-root.querySelector("[data-action='expand']").addEventListener("change", (event) => {
-  expanded = event.target.checked;
-  const selected = byId(selectedId);
-  if (!expanded && selected?.series) selectedId = selected.series;
-  layout();
-  fitTree(false);
-  clearMessage();
-  render();
 });
 
 svg.addEventListener("pointerdown", (event) => {

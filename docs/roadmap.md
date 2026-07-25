@@ -12,17 +12,22 @@
 - [x] Scale outward material-search cohorts and durations with each local mass horizon.
 - [x] Keep nested-substrate survey controls and progress in the substrate panel rather than the recurring cohort board.
 - [x] Event-led catalogue research split into Residuum Indexing, chassis iron analysis and atmospheric spectroscopy without overloading the first material horizons.
-- [ ] Apply completed catalogue research to re-sort retained matter into usable elemental inventories.
-- [ ] Preserve one authoritative Residuum lot per finite substrate and separate bulk lots for atmosphere, regolith and later open sources.
+- [x] Apply Ferromagnetic Phase Analysis to re-sort retained iron into usable elemental inventory.
+- [x] Keep captured atmosphere physically separate from solid Feedstock and Residuum.
+- [ ] Preserve one authoritative Residuum lot per finite substrate and separate later bulk lots for regolith and other open sources.
 - [ ] Add aggregate early presentation, source-lot controls and later Spectral Binning without homogenizing compositions.
-- [x] Couple general refinement tiers to material-search horizons, one tier per search.
-- [x] Establish behavioural-only Specialized Morphologies I without changing the shared nanite recipe.
+- [x] Remove generated refinement tiers from the playable research catalogue.
+- [ ] Re-author later morphology research without changing the shared nanite recipe.
 - [ ] Author physical specialist assembly, populations, recipes and role-specific construction times for later morphology tiers.
 - [ ] Phase-aware bulk collection, recovery, tailings and specialist morphology efficiencies.
 - [ ] Authored soil, water and flora fields following the chassis boundary.
 - [ ] Introduce free-ranging biomass search or hunting parties as operational directives at local-area scale.
 - [x] Formalize the seven-stage, seventeen-horizon 0.1 g–1 Gt pathway.
-- [ ] Review and fill—or deliberately preserve—the research-empty bridge between Relative Directive Allocation and material search 1.
+- [x] Replace loose-atom research prices with irreversible nanite mnemonic banks, facilitation energy and fixed formation work.
+- [x] Remove the passive active-swarm research percentage; use the fixed seed core, assigned researchers and 1% of installed memory.
+- [x] Enforce one-lower-exponent bank commitments and free editable queue intent.
+- [x] Retire incompatible saves behind a red reset screen with PNG tombstone export.
+- [ ] Playtest mnemonic costs and work against real first-phase growth before expanding the catalogue.
 
 ## Chemistry and morphology
 

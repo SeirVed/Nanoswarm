@@ -44,7 +44,7 @@ export function createInitialState(now = Date.now()) {
     tier: entry.tier ?? "info",
   }));
   const state = {
-    version: 11,
+    version: 12,
     createdAt: now,
     simTime: now,
     lastSavedAt: now,
@@ -53,8 +53,10 @@ export function createInitialState(now = Date.now()) {
     stage: 0,
     energy: 40n,
     feedstock: emptyMatter(),
+    capturedAtmosphere: emptyMatter(),
     residuum: emptyMatter(),
     atoms: emptyAtoms(),
+    mnemonicBanks: 0n,
     lifetime: {
       collected: emptyMatter(),
       processed: emptyMatter(),
