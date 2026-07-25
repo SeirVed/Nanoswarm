@@ -326,6 +326,12 @@ body::after {
 
 .dashboard-column { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .dashboard-column > * { flex: 0 0 auto; }
+.movable-panel > .panel-heading { cursor: grab; user-select: none; }
+.movable-panel > .panel-heading:active { cursor: grabbing; }
+.panel-dragging { opacity: 0.35; }
+.panel-drop-before { box-shadow: 0 -3px 0 var(--green); }
+.panel-drop-after { box-shadow: 0 3px 0 var(--green); }
+.panel-drop-column { outline: 1px dashed var(--line-bright); outline-offset: 4px; }
 .log-column { position: sticky; top: 16px; height: calc(100vh - 110px); }
 .log-column .log-panel { flex: 1 1 auto; }
 .log-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }

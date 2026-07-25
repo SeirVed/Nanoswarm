@@ -64,6 +64,13 @@ const root = document.querySelector("#root");
 const delayedTooltips = installDelayedTooltips(root);
 const sonicMind = new SyntheticMind();
 const LOG_COLLAPSED_STORAGE_KEY = "nanoswarm.log-collapsed";
+const PANEL_LAYOUT_STORAGE_KEY = "nanoswarm.panel-layout";
+const PANEL_IDS = ["operations", "substrate", "materials", "ablation", "projects", "allocations", "research", "log"];
+const DEFAULT_PANEL_LAYOUT = [
+  ["operations", "substrate", "materials", "ablation", "projects"],
+  ["allocations"],
+  ["research", "log"],
+];
 const loadedGame = loadGame();
 let retiredSeed = loadedGame?.obsolete ? loadedGame : null;
 let state = retiredSeed ? null : loadedGame;
@@ -75,6 +82,9 @@ let lastStructuralSignature = null;
 let activeLogTier = "all";
 let activeResearchTab = "incomplete";
 let logCollapsed = false;
+let panelLayout = DEFAULT_PANEL_LAYOUT.map((column) => [...column]);
+let draggedPanelId = null;
+let dragHandlePanelId = null;
 let feedbackSelecting = false;
 let feedbackSelection = null;
 let feedbackOpened = false;
@@ -89,6 +99,40 @@ try {
   logCollapsed = window.localStorage.getItem(LOG_COLLAPSED_STORAGE_KEY) === "true";
 } catch {
   // The layout remains usable when browser storage is unavailable.
+}
+
+function normalisePanelLayout(layout) {
+  const seen = new Set();
+  const normalised = [[], [], []];
+  if (Array.isArray(layout)) {
+    layout.slice(0, normalised.length).forEach((column, index) => {
+      if (!Array.isArray(column)) return;
+      column.forEach((panelId) => {
+        if (!PANEL_IDS.includes(panelId) || seen.has(panelId)) return;
+        seen.add(panelId);
+        normalised[index].push(panelId);
+      });
+    });
+  }
+  PANEL_IDS.forEach((panelId) => {
+    if (!seen.has(panelId)) normalised[DEFAULT_PANEL_LAYOUT.findIndex((column) => column.includes(panelId))].push(panelId);
+  });
+  return normalised;
+}
+
+function persistPanelLayout() {
+  try {
+    window.localStorage.setItem(PANEL_LAYOUT_STORAGE_KEY, JSON.stringify(panelLayout));
+  } catch {
+    // The current layout remains active until the page closes when storage is unavailable.
+  }
+}
+
+try {
+  const savedLayout = window.localStorage.getItem(PANEL_LAYOUT_STORAGE_KEY);
+  if (savedLayout) panelLayout = normalisePanelLayout(JSON.parse(savedLayout));
+} catch {
+  // A corrupt or unavailable stored layout falls back to the authored arrangement.
 }
 
 const escapeAttribute = (value) => String(value)
@@ -495,7 +539,7 @@ function resourcesHtml(now) {
       </section>`
     : "";
 
-  if (!state.discovery.feedstockVisible) return substrate;
+  if (!state.discovery.feedstockVisible) return { substrate, materials: "" };
   const material = `<section class="panel resources-panel${newUnlockClass("materials")}" data-unlock-id="materials" data-tooltip="Exact available inventories exclude inputs already reserved by active cohorts.">
     <header class="panel-heading"><span>MATERIAL CONTROL</span><span>EXACT INVENTORY</span></header>
     <div class="resource-summary">
@@ -577,7 +621,7 @@ function resourcesHtml(now) {
         : ""
     }
   </section>`;
-  return `<div class="resource-stack">${substrate}${material}</div>`;
+  return { substrate, materials: material };
 }
 
 function ablationHtml(now) {
@@ -997,6 +1041,7 @@ function structuralSignature() {
     activeLogTier,
     activeResearchTab,
     logCollapsed,
+    panelLayout.map((column) => column.join(",")).join("/"),
     ...DIRECTIVES.map((directive) => state.allocationTargets?.[directive] ?? 0n),
     state.replicationTuning?.batchUntil ?? "",
     state.ablation?.active?.profileId ?? "",
@@ -1011,6 +1056,35 @@ function structuralSignature() {
     feedbackSelection?.key ?? "",
     feedbackOpened,
   ].join("|");
+}
+
+function movablePanelHtml(panelId, html) {
+  if (!html) return "";
+  return html.replace(
+    '<section class="panel',
+    `<section class="panel movable-panel" data-panel-id="${panelId}" draggable="true"`,
+  );
+}
+
+function dashboardColumnsHtml(now) {
+  const resources = resourcesHtml(now);
+  const panels = {
+    operations: movablePanelHtml("operations", operationsHtml(now)),
+    substrate: movablePanelHtml("substrate", resources.substrate),
+    materials: movablePanelHtml("materials", resources.materials),
+    ablation: movablePanelHtml("ablation", ablationHtml(now)),
+    projects: movablePanelHtml("projects", projectsHtml()),
+    allocations: movablePanelHtml("allocations", allocationsHtml()),
+    research: movablePanelHtml("research", researchHtml()),
+    log: logCollapsed ? "" : movablePanelHtml("log", logHtml()),
+  };
+  return panelLayout
+    .map(
+      (column, index) => `<div class="dashboard-column" data-layout-column="${index}">${column
+        .map((panelId) => panels[panelId])
+        .join("")}</div>`,
+    )
+    .join("");
 }
 
 function updateDynamicProgress(now) {
@@ -1114,9 +1188,7 @@ function renderGame(now = Date.now(), force = false) {
     ${notice ? `<div class="notice" role="status">${notice}</div>` : ""}
     ${feedbackSelecting ? `<div class="feedback-select-banner" role="status">FEEDBACK SELECTOR ACTIVE · CLICK ANY INTERFACE ELEMENT · CLICK ◈ TO CANCEL</div>` : ""}
     <main class="dashboard-grid${logCollapsed ? " log-collapsed" : ""}">
-      <div class="dashboard-column">${operationsHtml(now)}${resourcesHtml(now)}${ablationHtml(now)}${projectsHtml()}</div>
-      <div class="dashboard-column">${allocationsHtml()}${logCollapsed ? "" : researchHtml()}</div>
-      ${logCollapsed ? `<div class="dashboard-column">${researchHtml()}</div>` : `<div class="dashboard-column log-column">${logHtml()}</div>`}
+      ${dashboardColumnsHtml(now)}
     </main>
     ${logCollapsed ? collapsedLogHtml() : ""}
     ${feedbackFormHtml()}
@@ -1363,6 +1435,86 @@ root.addEventListener("pointerdown", (event) => {
 document.addEventListener("pointerup", stopRepeating);
 document.addEventListener("pointercancel", stopRepeating);
 window.addEventListener("blur", stopRepeating);
+
+function clearPanelDragState() {
+  draggedPanelId = null;
+  dragHandlePanelId = null;
+  root.querySelectorAll(".panel-dragging, .panel-drop-before, .panel-drop-after, .panel-drop-column").forEach((element) => {
+    element.classList.remove("panel-dragging", "panel-drop-before", "panel-drop-after", "panel-drop-column");
+  });
+}
+
+function movePanel(panelId, columnIndex, targetPanel, pointerY) {
+  if (!PANEL_IDS.includes(panelId) || columnIndex < 0 || columnIndex >= panelLayout.length) return;
+  const targetPanelId = targetPanel?.dataset.panelId;
+  if (targetPanelId === panelId) return;
+  const nextLayout = panelLayout.map((column) => column.filter((id) => id !== panelId));
+  const destination = nextLayout[columnIndex];
+  let insertAt = destination.length;
+  if (targetPanelId) {
+    const targetIndex = destination.indexOf(targetPanelId);
+    if (targetIndex >= 0) {
+      const targetBounds = targetPanel.getBoundingClientRect();
+      insertAt = targetIndex + (pointerY > targetBounds.top + targetBounds.height / 2 ? 1 : 0);
+    }
+  }
+  destination.splice(insertAt, 0, panelId);
+  panelLayout = normalisePanelLayout(nextLayout);
+  persistPanelLayout();
+  renderGame(Date.now(), true);
+}
+
+root.addEventListener("pointerdown", (event) => {
+  const heading = event.target.closest?.(".movable-panel > .panel-heading");
+  dragHandlePanelId = heading && !event.target.closest("button, input, select, textarea")
+    ? heading.parentElement.dataset.panelId
+    : null;
+});
+
+root.addEventListener("dragstart", (event) => {
+  const panel = event.target.closest?.(".movable-panel[data-panel-id]");
+  if (!panel || panel.dataset.panelId !== dragHandlePanelId) {
+    event.preventDefault();
+    return;
+  }
+  draggedPanelId = panel.dataset.panelId;
+  panel.classList.add("panel-dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", draggedPanelId);
+});
+
+root.addEventListener("dragover", (event) => {
+  if (!draggedPanelId) return;
+  const column = event.target.closest?.("[data-layout-column]");
+  if (!column) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  root.querySelectorAll(".panel-drop-before, .panel-drop-after, .panel-drop-column").forEach((element) => {
+    element.classList.remove("panel-drop-before", "panel-drop-after", "panel-drop-column");
+  });
+  const targetPanel = event.target.closest?.(".movable-panel[data-panel-id]");
+  if (targetPanel && targetPanel.dataset.panelId !== draggedPanelId) {
+    const bounds = targetPanel.getBoundingClientRect();
+    targetPanel.classList.add(event.clientY > bounds.top + bounds.height / 2 ? "panel-drop-after" : "panel-drop-before");
+  } else {
+    column.classList.add("panel-drop-column");
+  }
+});
+
+root.addEventListener("drop", (event) => {
+  if (!draggedPanelId) return;
+  const column = event.target.closest?.("[data-layout-column]");
+  if (!column) return;
+  event.preventDefault();
+  const panelId = draggedPanelId;
+  const targetPanel = event.target.closest?.(".movable-panel[data-panel-id]");
+  clearPanelDragState();
+  movePanel(panelId, Number(column.dataset.layoutColumn), targetPanel, event.clientY);
+});
+
+root.addEventListener("dragend", clearPanelDragState);
+document.addEventListener("pointerup", () => { dragHandlePanelId = null; });
+document.addEventListener("pointercancel", () => { dragHandlePanelId = null; });
 
 root.addEventListener("click", (event) => {
   const acknowledged = acknowledgeUnlocks(event);
