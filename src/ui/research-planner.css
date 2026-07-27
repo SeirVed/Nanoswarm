@@ -1,3 +1,10 @@
+body {
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-color: var(--line-bright) transparent;
+  scrollbar-gutter: stable;
+}
+
 .planner-shell {
   min-height: 100vh;
   color: var(--text);
