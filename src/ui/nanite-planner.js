@@ -84,7 +84,7 @@ function renderEditor() {
   const module = byId(selectedId) ?? plan.modules[0];
   if (!module) return;
   selectedId = module.id;
-  editor.innerHTML = `<div class="planner-editor-heading"><strong>MODULE EDITOR</strong><span class="planner-badge">${escapeHtml(module.function.toUpperCase())}</span></div><div class="planner-form-grid"><label class="planner-field full">MODULE NAME<input class="planner-input" data-field="name" value="${escapeHtml(module.name)}"></label><label class="planner-field full">FUNCTION<input class="planner-input" data-field="function" value="${escapeHtml(module.function)}"></label><label class="planner-field full">DECLARED ROLE<textarea class="planner-textarea short-textarea" data-field="description">${escapeHtml(module.description)}</textarea></label>${NANITE_ELEMENTS.map((element) => `<label class="planner-field">${element.symbol} · ${element.name.toUpperCase()}<input class="planner-input" type="number" min="0" step="1" data-atom="${element.id}" value="${module.atoms[element.id]}"></label>`).join("")}</div><p class="nanite-editor-note">Counts must remain whole non-negative atoms. An experimental allocation may be saved and exported, but it is never sent to the simulation.</p>`;
+  editor.innerHTML = `<div class="planner-editor-heading"><strong>MODULE EDITOR</strong><span class="planner-badge">${escapeHtml(module.function.toUpperCase())}</span></div><div class="planner-form-grid"><label class="planner-field full">MODULE NAME<input class="planner-input" data-field="name" value="${escapeHtml(module.name)}"></label><label class="planner-field full">FUNCTION<input class="planner-input" data-field="function" value="${escapeHtml(module.function)}"></label><label class="planner-field full">DECLARED ROLE<textarea class="planner-textarea short-textarea" data-field="description">${escapeHtml(module.description)}</textarea></label>${NANITE_ELEMENTS.map((element) => `<label class="planner-field">${element.symbol} · ${element.name.toUpperCase()}<input class="planner-input" type="number" min="0" max="9999" step="1" data-atom="${element.id}" value="${module.atoms[element.id]}"></label>`).join("")}</div><p class="nanite-editor-note">Counts must remain whole non-negative atoms. An experimental allocation may be saved and exported, but it is never sent to the simulation.</p>`;
 }
 
 function renderWarnings(check) {
@@ -117,7 +117,8 @@ root.addEventListener("input", (event) => {
   if (event.target.matches("[data-suggestions]")) plan.suggestions = event.target.value;
   else if (module && event.target.matches("[data-field]")) module[event.target.dataset.field] = event.target.value;
   else if (module && event.target.matches("[data-atom]")) {
-    module.atoms[event.target.dataset.atom] = Number(event.target.value);
+    module.atoms[event.target.dataset.atom] = Math.max(0, Math.min(9999, Number(event.target.value) || 0));
+    event.target.value = module.atoms[event.target.dataset.atom];
     saveDraft(); message = "DRAFT SAVED LOCALLY"; render(); return;
   } else return;
   saveDraft(); message = "DRAFT SAVED LOCALLY"; renderStatus(validateNanitePlan(plan));
