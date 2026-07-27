@@ -1,4 +1,6 @@
 import { NANITE_ELEMENTS, cloneNanitePlan, validateNanitePlan } from "../design/nanite.js";
+import { generateNaniteModel } from "../design/nanite-model.js";
+import { createNaniteViewport } from "./nanite-viewport.js";
 
 const root = document.querySelector("#nanite-planner-root");
 const STORAGE_KEY = "nanoswarm.nanite-planner.v1";
@@ -6,6 +8,7 @@ const baseline = cloneNanitePlan();
 let plan = cloneNanitePlan();
 let selectedId = plan.modules[0].id;
 let message = "";
+let viewport;
 
 const escapeHtml = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const byId = (id) => plan.modules.find((module) => module.id === id);
@@ -70,7 +73,11 @@ function renderBudget(check) {
 }
 
 function renderSchematic() {
-  schematic.innerHTML = `<header><strong>MODULE-LEVEL SCHEMATIC</strong><span>TEMPORARY · NO ATOM COORDINATES</span></header><p>The blocks are declared functional regions, not a claim of geometry, bonding, or atom placement. Stage B replaces this with a deterministic atom cloud.</p><div class="nanite-diagram"><div class="nanite-core">N0<br><small>SEED BODY</small></div>${plan.modules.map((module, index) => `<button type="button" class="nanite-module-node node-${index}${module.id === selectedId ? " selected" : ""}" data-action="select" data-id="${escapeHtml(module.id)}"><strong>${escapeHtml(module.function)}</strong><small>${formatAtoms(atomCount(module.atoms))} ATOMS</small></button>`).join("")}</div><div class="nanite-legend">${plan.modules.map((module) => `<button type="button" data-action="select" data-id="${escapeHtml(module.id)}" class="${module.id === selectedId ? "selected" : ""}"><span></span>${escapeHtml(module.name)}</button>`).join("")}</div>`;
+  const model = generateNaniteModel(plan);
+  const dimensions = model.bounds.size.map((value) => value.toFixed(2)).join(" × ");
+  schematic.innerHTML = `<header><strong>DETERMINISTIC ATOM CLOUD</strong><span>${model.count.toLocaleString("en-US")} ATOMS · ${dimensions} nm</span></header><p>Geometric coordinates generated from seed ${plan.seed}. Drag to rotate; Shift/Alt drag or middle drag to pan; wheel to zoom. This is a design model, not a validated molecular structure.</p><div class="nanite-viewport"><canvas data-atom-canvas aria-label="Rotatable N0 atom model"></canvas><div class="nanite-viewport-overlay">${dimensions} nm BOUNDS · ${((validateNanitePlan(plan).massDa * 1.6605390666e-22) / Math.max(1, model.bounds.size.reduce((total, value) => total * value, 1))).toFixed(2)} g/cm³ BOUNDING DENSITY</div></div><div class="nanite-view-controls"><button class="planner-button" data-action="view-reset">RESET VIEW</button><button class="planner-button" data-action="view-projection">PERSPECTIVE</button>${NANITE_ELEMENTS.map((element, index) => `<button class="planner-button active" data-action="view-element" data-element="${index}" style="--element-color:${element.color}">${element.symbol}</button>`).join("")}</div><div class="nanite-legend">${plan.modules.map((module) => `<button type="button" data-action="select" data-id="${escapeHtml(module.id)}" class="${module.id === selectedId ? "selected" : ""}"><span></span>${escapeHtml(module.name)}</button>`).join("")}</div>`;
+  viewport = createNaniteViewport(schematic.querySelector("[data-atom-canvas]"), model, { onSelect(index) { selectedId = plan.modules[model.module[index]].id; message = `ATOM ${index + 1} · ${NANITE_ELEMENTS[model.element[index]].symbol} · ${plan.modules[model.module[index]].name.toUpperCase()}`; renderEditor(); renderStatus(validateNanitePlan(plan)); } });
+  viewport.draw();
 }
 
 function renderEditor() {
@@ -119,6 +126,9 @@ root.addEventListener("input", (event) => {
 root.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]"); if (!button) return;
   const action = button.dataset.action;
+  if (action === "view-reset") { viewport?.reset(); return; }
+  if (action === "view-projection") { button.textContent = viewport?.toggleProjection() ? "PERSPECTIVE" : "ORTHOGRAPHIC"; return; }
+  if (action === "view-element") { viewport?.toggleElement(Number(button.dataset.element)); button.classList.toggle("active"); return; }
   if (action === "select") { selectedId = button.dataset.id; render(); return; }
   if (action === "reset") { localStorage.removeItem(STORAGE_KEY); plan = cloneNanitePlan(); selectedId = plan.modules[0].id; message = "CANONICAL DRAFT RESTORED"; render(); return; }
   if (action === "copy-changes") {
