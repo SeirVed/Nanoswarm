@@ -56,6 +56,7 @@ root.innerHTML = `
       </a>
       <nav class="planner-header-nav" aria-label="Workbench navigation">
         <a class="planner-back" href="../horizon-planner/">MASS HORIZONS</a>
+        <a class="planner-back" href="../nanite-planner/">NANITE DESIGN</a>
         <a class="planner-back" href="../">RETURN TO SIMULATION</a>
       </nav>
     </header>

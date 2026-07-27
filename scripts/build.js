@@ -32,10 +32,12 @@ await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 await cp(new URL("research-planner/", project), new URL("research-planner/", output), { recursive: true });
 await cp(new URL("horizon-planner/", project), new URL("horizon-planner/", output), { recursive: true });
+await cp(new URL("nanite-planner/", project), new URL("nanite-planner/", output), { recursive: true });
 await cp(new URL("src/", project), new URL(`assets/${release}/src/`, output), { recursive: true });
 await writeReleaseHtml("index.html", "index.html");
 await writeReleaseHtml("research-planner/index.html", "research-planner/index.html");
 await writeReleaseHtml("horizon-planner/index.html", "horizon-planner/index.html");
+await writeReleaseHtml("nanite-planner/index.html", "nanite-planner/index.html");
 await writeFile(new URL(".nojekyll", output), "");
 await makeTreeWritable(output);
 

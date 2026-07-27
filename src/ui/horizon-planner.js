@@ -19,6 +19,7 @@ root.innerHTML = `
       </a>
       <nav class="horizon-links" aria-label="Workbench navigation">
         <a class="planner-back" href="../research-planner/">RESEARCH TREE</a>
+        <a class="planner-back" href="../nanite-planner/">NANITE DESIGN</a>
         <a class="planner-back" href="../">RETURN TO SIMULATION</a>
       </nav>
     </header>
