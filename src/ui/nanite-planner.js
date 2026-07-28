@@ -143,7 +143,7 @@ root.addEventListener("click", async (event) => {
   if (action === "view-projection") { button.textContent = viewport?.toggleProjection() ? "PERSPECTIVE" : "ORTHOGRAPHIC"; return; }
   if (action === "view-bonds") { button.classList.toggle("active", viewport?.toggleBonds()); return; }
   if (action === "view-element") { viewport?.toggleElement(Number(button.dataset.element)); button.classList.toggle("active"); return; }
-  if (action === "select") { selectedId = button.dataset.id; focusedIds.has(selectedId) ? focusedIds.delete(selectedId) : focusedIds.add(selectedId); render(); return; }
+  if (action === "select") { selectedId = button.dataset.id; focusedIds.has(selectedId) ? focusedIds.delete(selectedId) : focusedIds.add(selectedId); viewport?.focusModules(plan.modules.map((module, index) => focusedIds.has(module.id) ? index : -1).filter((index) => index >= 0)); for (const item of schematic.querySelectorAll("[data-action='select']")) item.classList.toggle("selected", focusedIds.has(item.dataset.id)); renderEditor(); return; }
   if (action === "reset") { localStorage.removeItem(STORAGE_KEY); plan = cloneNanitePlan(); selectedId = plan.modules[0].id; focusedIds.clear(); message = "CANONICAL DRAFT RESTORED"; render(); return; }
   if (action === "copy-changes") {
     const check = validateNanitePlan(plan);
