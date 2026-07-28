@@ -9,6 +9,9 @@ test("topology analysis uses repeatable authored valence-limited bonds", () => {
   const first = analyseNaniteTopology(model);
   const second = analyseNaniteTopology(generateNaniteModel(cloneNanitePlan()));
   assert.equal(first.bondCount, second.bondCount);
+  assert.deepEqual([...first.kinds], [...second.kinds]);
+  assert.equal(first.kinds.length, first.bondCount);
+  assert.ok([...first.lengthsNm].every((length) => length >= 0.15 && length <= 0.31));
   assert.equal(first.authored, true);
   assert.ok(first.bondCount > 0);
   assert.equal(first.overCoordinated, 0);
