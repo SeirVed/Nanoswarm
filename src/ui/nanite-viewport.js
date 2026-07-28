@@ -40,7 +40,7 @@ export function createNaniteViewport(canvas, model, topology, { onSelect, focuse
   const scheduleIdle = () => {
     stopIdle();
     state.idleTimer = window.setTimeout(() => {
-      const rotate = () => { state.yaw += 0.0015; draw(); state.idleFrame = window.requestAnimationFrame(rotate); };
+      const rotate = () => { state.yaw += 0.0025; draw(); state.idleFrame = window.requestAnimationFrame(rotate); };
       state.idleFrame = window.requestAnimationFrame(rotate);
     }, 10000);
   };
