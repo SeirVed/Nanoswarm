@@ -15,4 +15,7 @@ test("N0 coordinates are deterministic and retain exact element and module count
   assert.equal(first.passivation.count, second.passivation.count);
   assert.ok(first.passivation.count > 0);
   assert.equal(first.physicalAtomCount, first.count + first.passivation.count);
+  const anchors = [...first.module].map((value, index) => value === 1 ? index : -1).filter((index) => index >= 0);
+  assert.ok(Math.max(...anchors.map((index) => Math.abs(first.position[index * 3]))) > 3);
+  assert.ok(Math.min(...anchors.map((index) => first.position[index * 3 + 2])) < -1.4);
 });
