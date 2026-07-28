@@ -67,7 +67,7 @@ function tube(sites, count, path, radius, seed, moduleIndex) {
   for (let index = 0; index < count; index += 1) {
     const axial = Math.floor(index / around);
     const phase = (index % around) / around * TAU + (axial & 1) * Math.PI / around;
-    const fraction = axial / Math.max(1, along - 1);
+    const fraction = (axial + 0.5) / along;
     const segment = Math.min(path.length - 2, Math.floor(fraction * (path.length - 1)));
     const segmentAmount = fraction * (path.length - 1) - segment;
     const centre = lerpPoint(path[segment], path[segment + 1], segmentAmount);
@@ -78,12 +78,26 @@ function tube(sites, count, path, radius, seed, moduleIndex) {
     const horizontal = Math.hypot(dx, dy) || 1;
     const side = [-dy / horizontal, dx / horizontal, 0];
     const normal = [(-dx * dz) / horizontal, (-dy * dz) / horizontal, horizontal];
+    const closure = Math.min(1, Math.sin(Math.min(fraction, 1 - fraction) * Math.PI * 3));
     const point = [
-      centre[0] + radius * (side[0] * Math.cos(phase) + normal[0] * Math.sin(phase)),
-      centre[1] + radius * (side[1] * Math.cos(phase) + normal[1] * Math.sin(phase)),
-      centre[2] + radius * (side[2] * Math.cos(phase) + normal[2] * Math.sin(phase)),
+      centre[0] + radius * closure * (side[0] * Math.cos(phase) + normal[0] * Math.sin(phase)),
+      centre[1] + radius * closure * (side[1] * Math.cos(phase) + normal[1] * Math.sin(phase)),
+      centre[2] + radius * closure * (side[2] * Math.cos(phase) + normal[2] * Math.sin(phase)),
     ];
     add(sites, point, [fraction, Math.cos(phase), Math.sin(phase)], seed, moduleIndex);
+  }
+}
+
+function threePointEffector(sites, count, centre, side, seed, moduleIndex) {
+  const perPoint = Math.floor(count / 3);
+  for (let index = 0; index < 3; index += 1) {
+    const angle = index / 3 * TAU;
+    const allocation = perPoint + (index < count % 3 ? 1 : 0);
+    ellipsoidCage(sites, allocation, [
+      centre[0] + side * 0.1,
+      centre[1] + Math.cos(angle) * 0.16,
+      centre[2] + Math.sin(angle) * 0.16,
+    ], [0.09, 0.07, 0.07], seed, moduleIndex);
   }
 }
 
@@ -119,11 +133,16 @@ function anchorActuators(sites, count, seed, moduleIndex) {
     const side = Math.sign(base[0]) || 1;
     const flank = Math.sign(base[1]) || 1;
     const allocation = perAnchor + (remainder-- > 0 ? 1 : 0);
+    const collar = Math.min(24, Math.max(0, allocation - 44));
+    const pad = Math.min(36, Math.max(0, allocation - 1 - collar));
+    const tubeBudget = allocation - 1 - collar - pad;
     const attached = offset(base, [side * 0.55, flank * 0.55, -0.3], 0.154);
     add(sites, attached, [0, 0, 0], seed, moduleIndex, true);
+    ellipsoidCage(sites, collar, attached, [0.24, 0.2, 0.19], seed, moduleIndex);
     const endpoint = [side * 3.25, flank * 2.18, -1.62];
     const knee = [side * 2.62, flank * 1.72, -1.12];
-    tube(sites, allocation - 1, [attached, knee, endpoint], 0.18, seed, moduleIndex);
+    tube(sites, tubeBudget, [attached, knee, endpoint], 0.18, seed, moduleIndex);
+    ellipsoidCage(sites, pad, endpoint, [0.28, 0.22, 0.14], seed, moduleIndex);
   }
 }
 
@@ -134,12 +153,16 @@ function assemblyManipulators(sites, count, seed, moduleIndex) {
     const allocation = perManipulator + (index < count % 2 ? 1 : 0);
     const shell = [side * 1.85, 0.72, 0.52];
     const attached = offset(shell, [side, 0.3, 0.1], 0.154);
+    const effector = Math.min(30, Math.max(0, allocation - 2));
     add(sites, attached, [0, 0, 0], seed, moduleIndex, true);
-    tube(sites, allocation - 1, [
+    const endpoint = [side * 3.4, 0.26, -0.32];
+    tube(sites, allocation - 1 - effector, [
       attached,
-      [side * 2.82, 0.84, 0.08],
-      [side * 3.4, 0.26, -0.32],
+      [side * 2.54, 0.84, 0.08],
+      [side * 2.98, 0.53, -0.18],
+      endpoint,
     ], 0.13, seed, moduleIndex);
+    threePointEffector(sites, effector, endpoint, side, seed, moduleIndex);
   }
 }
 
