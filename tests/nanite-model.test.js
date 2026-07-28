@@ -12,4 +12,7 @@ test("N0 coordinates are deterministic and retain exact element and module count
   assert.deepEqual([...first.module].filter((value) => value === 0).length, 3000);
   assert.deepEqual([...first.element].filter((value) => value === 0).length, 5000);
   assert.ok(first.bounds.size.every((value) => Number.isFinite(value) && value > 0));
+  assert.equal(first.passivation.count, second.passivation.count);
+  assert.ok(first.passivation.count > 0);
+  assert.equal(first.physicalAtomCount, first.count + first.passivation.count);
 });

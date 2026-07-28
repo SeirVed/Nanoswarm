@@ -15,5 +15,6 @@ test("topology analysis uses repeatable authored valence-limited bonds", () => {
   assert.equal(first.authored, true);
   assert.ok(first.bondCount > 0);
   assert.equal(first.overCoordinated, 0);
+  assert.equal(first.isolated, 0);
   for (let index = 0; index < model.count; index += 1) assert.ok(first.degree[index] <= model.valence[model.element[index]]);
 });

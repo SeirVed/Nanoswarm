@@ -2,7 +2,7 @@ import { NANITE_ELEMENTS } from "../design/nanite.js";
 
 export function createNaniteViewport(canvas, model, topology, { onSelect, focusedModules = [] } = {}) {
   const context = canvas.getContext("2d");
-  const state = { yaw: -0.72, pitch: 0.38, panX: 0, panY: 0, zoom: 1, perspective: true, bonds: false, elements: new Set([0, 1, 2, 3]), selected: -1, focusedModules: new Set(focusedModules), drag: null, points: [], idleTimer: null, idleFrame: null };
+  const state = { yaw: -0.72, pitch: 0.38, panX: 0, panY: 0, zoom: 1, perspective: true, bonds: false, elements: new Set([0, 1, 2, 3]), selected: -1, focusedModules: new Set(focusedModules), drag: null, points: [], idleTimer: null, idleFrame: null, passivation: false };
   const stopIdle = () => { if (state.idleTimer) window.clearTimeout(state.idleTimer); if (state.idleFrame) window.cancelAnimationFrame(state.idleFrame); state.idleTimer = null; state.idleFrame = null; };
   const draw = () => {
     const rect = canvas.getBoundingClientRect(); const scale = window.devicePixelRatio || 1;
@@ -31,6 +31,7 @@ export function createNaniteViewport(canvas, model, topology, { onSelect, focuse
       context.globalAlpha = dimmed ? 0.06 : Math.min(0.92, 0.34 + (10 - point.depth) * 0.07);
       context.arc(point.x, point.y, point.radius, 0, Math.PI * 2); context.fill();
     }
+    if (state.passivation && model.passivation) for (let index = 0; index < model.passivation.count; index += 1) { const x = model.passivation.position[index * 3]; const y = model.passivation.position[index * 3 + 1]; const z = model.passivation.position[index * 3 + 2]; const rx = x * cosY - z * sinY; const rz = x * sinY + z * cosY; const ry = y * cosP - rz * sinP; const depth = y * sinP + rz * cosP + 9; const factor = state.perspective ? 9 / depth : 1; context.beginPath(); context.fillStyle = "#d8f6ff"; context.globalAlpha = 0.72; context.arc(rect.width / 2 + state.panX + rx * base * factor, rect.height / 2 + state.panY - ry * base * factor, Math.max(0.35, 0.55 * factor * state.zoom), 0, Math.PI * 2); context.fill(); }
     context.globalAlpha = 1;
     if (state.selected >= 0) {
       const point = points.find((item) => item.index === state.selected);
@@ -54,5 +55,5 @@ export function createNaniteViewport(canvas, model, topology, { onSelect, focuse
   canvas.addEventListener("pointerup", (event) => { const drag = state.drag; state.drag = null; if (drag && !drag.moved) { const rect = canvas.getBoundingClientRect(); select(event.clientX - rect.left, event.clientY - rect.top); } else scheduleIdle(); });
   canvas.addEventListener("wheel", (event) => { event.preventDefault(); stopIdle(); state.zoom = Math.max(0.35, Math.min(3, state.zoom * (event.deltaY > 0 ? 0.9 : 1.1))); draw(); scheduleIdle(); }, { passive: false });
   scheduleIdle();
-  return { draw, reset, focusModules(indices) { state.focusedModules = new Set(indices); draw(); }, toggleProjection() { state.perspective = !state.perspective; draw(); return state.perspective; }, toggleElement(index) { state.elements.has(index) ? state.elements.delete(index) : state.elements.add(index); draw(); }, toggleBonds() { state.bonds = !state.bonds; draw(); return state.bonds; }, state };
+  return { draw, reset, focusModules(indices) { state.focusedModules = new Set(indices); draw(); }, toggleProjection() { state.perspective = !state.perspective; draw(); return state.perspective; }, toggleElement(index) { state.elements.has(index) ? state.elements.delete(index) : state.elements.add(index); draw(); }, toggleBonds() { state.bonds = !state.bonds; draw(); return state.bonds; }, togglePassivation() { state.passivation = !state.passivation; draw(); return state.passivation; }, state };
 }
