@@ -1,54 +1,12 @@
 import { NANITE_ELEMENTS } from "./nanite.js";
-
-const ELEMENT_INDEX = Object.fromEntries(NANITE_ELEMENTS.map((element, index) => [element.id, index]));
-const RADII_PM = [76, 111, 132, 136];
-const frame = (id, index, total) => {
-  if (id === "shell-truss") return [[0, 0, 0], [2.75, 2, 1.75]];
-  if (id === "anchor-actuators") {
-    const leg = Math.floor(index / Math.max(1, total / 4));
-    return [[leg % 2 ? 2.8 : -2.8, leg < 2 ? 1.55 : -1.55, 0], [0.7, 0.48, 0.48]];
-  }
-  if (id === "assembly-manipulators") return [[index % 2 ? 3.05 : -3.05, 0.1, -0.2], [0.75, 0.42, 0.4]];
-  if (id === "intake-channel") return [[0, -1.3, -1.2], [1.25, 0.6, 0.42]];
-  if (id === "computational-substrate") return [[0, 0, 0.15], [1.15, 1.05, 0.78]];
-  return [[0, 0.1, 1.2], [1.25, 0.9, 0.4]];
-};
-
-const random = (seed) => () => {
-  let value = seed += 0x6d2b79f5;
-  value = Math.imul(value ^ value >>> 15, value | 1);
-  value ^= value + Math.imul(value ^ value >>> 7, value | 61);
-  return ((value ^ value >>> 14) >>> 0) / 4294967296;
-};
-
-export function generateNaniteModel(plan) {
-  const count = plan.modules.reduce((total, module) => total + Object.values(module.atoms).reduce((sum, value) => sum + Number(value), 0), 0);
-  const position = new Float32Array(count * 3);
-  const element = new Uint8Array(count);
-  const module = new Uint8Array(count);
-  const radiusPm = new Uint16Array(count);
-  const next = random(Number(plan.seed) || 5575);
-  let cursor = 0;
-  for (let moduleIndex = 0; moduleIndex < plan.modules.length; moduleIndex += 1) {
-    const designModule = plan.modules[moduleIndex];
-    const total = Object.values(designModule.atoms).reduce((sum, value) => sum + Number(value), 0);
-    let local = 0;
-    for (const atom of NANITE_ELEMENTS) {
-      for (let ordinal = 0; ordinal < Number(designModule.atoms[atom.id] ?? 0); ordinal += 1) {
-        const [centre, extent] = frame(designModule.id, local, total);
-        const theta = next() * Math.PI * 2;
-        const phi = Math.acos(1 - 2 * next());
-        const distance = Math.cbrt(next());
-        position[cursor * 3] = centre[0] + Math.cos(theta) * Math.sin(phi) * distance * extent[0];
-        position[cursor * 3 + 1] = centre[1] + Math.sin(theta) * Math.sin(phi) * distance * extent[1];
-        position[cursor * 3 + 2] = centre[2] + Math.cos(phi) * distance * extent[2];
-        element[cursor] = ELEMENT_INDEX[atom.id]; module[cursor] = moduleIndex; radiusPm[cursor] = RADII_PM[ELEMENT_INDEX[atom.id]];
-        cursor += 1; local += 1;
-      }
-    }
-  }
-  const bounds = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
-  for (let index = 0; index < count; index += 1) for (let axis = 0; axis < 3; axis += 1) { const value = position[index * 3 + axis]; bounds.min[axis] = Math.min(bounds.min[axis], value); bounds.max[axis] = Math.max(bounds.max[axis], value); }
-  bounds.size = bounds.max.map((value, axis) => value - bounds.min[axis]);
-  return { count, position, element, module, radiusPm, bounds };
-}
+const INDEX=Object.fromEntries(NANITE_ELEMENTS.map((a,i)=>[a.id,i])),RADII=[76,111,132,136],VALENCE=[4,4,4,2];
+const SCALE={"shell-truss":[2.5,1.78,1.5],"anchor-actuators":[.98,.68,.58],"assembly-manipulators":[1.4,.48,.48],"intake-channel":[2,1,.7],"computational-substrate":[1.6,1.2,1],"timing-field-array":[1.3,.9,.5]};
+const hash=v=>{let r=v>>>0;r=Math.imul(r^r>>>16,0x7feb352d);r=Math.imul(r^r>>>15,0x846ca68b);return(r^r>>>16)>>>0},key=(x,y,z)=>x+"|"+y+"|"+z;
+const distance=(p,a,b)=>Math.hypot(p[a*3]-p[b*3],p[a*3+1]-p[b*3+1],p[a*3+2]-p[b*3+2]);
+function centre(id,n){if(id==="anchor-actuators")return[[-2.72,1.48,0],[2.72,1.48,0],[-2.72,-1.48,0],[2.72,-1.48,0]][n];if(id==="assembly-manipulators")return[n?3.02:-3.02,.12,-.34];if(id==="intake-channel")return[0,-1.22,-1.12];if(id==="computational-substrate")return[0,.22,.08];if(id==="timing-field-array")return[0,.15,1.18];return[0,0,0]}
+function inside(id,x,y,z){if(id==="shell-truss"){const shell=(x/2.5)**2+(y/1.78)**2+(z/1.5)**2<=1,channel=Math.abs(x)<.82&&y<-.62&&z<-.28,rail=Math.abs(x)<1.52&&y<-.96&&Math.abs(z+.18)<.28,core=(x/.82)**2+(y/.62)**2+(z/.48)**2<1;return shell&&!channel&&!rail&&!core}const[a,b,c]=SCALE[id]??SCALE["shell-truss"];if(id==="assembly-manipulators")return Math.abs(y)<=b&&Math.abs(z)<=c&&Math.abs(x)<=a&&Math.abs(x)+1.4*Math.abs(z)<=1.55;if(id==="intake-channel")return(x/a)**2+(y/b)**2+(z/c)**2<=1&&Math.abs(x)>.18;return(x/a)**2+(y/b)**2+(z/c)**2<=1}
+function candidates(item,moduleIndex,seed,need){const[a,b,c]=SCALE[item.id]??SCALE["shell-truss"],step=.19,sites=[],parts=item.id==="anchor-actuators"?4:item.id==="assembly-manipulators"?2:1;for(let part=0;part<parts;part+=1){const origin=centre(item.id,part);for(let ix=-Math.ceil(a/step);ix<=Math.ceil(a/step);ix+=1)for(let iy=-Math.ceil(b/step);iy<=Math.ceil(b/step);iy+=1)for(let iz=-Math.ceil(c/step);iz<=Math.ceil(c/step);iz+=1){const offset=(ix+iy+iz)&1?.5:0,local=[(ix+offset)*step,(iy+offset)*step,(iz+offset)*step];if(!inside(item.id,...local))continue;const order=sites.length+part*100003+moduleIndex*1000003;sites.push({local,point:[origin[0]+local[0],origin[1]+local[1],origin[2]+local[2]],rank:hash((Number(seed)||5575)+Math.imul(order+1,0x9e3779b1))})}}if(sites.length<need)throw new Error("Scaffold capacity exceeded for "+item.id+".");return sites}
+function score(site,element,id){const[x,y,z]=site.local;if(element===2)return Math.abs(y)*4+Math.abs(z)*2+Math.abs(x)*.15;if(element===3)return-(Math.abs(x)+Math.abs(y)+Math.abs(z))-(id==="assembly-manipulators"?Math.abs(x)*3:0);if(element===1)return Math.abs(x)*.35+Math.abs(y)*.2+Math.abs(z)*.2;return site.rank/0xffffffff}
+function authoredBonds(position,element,module){const cells=new Map(),near=[],degree=new Uint8Array(element.length),pairs=[],cell=.29;for(let index=0;index<element.length;index+=1){const x=Math.floor(position[index*3]/cell),y=Math.floor(position[index*3+1]/cell),z=Math.floor(position[index*3+2]/cell);for(let dx=-1;dx<=1;dx+=1)for(let dy=-1;dy<=1;dy+=1)for(let dz=-1;dz<=1;dz+=1)for(const other of cells.get(key(x+dx,y+dy,z+dz))??[]){const length=distance(position,index,other);if(length>=.15&&length<=.31&&(module[index]===module[other]||length<=.24))near.push([length,other,index])}const bucket=cells.get(key(x,y,z))??[];bucket.push(index);cells.set(key(x,y,z),bucket)}near.sort((a,b)=>a[0]-b[0]||a[1]-b[1]||a[2]-b[2]);for(const[,a,b]of near)if(degree[a]<VALENCE[element[a]]&&degree[b]<VALENCE[element[b]]){pairs.push(a,b);degree[a]+=1;degree[b]+=1}return{pairs:Uint32Array.from(pairs),degree}}
+function bounds(position,count){const result={min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]};for(let i=0;i<count;i+=1)for(let axis=0;axis<3;axis+=1){const value=position[i*3+axis];result.min[axis]=Math.min(result.min[axis],value);result.max[axis]=Math.max(result.max[axis],value)}result.size=result.max.map((value,axis)=>value-result.min[axis]);return result}
+export function generateNaniteModel(plan){const count=plan.modules.reduce((sum,item)=>sum+Object.values(item.atoms).reduce((total,value)=>total+Number(value),0),0),position=new Float32Array(count*3),element=new Uint8Array(count),module=new Uint8Array(count),radiusPm=new Uint16Array(count);let cursor=0;for(let moduleIndex=0;moduleIndex<plan.modules.length;moduleIndex+=1){const item=plan.modules[moduleIndex],need=Object.values(item.atoms).reduce((sum,value)=>sum+Number(value),0),sites=candidates(item,moduleIndex,plan.seed,need),used=new Set();for(const atom of NANITE_ELEMENTS){const type=INDEX[atom.id],selected=sites.filter(site=>!used.has(site)).sort((a,b)=>score(a,type,item.id)-score(b,type,item.id)||a.rank-b.rank).slice(0,Number(item.atoms[atom.id]??0));for(const site of selected){used.add(site);position[cursor*3]=site.point[0];position[cursor*3+1]=site.point[1];position[cursor*3+2]=site.point[2];element[cursor]=type;module[cursor]=moduleIndex;radiusPm[cursor]=RADII[type];cursor+=1}}}const topology=authoredBonds(position,element,module);return{count,position,element,module,radiusPm,bondPairs:topology.pairs,authoredDegree:topology.degree,valence:Uint8Array.from(VALENCE),bounds:bounds(position,count)}}

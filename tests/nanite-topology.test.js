@@ -4,10 +4,13 @@ import { cloneNanitePlan } from "../src/design/nanite.js";
 import { generateNaniteModel } from "../src/design/nanite-model.js";
 import { analyseNaniteTopology } from "../src/design/nanite-topology.js";
 
-test("topology analysis produces repeatable bounded display bonds", () => {
-  const first = analyseNaniteTopology(generateNaniteModel(cloneNanitePlan()));
+test("topology analysis uses repeatable authored valence-limited bonds", () => {
+  const model = generateNaniteModel(cloneNanitePlan());
+  const first = analyseNaniteTopology(model);
   const second = analyseNaniteTopology(generateNaniteModel(cloneNanitePlan()));
   assert.equal(first.bondCount, second.bondCount);
-  assert.ok(first.bondCount > 0 && first.bondCount <= 16000);
-  assert.equal(first.pairs.length, first.bondCount * 2);
+  assert.equal(first.authored, true);
+  assert.ok(first.bondCount > 0);
+  assert.equal(first.overCoordinated, 0);
+  for (let index = 0; index < model.count; index += 1) assert.ok(first.degree[index] <= model.valence[model.element[index]]);
 });
