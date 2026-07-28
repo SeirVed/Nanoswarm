@@ -8,7 +8,7 @@ const STORAGE_KEY = "nanoswarm.nanite-planner.v1";
 const baseline = cloneNanitePlan();
 let plan = cloneNanitePlan();
 let selectedId = plan.modules[0].id;
-let focusedId = null;
+let focusedIds = new Set();
 let message = "";
 let viewport;
 
@@ -79,8 +79,9 @@ function renderSchematic() {
   const topology = analyseNaniteTopology(model);
   const dimensions = model.bounds.size.map((value) => value.toFixed(2)).join(" × ");
   schematic.innerHTML = `<header><strong>DETERMINISTIC LATTICE SCAFFOLD</strong><span>${model.count.toLocaleString("en-US")} ATOMS · ${dimensions} nm</span></header><p>Module-specific lattice candidates, exact element placement, and valence-limited authored bonds generated from seed ${plan.seed}. Drag to rotate; Shift/Alt drag or middle drag to pan; wheel to zoom. This is a design model, not a validated molecular structure.</p><div class="nanite-viewport"><canvas data-atom-canvas aria-label="Rotatable N0 atom model"></canvas><div class="nanite-viewport-overlay">${dimensions} nm BOUNDS · ${((validateNanitePlan(plan).massDa * 1.6605390666e-22) / Math.max(1, model.bounds.size.reduce((total, value) => total * value, 1))).toFixed(2)} g/cm³ BOUNDING DENSITY</div></div><div class="nanite-view-controls"><button class="planner-button" data-action="view-reset">RESET VIEW</button><button class="planner-button" data-action="view-projection">PERSPECTIVE</button><button class="planner-button" data-action="view-bonds">AUTHORED BONDS · ${topology.bondCount.toLocaleString("en-US")}</button>${NANITE_ELEMENTS.map((element, index) => `<button class="planner-button active" data-action="view-element" data-element="${index}" style="--element-color:${element.color}">${element.symbol}</button>`).join("")}</div><div class="nanite-legend">${plan.modules.map((module) => `<button type="button" data-action="select" data-id="${escapeHtml(module.id)}" class="${module.id === selectedId ? "selected" : ""}"><span></span>${escapeHtml(module.name)}</button>`).join("")}</div>`;
-  viewport = createNaniteViewport(schematic.querySelector("[data-atom-canvas]"), model, topology, { focusedModule: focusedId ? plan.modules.findIndex((module) => module.id === focusedId) : -1, onSelect(index) { selectedId = plan.modules[model.module[index]].id; focusedId = selectedId; message = "ATOM " + (index + 1); renderEditor(); renderStatus(validateNanitePlan(plan)); viewport.focusModule(model.module[index]); } });
+  viewport = createNaniteViewport(schematic.querySelector("[data-atom-canvas]"), model, topology, { focusedModules: plan.modules.map((module, index) => focusedIds.has(module.id) ? index : -1).filter((index) => index >= 0), onSelect(index) { selectedId = plan.modules[model.module[index]].id; focusedIds.add(selectedId); message = "ATOM " + (index + 1); renderEditor(); renderStatus(validateNanitePlan(plan)); viewport.focusModules(plan.modules.map((module, moduleIndex) => focusedIds.has(module.id) ? moduleIndex : -1).filter((moduleIndex) => moduleIndex >= 0)); } });
   viewport.draw();
+  for (const button of schematic.querySelectorAll("[data-action='select']")) button.classList.toggle("selected", focusedIds.has(button.dataset.id));
 }
 
 function renderEditor() {
@@ -142,8 +143,8 @@ root.addEventListener("click", async (event) => {
   if (action === "view-projection") { button.textContent = viewport?.toggleProjection() ? "PERSPECTIVE" : "ORTHOGRAPHIC"; return; }
   if (action === "view-bonds") { button.classList.toggle("active", viewport?.toggleBonds()); return; }
   if (action === "view-element") { viewport?.toggleElement(Number(button.dataset.element)); button.classList.toggle("active"); return; }
-  if (action === "select") { selectedId = button.dataset.id; focusedId = selectedId; render(); return; }
-  if (action === "reset") { localStorage.removeItem(STORAGE_KEY); plan = cloneNanitePlan(); selectedId = plan.modules[0].id; focusedId = null; message = "CANONICAL DRAFT RESTORED"; render(); return; }
+  if (action === "select") { selectedId = button.dataset.id; focusedIds.has(selectedId) ? focusedIds.delete(selectedId) : focusedIds.add(selectedId); render(); return; }
+  if (action === "reset") { localStorage.removeItem(STORAGE_KEY); plan = cloneNanitePlan(); selectedId = plan.modules[0].id; focusedIds.clear(); message = "CANONICAL DRAFT RESTORED"; render(); return; }
   if (action === "copy-changes") {
     const check = validateNanitePlan(plan);
     const payload = { instruction: "Design review only. Do not implement these changes until explicitly requested.", suggestions: plan.suggestions ?? "", canonicalRecipe: baseline.recipe, atomDeltas: check.deltas, changedModules: changes(), envelopeNm: plan.envelopeNm, designSeed: plan.seed, validation: { exactRecipe: check.exactRecipe, invalid: check.invalid, scientificWarnings: ["No validated mixed force field", "No quantum stability calculation", "Missing surface-passivation elements"] } };
