@@ -93,7 +93,7 @@ function hexPanel(sites, count, origin, axisU, axisV, width, height, seed, modul
   }
 }
 
-function tube(sites, count, path, radius, seed, moduleIndex) {
+function tube(sites, count, path, radius, seed, moduleIndex, caps = { start: true, end: true }) {
   const around = 10;
   const along = Math.max(2, Math.ceil(count / around));
   for (let index = 0; index < count; index += 1) {
@@ -110,7 +110,9 @@ function tube(sites, count, path, radius, seed, moduleIndex) {
     const horizontal = Math.hypot(dx, dy) || 1;
     const side = [-dy / horizontal, dx / horizontal, 0];
     const normal = [(-dx * dz) / horizontal, (-dy * dz) / horizontal, horizontal];
-    const closure = Math.min(1, Math.sin(Math.min(fraction, 1 - fraction) * Math.PI * 3));
+    const startClosure = caps.start ? Math.sin(fraction * Math.PI * 3) : 1;
+    const endClosure = caps.end ? Math.sin((1 - fraction) * Math.PI * 3) : 1;
+    const closure = Math.min(1, startClosure, endClosure);
     const point = [
       centre[0] + radius * closure * (side[0] * Math.cos(phase) + normal[0] * Math.sin(phase)),
       centre[1] + radius * closure * (side[1] * Math.cos(phase) + normal[1] * Math.sin(phase)),
@@ -140,11 +142,28 @@ function c60Cage(sites, centre, attachmentVertex, seed, moduleIndex) {
   }
 }
 
-function carapaceCentre(index, count) {
-  const vertical = 1 - 2 * (index + 0.5) / Math.max(1, count);
-  const horizontal = Math.sqrt(Math.max(0, 1 - vertical * vertical));
-  const angle = index * Math.PI * (3 - Math.sqrt(5));
-  return [Math.cos(angle) * horizontal * 2.04, Math.sin(angle) * horizontal * 1.18, vertical * 0.9];
+function carapaceCentres() {
+  const centres = [];
+  const band = (count, radiusX, radiusY, height, phase = 0) => {
+    for (let index = 0; index < count; index += 1) {
+      const angle = phase + index / count * TAU;
+      centres.push([Math.cos(angle) * radiusX, Math.sin(angle) * radiusY, height]);
+    }
+  };
+  // Outer dorsal body, broad lateral carapace, then a recessed ventral inner shell.
+  band(10, 1.65, 0.92, 0.78, Math.PI / 10);
+  band(12, 1.95, 1.22, 0.18);
+  band(10, 1.52, 0.88, -0.48, Math.PI / 10);
+  // A horseshoe rim leaves the ventral assembly/output aperture physically open.
+  for (const point of [[-1.1, -1.18, -0.78], [-0.55, -1.34, -0.84], [0.55, -1.34, -0.84], [1.1, -1.18, -0.78], [-1.28, -0.72, -0.92], [1.28, -0.72, -0.92], [-0.72, -0.42, -1.02], [0.72, -0.42, -1.02]]) centres.push(point);
+  centres.push([0, 1.12, -0.16]);
+  return centres;
+}
+
+const CARAPACE_CENTRES = carapaceCentres();
+
+function carapaceCentre(index) {
+  return CARAPACE_CENTRES[index % CARAPACE_CENTRES.length];
 }
 
 function shellTruss(sites, count, seed, moduleIndex) {
@@ -158,7 +177,7 @@ function shellTruss(sites, count, seed, moduleIndex) {
     const attachmentVertex = attachment ? (index * 7) % C60_VERTICES.length : -1;
     const centre = attachment
       ? attachment.map((value, axis) => value - C60_VERTICES[attachmentVertex][axis])
-      : carapaceCentre(index - attachments.length, cages - attachments.length);
+      : carapaceCentre(index - attachments.length);
     c60Cage(sites, centre, attachmentVertex, seed, moduleIndex);
   }
   const remainder = count - cages * C60_VERTICES.length;
@@ -211,10 +230,11 @@ function assemblyManipulators(sites, count, seed, moduleIndex) {
 
 function intakeChannel(sites, count, seed, moduleIndex) {
   const attached = offset([0, -1.15, -0.76], [0, -0.7, -0.7], 0.154);
+  const collar = Math.min(96, Math.max(0, count - 2));
+  const throat = count - 1 - collar;
   add(sites, attached, [0, 0, 0], seed, moduleIndex, true);
-  const spine = Math.floor(count * 0.65);
-  tube(sites, spine - 1, [attached, [-1.25, -1.38, -1.18], [0, -1.65, -1.3], [1.25, -1.38, -1.18]], 0.2, seed, moduleIndex);
-  hexPanel(sites, count - spine, [0, -1.47, -1.01], [1, 0, 0], [0, 0, 1], 2.3, 0.52, seed, moduleIndex);
+  ellipsoidCage(sites, collar, [0, -1.35, -0.67], [0.38, 0.25, 0.25], seed, moduleIndex);
+  tube(sites, throat, [attached, [0, -1.58, -0.62], [0, -2.12, -0.42]], 0.26, seed, moduleIndex, { start: true, end: false });
 }
 
 function computationalSubstrate(sites, count, seed, moduleIndex) {
