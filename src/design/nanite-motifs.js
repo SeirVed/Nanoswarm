@@ -2,6 +2,7 @@
 // This is visual/proposal geometry only: it never changes the game recipe.
 
 const TAU = Math.PI * 2;
+const PHI = (1 + Math.sqrt(5)) / 2;
 
 const hash = (value) => {
   let result = value >>> 0;
@@ -28,6 +29,37 @@ const offset = (point, direction, length) => {
   const magnitude = Math.hypot(...direction) || 1;
   return point.map((value, axis) => value + direction[axis] / magnitude * length);
 };
+
+const C60_VERTICES = (() => {
+  const raw = [];
+  const addVertex = (point) => raw.push(point);
+  for (let axis = 0; axis < 3; axis += 1) {
+    for (const first of [-1, 1]) for (const second of [-1, 1]) {
+      const point = [0, 0, 0];
+      point[(axis + 1) % 3] = first;
+      point[(axis + 2) % 3] = second * 3 * PHI;
+      addVertex(point);
+    }
+  }
+  const evenPermutations = (values) => [values, [values[1], values[2], values[0]], [values[2], values[0], values[1]]];
+  for (const values of [[1, 2 + PHI, 2 * PHI], [PHI, 2, 2 * PHI + 1]]) {
+    for (const permutation of evenPermutations(values)) {
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+        addVertex([permutation[0] * sx, permutation[1] * sy, permutation[2] * sz]);
+      }
+    }
+  }
+  const unique = [...new Map(raw.map((point) => [point.map((value) => value.toFixed(8)).join('|'), point])).values()];
+  let edge = Infinity;
+  for (let left = 0; left < unique.length; left += 1) for (let right = left + 1; right < unique.length; right += 1) {
+    edge = Math.min(edge, Math.hypot(
+      unique[left][0] - unique[right][0],
+      unique[left][1] - unique[right][1],
+      unique[left][2] - unique[right][2],
+    ));
+  }
+  return unique.map((point) => point.map((value) => value * 0.154 / edge));
+})();
 
 function ellipsoidCage(sites, count, centre, radii, seed, moduleIndex) {
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
@@ -101,25 +133,36 @@ function threePointEffector(sites, count, centre, side, seed, moduleIndex) {
   }
 }
 
+function c60Cage(sites, centre, attachmentVertex, seed, moduleIndex) {
+  for (let index = 0; index < C60_VERTICES.length; index += 1) {
+    const local = C60_VERTICES[index];
+    add(sites, [centre[0] + local[0], centre[1] + local[1], centre[2] + local[2]], local, seed, moduleIndex, index === attachmentVertex);
+  }
+}
+
+function carapaceCentre(index, count) {
+  const vertical = 1 - 2 * (index + 0.5) / Math.max(1, count);
+  const horizontal = Math.sqrt(Math.max(0, 1 - vertical * vertical));
+  const angle = index * Math.PI * (3 - Math.sqrt(5));
+  return [Math.cos(angle) * horizontal * 2.04, Math.sin(angle) * horizontal * 1.18, vertical * 0.9];
+}
+
 function shellTruss(sites, count, seed, moduleIndex) {
   const attachments = [
     [-1.85, 1.02, -0.72], [1.85, 1.02, -0.72], [-1.85, -1.02, -0.72], [1.85, -1.02, -0.72],
     [-1.85, 0.72, 0.52], [1.85, 0.72, 0.52], [0, -1.15, -0.76], [0, 0.96, 0.26], [0, 0.1, 1.03],
   ];
-  for (const point of attachments) add(sites, point, point, seed, moduleIndex, true);
-  const remaining = count - attachments.length;
-  const body = Math.floor(remaining * 0.54);
-  const dorsal = Math.floor(remaining * 0.15);
-  const ventral = Math.floor(remaining * 0.15);
-  ellipsoidCage(sites, body, [0, 0, 0], [2.22, 1.28, 1.04], seed, moduleIndex);
-  tube(sites, dorsal, [[-2.18, 0, 0.54], [0, 0, 1.24], [2.18, 0, 0.54]], 0.16, seed, moduleIndex);
-  tube(sites, ventral, [[-2.05, 0, -0.58], [0, 0, -1.08], [2.05, 0, -0.58]], 0.16, seed, moduleIndex);
-  const nodeBudget = remaining - body - dorsal - ventral;
-  const nodeCentres = [[-1.58, 0.9, -0.58], [1.58, 0.9, -0.58], [-1.58, -0.9, -0.58], [1.58, -0.9, -0.58]];
-  for (let index = 0; index < nodeCentres.length; index += 1) {
-    const allocation = Math.floor(nodeBudget / nodeCentres.length) + (index < nodeBudget % nodeCentres.length ? 1 : 0);
-    ellipsoidCage(sites, allocation, nodeCentres[index], [0.38, 0.31, 0.31], seed, moduleIndex);
+  const cages = Math.floor(count / C60_VERTICES.length);
+  for (let index = 0; index < cages; index += 1) {
+    const attachment = index < attachments.length ? attachments[index] : null;
+    const attachmentVertex = attachment ? (index * 7) % C60_VERTICES.length : -1;
+    const centre = attachment
+      ? attachment.map((value, axis) => value - C60_VERTICES[attachmentVertex][axis])
+      : carapaceCentre(index - attachments.length, cages - attachments.length);
+    c60Cage(sites, centre, attachmentVertex, seed, moduleIndex);
   }
+  const remainder = count - cages * C60_VERTICES.length;
+  if (remainder) ellipsoidCage(sites, remainder, [0, 0, 0], [1.4, 0.85, 0.65], seed, moduleIndex);
 }
 
 function anchorActuators(sites, count, seed, moduleIndex) {
