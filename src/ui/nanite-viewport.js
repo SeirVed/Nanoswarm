@@ -2,7 +2,7 @@ import { NANITE_ELEMENTS } from "../design/nanite.js";
 
 export function createNaniteViewport(canvas, model, topology, { onSelect, focusedModules = [] } = {}) {
   const context = canvas.getContext("2d");
-  const state = { yaw: -0.72, pitch: 0.38, panX: 0, panY: 0, zoom: 1, perspective: true, bonds: false, elements: new Set([0, 1, 2, 3]), selected: -1, focusedModules: new Set(focusedModules), drag: null, points: [], idleTimer: null, idleFrame: null, passivation: false };
+  const state = { yaw: -0.72, pitch: 0.38, panX: 0, panY: 0, zoom: 1, perspective: true, bonds: false, elements: new Set([0, 1, 2, 3]), selected: -1, focusedModules: new Set(focusedModules), drag: null, points: [], idleTimer: null, idleFrame: null, passivation: false, renderMode: "atoms" };
   const stopIdle = () => { if (state.idleTimer) window.clearTimeout(state.idleTimer); if (state.idleFrame) window.cancelAnimationFrame(state.idleFrame); state.idleTimer = null; state.idleFrame = null; };
   const draw = () => {
     const rect = canvas.getBoundingClientRect(); const scale = window.devicePixelRatio || 1;
@@ -16,7 +16,7 @@ export function createNaniteViewport(canvas, model, topology, { onSelect, focuse
       points.push({ index, x: rect.width / 2 + state.panX + rx * base * factor, y: rect.height / 2 + state.panY - ry * base * factor, depth, radius, element, module: model.module[index] });
     }
     points.sort((left, right) => right.depth - left.depth); state.points = points;
-    if (state.bonds) {
+    if (state.bonds && state.renderMode === "atoms") {
       const byIndex = new Map(points.map((point) => [point.index, point])); context.lineWidth = 1.1;
       for (let bond = 0; bond < topology.pairs.length; bond += 2) {
         const left = byIndex.get(topology.pairs[bond]); const right = byIndex.get(topology.pairs[bond + 1]); if (!left || !right) continue;
@@ -25,7 +25,23 @@ export function createNaniteViewport(canvas, model, topology, { onSelect, focuse
         context.beginPath(); context.moveTo(left.x, left.y); context.lineTo(right.x, right.y); context.stroke();
       }
     }
-    for (const point of points) {
+    if (state.renderMode === "smooth") {
+      context.save(); context.globalCompositeOperation = "lighter";
+      for (const point of points) {
+        const dimmed = state.focusedModules.size > 0 && !state.focusedModules.has(point.module);
+        context.beginPath(); context.fillStyle = NANITE_ELEMENTS[point.element].color;
+        context.globalAlpha = dimmed ? 0.008 : 0.075;
+        context.arc(point.x, point.y, Math.max(3.5, point.radius * 3.8 + 1.8), 0, Math.PI * 2); context.fill();
+      }
+      context.globalCompositeOperation = "source-over";
+      for (const point of points) {
+        const dimmed = state.focusedModules.size > 0 && !state.focusedModules.has(point.module);
+        context.beginPath(); context.fillStyle = point.index === state.selected ? "#f7fff8" : "#8dffae";
+        context.globalAlpha = dimmed ? 0.018 : 0.09;
+        context.arc(point.x, point.y, Math.max(1.4, point.radius * 1.8), 0, Math.PI * 2); context.fill();
+      }
+      context.restore();
+    } else for (const point of points) {
       const dimmed = state.focusedModules.size > 0 && !state.focusedModules.has(point.module);
       context.beginPath(); context.fillStyle = point.index === state.selected ? "#f7fff8" : NANITE_ELEMENTS[point.element].color;
       context.globalAlpha = dimmed ? 0.06 : Math.min(0.92, 0.34 + (10 - point.depth) * 0.07);
@@ -55,5 +71,5 @@ export function createNaniteViewport(canvas, model, topology, { onSelect, focuse
   canvas.addEventListener("pointerup", (event) => { const drag = state.drag; state.drag = null; if (drag && !drag.moved) { const rect = canvas.getBoundingClientRect(); select(event.clientX - rect.left, event.clientY - rect.top); } else scheduleIdle(); });
   canvas.addEventListener("wheel", (event) => { event.preventDefault(); stopIdle(); state.zoom = Math.max(0.35, Math.min(3, state.zoom * (event.deltaY > 0 ? 0.9 : 1.1))); draw(); scheduleIdle(); }, { passive: false });
   scheduleIdle();
-  return { draw, reset, focusModules(indices) { state.focusedModules = new Set(indices); draw(); }, toggleProjection() { state.perspective = !state.perspective; draw(); return state.perspective; }, toggleElement(index) { state.elements.has(index) ? state.elements.delete(index) : state.elements.add(index); draw(); }, toggleBonds() { state.bonds = !state.bonds; draw(); return state.bonds; }, togglePassivation() { state.passivation = !state.passivation; draw(); return state.passivation; }, state };
+  return { draw, reset, focusModules(indices) { state.focusedModules = new Set(indices); draw(); }, toggleProjection() { state.perspective = !state.perspective; draw(); return state.perspective; }, toggleElement(index) { state.elements.has(index) ? state.elements.delete(index) : state.elements.add(index); draw(); }, toggleBonds() { state.bonds = !state.bonds; draw(); return state.bonds; }, togglePassivation() { state.passivation = !state.passivation; draw(); return state.passivation; }, toggleRenderMode() { state.renderMode = state.renderMode === "atoms" ? "smooth" : "atoms"; draw(); return state.renderMode === "smooth"; }, state };
 }
