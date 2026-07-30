@@ -142,46 +142,47 @@ function c60Cage(sites, centre, attachmentVertex, seed, moduleIndex) {
   }
 }
 
-function carapaceCentres() {
-  const centres = [];
-  const band = (count, radiusX, radiusY, height, phase = 0) => {
-    for (let index = 0; index < count; index += 1) {
-      const angle = phase + index / count * TAU;
-      centres.push([Math.cos(angle) * radiusX, Math.sin(angle) * radiusY, height]);
-    }
-  };
-  // Outer dorsal body, broad lateral carapace, then a recessed ventral inner shell.
-  band(10, 1.65, 0.92, 0.78, Math.PI / 10);
-  band(12, 1.95, 1.22, 0.18);
-  band(10, 1.52, 0.88, -0.48, Math.PI / 10);
-  // A horseshoe rim leaves the ventral assembly/output aperture physically open.
-  for (const point of [[-1.1, -1.18, -0.78], [-0.55, -1.34, -0.84], [0.55, -1.34, -0.84], [1.1, -1.18, -0.78], [-1.28, -0.72, -0.92], [1.28, -0.72, -0.92], [-0.72, -0.42, -1.02], [0.72, -0.42, -1.02]]) centres.push(point);
-  centres.push([0, 1.12, -0.16]);
-  return centres;
-}
-
-const CARAPACE_CENTRES = carapaceCentres();
-
-function carapaceCentre(index) {
-  return CARAPACE_CENTRES[index % CARAPACE_CENTRES.length];
+function curvedLamella(sites, count, centre, spanX, spanY, height, curveX, curveY, seed, moduleIndex) {
+  const columns = Math.max(2, Math.ceil(Math.sqrt((count * spanX) / Math.max(spanY, 0.1))));
+  const rows = Math.max(2, Math.ceil(count / columns));
+  for (let index = 0; index < count; index += 1) {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const u = (column / Math.max(1, columns - 1) - 0.5) * 2;
+    const v = (row / Math.max(1, rows - 1) - 0.5) * 2;
+    const x = centre[0] + u * spanX + (row & 1) * 0.035;
+    const y = centre[1] + v * spanY;
+    const z = centre[2] + height - curveX * u * u - curveY * v * v;
+    add(sites, [x, y, z], [u, v, z - centre[2]], seed, moduleIndex);
+  }
 }
 
 function shellTruss(sites, count, seed, moduleIndex) {
-  const attachments = [
+  const interfaces = [
     [-1.85, 1.02, -0.72], [1.85, 1.02, -0.72], [-1.85, -1.02, -0.72], [1.85, -1.02, -0.72],
     [-1.85, 0.72, 0.52], [1.85, 0.72, 0.52], [0, -1.15, -0.76], [0, 0.96, 0.26], [0, 0.1, 1.03],
   ];
-  const cages = Math.floor(count / C60_VERTICES.length);
-  for (let index = 0; index < cages; index += 1) {
-    const attachment = index < attachments.length ? attachments[index] : null;
-    const attachmentVertex = attachment ? (index * 7) % C60_VERTICES.length : -1;
-    const centre = attachment
-      ? attachment.map((value, axis) => value - C60_VERTICES[attachmentVertex][axis])
-      : carapaceCentre(index - attachments.length);
+  const nodeAtoms = Math.min(count, interfaces.length * C60_VERTICES.length);
+  const nodeCount = Math.floor(nodeAtoms / C60_VERTICES.length);
+  for (let index = 0; index < nodeCount; index += 1) {
+    const attachmentVertex = (index * 7) % C60_VERTICES.length;
+    const centre = interfaces[index].map((value, axis) => value - C60_VERTICES[attachmentVertex][axis]);
     c60Cage(sites, centre, attachmentVertex, seed, moduleIndex);
   }
-  const remainder = count - cages * C60_VERTICES.length;
-  if (remainder) ellipsoidCage(sites, remainder, [0, 0, 0], [1.4, 0.85, 0.65], seed, moduleIndex);
+  const remaining = count - nodeCount * C60_VERTICES.length;
+  const dorsal = Math.floor(remaining * 0.427);
+  const ventralLeft = Math.floor(remaining * 0.146);
+  const ventralRight = Math.floor(remaining * 0.146);
+  const archLeft = Math.floor(remaining * 0.098);
+  const archRight = Math.floor(remaining * 0.098);
+  const crown = remaining - dorsal - ventralLeft - ventralRight - archLeft - archRight;
+  // The two curved lamellae form a hollow body; the split ventral cradle keeps the output bay clear.
+  curvedLamella(sites, dorsal, [0, 0.04, 0], 2.18, 1.26, 0.92, 0.38, 0.24, seed, moduleIndex);
+  curvedLamella(sites, ventralLeft, [-0.98, -0.04, 0], 0.64, 1.04, -0.5, -0.24, -0.14, seed, moduleIndex);
+  curvedLamella(sites, ventralRight, [0.98, -0.04, 0], 0.64, 1.04, -0.5, -0.24, -0.14, seed, moduleIndex);
+  tube(sites, archLeft, [[-2.02, -1.04, -0.18], [-2.3, 0, 0.22], [-1.92, 1.02, 0.72]], 0.17, seed, moduleIndex);
+  tube(sites, archRight, [[2.02, -1.04, -0.18], [2.3, 0, 0.22], [1.92, 1.02, 0.72]], 0.17, seed, moduleIndex);
+  tube(sites, crown, [[-1.28, 0, 0.84], [0, 0.12, 1.34], [1.28, 0, 0.84]], 0.14, seed, moduleIndex);
 }
 
 function anchorActuators(sites, count, seed, moduleIndex) {
