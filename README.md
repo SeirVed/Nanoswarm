@@ -22,6 +22,8 @@ The mass-horizon workbench is available at `http://127.0.0.1:4173/horizon-planne
 
 Research v2 is live. Its design history remains in [`docs/research-mnemonic-substrate.md`](docs/research-mnemonic-substrate.md), the implementation boundary is described in [`docs/research-v2-implementation-handoff.md`](docs/research-v2-implementation-handoff.md), and [`docs/README.md`](docs/README.md) identifies the status of every design document.
 
+The proposed replacement for unrestricted linear energy acquisition is documented in [`docs/energy-locality-storage-and-thermal-model.md`](docs/energy-locality-storage-and-thermal-model.md). It treats per-nanite yield as a microscopic processing ceiling while local source power, accessible interface, transmission, storage and heat rejection constrain total realised power.
+
 ## Play online
 
 The `main` branch deploys automatically to GitHub Pages:
@@ -46,15 +48,13 @@ The deployment workflow builds the dependency-free static site, uploads `dist/`,
 - UI controls issue commands; they never mutate resources directly.
 - Saves use an explicit version and a BigInt-aware codec. Version 12 is a deliberate physical-law boundary: prior saves receive a red retired-node screen, may export a PNG tombstone with compact metadata, and must restart.
 - Log entries carry a significance tier independently of their visual tone. World, critical, and medium events remain permanent; only routine info events roll off after the newest 200.
-- Parallel Directive Scheduling is the sole initial research signal and takes four minutes on the embedded 100 n-eq seed reasoning substrate. The whole-number Directive Allocation panel appears with the second nanite, but its controls set intent only; an explicit dispatch launches one cycle and completed cohorts require manual redispatch until this firmware is restored. Completion enables persistent concurrent relaunch. At 12 nanites it reveals Relative Directive Allocation, and every other research signal requires both roots. The research header deliberately withholds the catalog-wide completion fraction.
+- Parallel Directive Scheduling is the sole initial research signal and takes four minutes on the embedded 100 n-eq seed reasoning substrate. Research appears with the second nanite and Stage 1; at 12 nanites it reveals Relative Directive Allocation, and every other research signal requires both roots. The research header deliberately withholds the catalog-wide completion fraction.
 - Allocation step buttons support accelerating press-and-hold input. Percentage fields retain focus and uncommitted text when an unrelated cohort completion refreshes the dashboard.
-- One-by-one allocation omits percentage locks. Parallel Directive Scheduling makes those whole-number assignments persistent; once Relative Directive Allocation is complete, new nanites automatically enter target shares and locks protect selected directives.
+- One-by-one allocation omits percentage locks. Once Relative Directive Allocation is complete, new nanites automatically enter target shares and locks protect selected directives.
 - The operations panel keeps discovered replication, collection, sorting, and miscellaneous work in fixed slots without exposing unknown jobs. Structural refreshes preserve the page scroll position.
 - The replication directive owns the nanite recipe readout, reports the exact population unable to begin, and distinguishes a sufficient upstream pipeline from a genuine material halt.
 - At 180 nanites, Cohort Ratio Prognostics turns the swarm's growing self-model into a live comparison between current and coherent substrate-conversion ETAs. It also adds a current-growth-curve exhaustion ETA to the active substrate. Completing it exposes the exact replication-efficiency score, current bottleneck, complete-recipe buffer, and potential speed multiplier.
 - Replication batches partial inputs for up to five seconds while upstream payloads are already converging, reducing phase fragmentation without delaying an isolated complete launch. After 30 seconds at 99% efficiency, Temporary Burst can enter a charging state that holds normal replication until its 1%-of-swarm minimum buffer exists; it then reserves every complete recipe, deploys them through replication, and restores the exact previous shares and locks.
-- At 1,000 nanites, Directed Bond Ablation can be researched to turn stored energy into discrete, composition-accurate Feedstock waves. Matter leaves the finite substrate when firing begins, remains reserved during coupling, and enters Feedstock atomically at completion. Calibration and controlled delamination lead into repeatable saturation fractures; none of them sort matter or guarantee complete nanite recipes.
-- At 10,000 nanites, Pipelined Self-Assembly overlaps four discrete construction phases. Whole recipes and whole nanite completions remain authoritative while the filled replication cadence falls from 55 seconds to approximately 35 seconds.
 - Every manageable control, intro telemetry line, running-log event, timer, resource card, and key status readout exposes a verbose contextual tooltip after a 1.5-second hover. Stable semantic tooltip identities and generic focus restoration preserve the player's inspection or keyboard position across job-completion renders.
 - Newly revealed panels, directives, elements, projects, and research signals pulse until clicked. Acknowledgements persist in current saves, while migration treats features visible in older saves as already seen.
 - The ◈ brand control enters feedback-selection mode. The next interface click opens an in-game report form with semantic element context and optional non-save diagnostics, then opens a prefilled public `SeirVed/Nanoswarm` GitHub issue for the player to review and submit.
@@ -72,4 +72,4 @@ See [`docs/README.md`](docs/README.md) for the documentation source-of-truth ind
 
 See `docs/architecture.md` for the current model boundary and extension rules.
 
-See `docs/design-goals.md`, `docs/horizon-roadmap.md`, `docs/roadmap.md` and `docs/stage-2-industrial-transition.md` for the working long-horizon direction and implementation roadmap.
+See `docs/design-goals.md`, `docs/horizon-roadmap.md`, `docs/roadmap.md`, `docs/stage-2-industrial-transition.md` and `docs/energy-locality-storage-and-thermal-model.md` for the working long-horizon direction and implementation roadmap.

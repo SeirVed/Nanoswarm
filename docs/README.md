@@ -26,6 +26,7 @@ This directory contains several kinds of material. Their status matters.
 | [`research-v2-implementation-handoff.md`](research-v2-implementation-handoff.md) | Historical implementation brief | Boundaries used during the Research v2 implementation; superseded by code and `architecture.md`. |
 | [`research-v2-regression-plan.md`](research-v2-regression-plan.md) | Historical verification charter | Risk inventory used to select the implemented Research v2 tests. |
 | [`stage-2-industrial-transition.md`](stage-2-industrial-transition.md) | Working design | Candidate phase change from alien nanite replication to larger, slower chemical and mechanical production systems. |
+| [`energy-locality-storage-and-thermal-model.md`](energy-locality-storage-and-thermal-model.md) | Working design with validated constraints | Replaces unrestricted linear per-nanite energy scaling with local source, interface, network, storage and thermal limits. Includes the 20 pJ versus 40 pJ audit, Directed Bond Ablation analysis, progression safeguards, implementation sequence and required tests. |
 | [`repository-audit-and-cleanup.md`](repository-audit-and-cleanup.md) | Audit | Findings from the repository continuity review, including stale bridge material, orphaned documentation, CI gaps and the unsafe PR #3 implementation spike. |
 | [`prototype-audit.md`](prototype-audit.md) | Historical | Record of what was and was not retained from the Lovable prototype. Its old resource-funded research wording is historical, not current design. |
 
@@ -46,3 +47,4 @@ PR #3 duplicates the runtime into `*-legacy.js` files, advances legacy simulatio
 5. Research v2 must be integrated into the same event-jumping loop as cohorts. A second post-processing simulation pass is invalid.
 6. Documentation that describes removed mechanics must be updated in the same implementation PR.
 7. Before merging a broad design branch, squash incidental connector commits so the final history reflects intentional changes.
+8. Energy balance work must first resolve the player-facing 20 pJ versus authored 40 pJ base-yield discrepancy and cover the result with a runtime/UI consistency test.
